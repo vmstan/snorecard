@@ -1,0 +1,96 @@
+name: Snorecard
+options:
+  bundleIdPrefix: com.vmstan
+  deploymentTarget:
+    macOS: "26.0"
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  SnorecardKit:
+    path: .
+
+targets:
+  Snorecard:
+    type: application
+    platform: macOS
+    sources:
+      - path: Snorecard
+      - path: Snorecard-macOS
+    dependencies:
+      - package: SnorecardKit
+        product: SnorecardKit
+    info:
+      path: Snorecard-macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Snorecard
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.medical
+        NSHumanReadableCopyright: "© 2026"
+        NSUbiquitousContainers:
+          iCloud.com.vmstan.Snorecard:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: Snorecard
+            NSUbiquitousContainerSupportedFolderLevels: Any
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vmstan.Snorecard
+        PRODUCT_NAME: Snorecard
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: CVZLL7XC62
+        CODE_SIGN_ENTITLEMENTS: Snorecard/Snorecard.entitlements
+        DEAD_CODE_STRIPPING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  Snorecard-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Snorecard
+      - path: Snorecard-iOS
+    dependencies:
+      - package: SnorecardKit
+        product: SnorecardKit
+    info:
+      path: Snorecard-iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Snorecard
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.medical
+        NSHumanReadableCopyright: "© 2026"
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSUbiquitousContainers:
+          iCloud.com.vmstan.Snorecard:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: Snorecard
+            NSUbiquitousContainerSupportedFolderLevels: Any
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vmstan.Snorecard.iOS
+        PRODUCT_NAME: Snorecard
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: CVZLL7XC62
+        CODE_SIGN_ENTITLEMENTS: Snorecard-iOS/Snorecard-iOS.entitlements
+        DEAD_CODE_STRIPPING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

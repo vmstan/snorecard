@@ -1,0 +1,15 @@
+# Xcode
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# SwiftPM
+.build/
+.swiftpm/xcode/
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/settings.local.json
