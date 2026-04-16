@@ -75,9 +75,10 @@ public enum SDCardImporter {
             throw SDCardImportError.missingDataLog(root)
         }
 
-        let identification = try? ResMedIdentification(
-            contentsOf: root.appendingPathComponent("Identification.tgt")
-        )
+        let identification: ResMedIdentification? = {
+            guard let url = ResMedIdentification.locate(in: root) else { return nil }
+            return try? ResMedIdentification(contentsOf: url)
+        }()
 
         let strURL = root.appendingPathComponent("STR.edf")
         let summaryURL = fm.fileExists(atPath: strURL.path) ? strURL : nil

@@ -6,6 +6,22 @@ struct DayListView: View {
     @Binding var selection: SidebarSelection?
     @Environment(Library.self) private var library
     @State private var isRenaming = false
+    @State private var knownDevices: [Library.DeviceFolder] = []
+
+    private var otherDevices: [Library.DeviceFolder] {
+        let currentSerial = card.identification?.serialNumber
+        return knownDevices.filter { $0.serial != currentSerial }
+    }
+
+    private func deviceMenuLabel(for folder: Library.DeviceFolder) -> String {
+        if let override = library.deviceNameOverrides[folder.serial], !override.isEmpty {
+            return "\(override) (\(folder.serial))"
+        }
+        if let product = folder.productName, !product.isEmpty {
+            return "\(product) (\(folder.serial))"
+        }
+        return "Device \(folder.serial)"
+    }
 
     var body: some View {
         List(selection: $selection) {
@@ -15,8 +31,29 @@ struct DayListView: View {
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(library.displayName(for: card))
-                            .font(.headline)
+                        if otherDevices.isEmpty {
+                            Text(library.displayName(for: card))
+                                .font(.headline)
+                        } else {
+                            Menu {
+                                ForEach(otherDevices) { folder in
+                                    Button(deviceMenuLabel(for: folder)) {
+                                        library.load(folder.url)
+                                    }
+                                }
+                            } label: {
+                                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                    Text(library.displayName(for: card))
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
                         if card.identification?.serialNumber != nil {
                             Button {
                                 isRenaming = true
@@ -52,6 +89,9 @@ struct DayListView: View {
             }
         }
         .listStyle(.sidebar)
+        .task(id: card.rootURL) {
+            knownDevices = Library.iCloudDeviceFolders()
+        }
         .sheet(isPresented: $isRenaming) {
             if let serial = card.identification?.serialNumber {
                 RenameDeviceSheet(

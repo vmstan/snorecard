@@ -119,9 +119,29 @@ final class Library {
     /// `nil` when iCloud isn't available or no backups exist yet. When
     /// multiple device folders exist the most recently modified one wins.
     private static func bestICloudDeviceFolder() -> URL? {
-        guard let backupRoot = iCloudBackupRoot else { return nil }
+        iCloudDeviceFolders().first?.url
+    }
+
+    /// Summary of a device folder stored inside Snorecard's iCloud
+    /// container. Presented to the user in the sidebar switcher so they
+    /// can pick between machines without re-importing.
+    struct DeviceFolder: Identifiable, Hashable, Sendable {
+        let url: URL
+        let serial: String
+        /// Product name pulled from the folder's `Identification` file
+        /// (e.g. "AirSense 10 AutoSet"). `nil` when the file is missing
+        /// or can't be parsed.
+        let productName: String?
+        let modified: Date?
+        var id: URL { url }
+    }
+
+    /// Every device folder inside the iCloud backup root, sorted most-
+    /// recently-modified first. Empty when iCloud is unavailable.
+    static func iCloudDeviceFolders() -> [DeviceFolder] {
+        guard let backupRoot = iCloudBackupRoot else { return [] }
         let fm = FileManager.default
-        guard fm.fileExists(atPath: backupRoot.path) else { return nil }
+        guard fm.fileExists(atPath: backupRoot.path) else { return [] }
 
         let subfolders = ((try? fm.contentsOfDirectory(
             at: backupRoot,
@@ -131,15 +151,22 @@ final class Library {
             (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
         }
 
-        guard !subfolders.isEmpty else { return nil }
-
         return subfolders
-            .sorted { a, b in
-                let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return da > db
+            .map { url -> DeviceFolder in
+                let productName: String? = {
+                    guard let idURL = ResMedIdentification.locate(in: url),
+                          let ident = try? ResMedIdentification(contentsOf: idURL)
+                    else { return nil }
+                    return ident.productName
+                }()
+                return DeviceFolder(
+                    url: url,
+                    serial: url.lastPathComponent,
+                    productName: productName,
+                    modified: (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+                )
             }
-            .first
+            .sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
     }
 
     func load(_ url: URL) {

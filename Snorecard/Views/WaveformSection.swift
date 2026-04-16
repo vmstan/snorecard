@@ -26,6 +26,8 @@ struct WaveformBundle: Sendable {
     let flatMinuteVentilation: [FlatPoint]
     let flatSnore: [FlatPoint]
     let flatFlowLimitation: [FlatPoint]
+    let flatIPAP: [FlatPoint]
+    let flatEPAP: [FlatPoint]
 
     var isEmpty: Bool { sessions.isEmpty }
 
@@ -58,7 +60,9 @@ struct WaveformBundle: Sendable {
                 flatTidalVolume: [],
                 flatMinuteVentilation: [],
                 flatSnore: [],
-                flatFlowLimitation: []
+                flatFlowLimitation: [],
+                flatIPAP: [],
+                flatEPAP: []
             )
         }
 
@@ -164,6 +168,8 @@ struct WaveformBundle: Sendable {
                     minuteVentilation: pld.minuteVentilation,
                     snore: pld.snore,
                     flowLimitation: pld.flowLimitation,
+                    ipap: pld.ipap,
+                    epap: pld.epap,
                     sourceFilename: p.url.lastPathComponent
                 )
             )
@@ -220,7 +226,9 @@ struct WaveformBundle: Sendable {
             flatTidalVolume: flatten(\.tidalVolume),
             flatMinuteVentilation: flatten(\.minuteVentilation),
             flatSnore: flatten(\.snore),
-            flatFlowLimitation: flatten(\.flowLimitation)
+            flatFlowLimitation: flatten(\.flowLimitation),
+            flatIPAP: flatten(\.ipap),
+            flatEPAP: flatten(\.epap)
         )
     }
 
@@ -265,6 +273,13 @@ private struct PLDDecoded {
     var minuteVentilation: [TimePoint] = []
     var snore: [TimePoint] = []
     var flowLimitation: [TimePoint] = []
+    /// Target inspiratory pressure (IPAP) per breath — the upper
+    /// envelope of the pressure chart. From the PLD "Press" signal.
+    var ipap: [TimePoint] = []
+    /// Target expiratory pressure (EPAP) per breath — the lower
+    /// envelope of the pressure chart. From the PLD "EprPress" signal
+    /// (empty on CPAP machines without EPR).
+    var epap: [TimePoint] = []
 }
 
 private func decodePLD(
@@ -301,6 +316,10 @@ private func decodePLD(
     out.minuteVentilation = points(prefix: "MinVent")
     out.snore = points(prefix: "Snore")
     out.flowLimitation = points(prefix: "FlowLim")
+    // Pressure setpoints — note the prefix "Press." to avoid matching
+    // "EprPress" and "MaskPress".
+    out.ipap = points(prefix: "Press.")
+    out.epap = points(prefix: "EprPress")
     return out
 }
 
@@ -324,6 +343,8 @@ struct SessionSegment: Sendable, Identifiable {
     let minuteVentilation: [TimePoint] // L/min
     let snore: [TimePoint]           // 0–5 scale
     let flowLimitation: [TimePoint]  // 0–1 scale
+    let ipap: [TimePoint]            // cmH₂O — target inspiratory
+    let epap: [TimePoint]            // cmH₂O — target expiratory
     let sourceFilename: String
 }
 
@@ -602,13 +623,33 @@ struct WaveformSection: View {
                     format: "%.1f",
                     color: .primary
                 )
-                readoutChip(
-                    "Pressure",
-                    value: hoverValue(bundle.flatPressure),
-                    unit: pressureUnit,
-                    format: "%.1f",
-                    color: .purple
-                )
+                if !bundle.flatEPAP.isEmpty {
+                    readoutChip(
+                        "EPAP",
+                        value: hoverValue(bundle.flatEPAP),
+                        unit: pressureUnit,
+                        format: "%.1f",
+                        color: .chartBlue
+                    )
+                }
+                if !bundle.flatIPAP.isEmpty {
+                    readoutChip(
+                        "IPAP",
+                        value: hoverValue(bundle.flatIPAP),
+                        unit: pressureUnit,
+                        format: "%.1f",
+                        color: .chartOrange
+                    )
+                }
+                if bundle.flatIPAP.isEmpty {
+                    readoutChip(
+                        "Pressure",
+                        value: hoverValue(bundle.flatPressure),
+                        unit: pressureUnit,
+                        format: "%.1f",
+                        color: .purple
+                    )
+                }
                 if hasLeak {
                     readoutChip(
                         "Leak",
@@ -858,15 +899,27 @@ struct WaveformSection: View {
             )
         }
         withHoverOverlay(tag: "Pressure") {
-            EquatableSignalLineChart(
+            // Prefer the per-breath IPAP / EPAP target traces from the
+            // PLD files — they give two clean step-lines bracketing
+            // what the machine is delivering. Fall back to the raw BRP
+            // mask pressure when no PLD data is available.
+            let ipap = sliced(bundle.flatIPAP)
+            let epap = sliced(bundle.flatEPAP)
+            let mask = sliced(bundle.flatPressure)
+
+            let domain: ClosedRange<Double>? = {
+                let values = (ipap + epap + mask).map(\.value)
+                guard let lo = values.min(), let hi = values.max() else { return nil }
+                return (lo - 1)...(hi + 1)
+            }()
+
+            EquatablePressureChart(
                 title: "Pressure",
                 unit: pressureUnit,
-                points: sliced(bundle.flatPressure),
-                events: [],
-                color: .purple,
-                zeroReference: false,
-                stepped: true,
-                thresholdY: nil,
+                ipap: ipap,
+                epap: epap,
+                fallback: ipap.isEmpty ? mask : [],
+                yDomain: domain,
                 hoverOffset: hoverOffset,
                 axes: axes
             )
@@ -1019,6 +1072,7 @@ struct SignalLineChart: View, Equatable {
     let zeroReference: Bool
     let stepped: Bool
     let thresholdY: Double?
+    let yDomain: ClosedRange<Double>?
     let hoverOffset: TimeInterval?
     let axes: SharedAxisConfig
 
@@ -1032,6 +1086,7 @@ struct SignalLineChart: View, Equatable {
             && lhs.zeroReference == rhs.zeroReference
             && lhs.stepped == rhs.stepped
             && lhs.thresholdY == rhs.thresholdY
+            && lhs.yDomain == rhs.yDomain
             && lhs.hoverOffset == rhs.hoverOffset
             && lhs.axes == rhs.axes
     }
@@ -1082,11 +1137,23 @@ struct SignalLineChart: View, Equatable {
                 totalDuration: axes.totalDuration,
                 clockLabel: axes.clockLabel
             ))
+            .applyYDomain(yDomain)
             .chartXVisibleDomain(length: axes.visibleDomainLength)
             .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
             .chartScrollPosition(x: axes.scrollBinding)
             .chartXSelection(value: axes.hoverBinding)
             .frame(height: WaveformSection.chartHeight)
+        }
+    }
+}
+
+extension View {
+    /// Apply a `chartYScale(domain:)` only when a range is provided.
+    @ViewBuilder fileprivate func applyYDomain(_ range: ClosedRange<Double>?) -> some View {
+        if let range {
+            self.chartYScale(domain: range)
+        } else {
+            self
         }
     }
 }
@@ -1145,8 +1212,125 @@ struct SignalAreaChart: View, Equatable {
     }
 }
 
+/// Pressure chart variant that renders two series — IPAP target (upper
+/// envelope) and EPAP target (lower envelope) — with a shared Y axis
+/// padded by 1 cmH₂O on either side of the visible range.
+struct PressureChart: View, Equatable {
+    let title: String
+    let unit: String
+    let ipap: [FlatPoint]
+    let epap: [FlatPoint]
+    /// BRP mask-pressure waveform used when no PLD IPAP data is
+    /// available (e.g. days scanned from an older iCloud backup).
+    let fallback: [FlatPoint]
+    let yDomain: ClosedRange<Double>?
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    nonisolated static func == (lhs: PressureChart, rhs: PressureChart) -> Bool {
+        lhs.title == rhs.title
+            && lhs.unit == rhs.unit
+            && lhs.ipap.count == rhs.ipap.count
+            && lhs.ipap.first?.offset == rhs.ipap.first?.offset
+            && lhs.ipap.last?.offset == rhs.ipap.last?.offset
+            && lhs.epap.count == rhs.epap.count
+            && lhs.epap.first?.offset == rhs.epap.first?.offset
+            && lhs.epap.last?.offset == rhs.epap.last?.offset
+            && lhs.fallback.count == rhs.fallback.count
+            && lhs.fallback.first?.offset == rhs.fallback.first?.offset
+            && lhs.fallback.last?.offset == rhs.fallback.last?.offset
+            && lhs.yDomain == rhs.yDomain
+            && lhs.hoverOffset == rhs.hoverOffset
+            && lhs.axes == rhs.axes
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ChartSubviewTitle(title: title, subtitle: unit.isEmpty ? "" : "(\(unit))")
+            Chart {
+                ForEach(ipap) { point in
+                    LineMark(
+                        x: .value("Time", point.offset),
+                        y: .value("IPAP", point.value),
+                        series: .value("Series", "IPAP-\(point.sessionID.uuidString)")
+                    )
+                    .foregroundStyle(by: .value("Series", "IPAP"))
+                    .interpolationMethod(.stepEnd)
+                    .lineStyle(StrokeStyle(lineWidth: 1.2))
+                }
+                ForEach(epap) { point in
+                    LineMark(
+                        x: .value("Time", point.offset),
+                        y: .value("EPAP", point.value),
+                        series: .value("Series", "EPAP-\(point.sessionID.uuidString)")
+                    )
+                    .foregroundStyle(by: .value("Series", "EPAP"))
+                    .interpolationMethod(.stepEnd)
+                    .lineStyle(StrokeStyle(lineWidth: 1.2))
+                }
+                ForEach(fallback) { point in
+                    LineMark(
+                        x: .value("Time", point.offset),
+                        y: .value("Mask", point.value),
+                        series: .value("Series", "Mask-\(point.sessionID.uuidString)")
+                    )
+                    .foregroundStyle(by: .value("Series", "Mask"))
+                    .interpolationMethod(.stepEnd)
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+                }
+                if let hoverOffset {
+                    RuleMark(x: .value("Hover", hoverOffset))
+                        .foregroundStyle(Color.secondary.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                }
+            }
+            .chartForegroundStyleScale([
+                "IPAP": Color.chartOrange,
+                "EPAP": Color.chartBlue,
+                "Mask": Color.purple
+            ])
+            .chartLegend(position: .top, alignment: .trailing, spacing: 8)
+            .modifier(SharedAxesModifier(
+                totalDuration: axes.totalDuration,
+                clockLabel: axes.clockLabel
+            ))
+            .applyYDomain(yDomain)
+            .chartXVisibleDomain(length: axes.visibleDomainLength)
+            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
+            .chartScrollPosition(x: axes.scrollBinding)
+            .chartXSelection(value: axes.hoverBinding)
+            .frame(height: WaveformSection.chartHeight)
+        }
+    }
+}
+
 /// Convenience wrappers that return `EquatableView` versions so the
 /// subview short-circuit actually engages.
+struct EquatablePressureChart: View {
+    let title: String
+    let unit: String
+    let ipap: [FlatPoint]
+    let epap: [FlatPoint]
+    let fallback: [FlatPoint]
+    let yDomain: ClosedRange<Double>?
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    var body: some View {
+        PressureChart(
+            title: title,
+            unit: unit,
+            ipap: ipap,
+            epap: epap,
+            fallback: fallback,
+            yDomain: yDomain,
+            hoverOffset: hoverOffset,
+            axes: axes
+        )
+        .equatable()
+    }
+}
+
 struct EquatableSignalLineChart: View {
     let title: String
     let unit: String
@@ -1156,6 +1340,7 @@ struct EquatableSignalLineChart: View {
     let zeroReference: Bool
     let stepped: Bool
     let thresholdY: Double?
+    var yDomain: ClosedRange<Double>? = nil
     let hoverOffset: TimeInterval?
     let axes: SharedAxisConfig
 
@@ -1169,6 +1354,7 @@ struct EquatableSignalLineChart: View {
             zeroReference: zeroReference,
             stepped: stepped,
             thresholdY: thresholdY,
+            yDomain: yDomain,
             hoverOffset: hoverOffset,
             axes: axes
         )
