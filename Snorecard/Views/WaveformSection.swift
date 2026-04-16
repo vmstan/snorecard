@@ -296,7 +296,8 @@ private func decodePLD(
     // Leak is stored in L/s; every viewer shows L/min so we scale on decode.
     out.leak = points(prefix: "Leak", scale: 60)
     out.respirationRate = points(prefix: "RespRate")
-    out.tidalVolume = points(prefix: "TidVol")
+    // Exposed in mL to match the daily stats card and clinical convention.
+    out.tidalVolume = points(prefix: "TidVol", scale: 1000)
     out.minuteVentilation = points(prefix: "MinVent")
     out.snore = points(prefix: "Snore")
     out.flowLimitation = points(prefix: "FlowLim")
@@ -319,7 +320,7 @@ struct SessionSegment: Sendable, Identifiable {
     /// 0.5 Hz signals from the paired PLD file. All empty when no PLD exists.
     let leak: [TimePoint]            // L/min (converted from L/s on decode)
     let respirationRate: [TimePoint] // bpm
-    let tidalVolume: [TimePoint]     // L
+    let tidalVolume: [TimePoint]     // mL
     let minuteVentilation: [TimePoint] // L/min
     let snore: [TimePoint]           // 0–5 scale
     let flowLimitation: [TimePoint]  // 0–1 scale
@@ -456,6 +457,9 @@ struct WaveformSection: View {
     /// Data-offset the pinch should stay anchored on — either the hover
     /// position when the gesture began, or the centre of the viewport.
     @State private var pinchAnchorOffset: TimeInterval?
+    /// Which chart the cursor is currently over. Drives the per-chart
+    /// hover readout popup.
+    @State private var activeHoverChart: String?
 
     private var visibleDomainLength: TimeInterval {
         zoomWindow > 0 ? min(zoomWindow, max(bundle.totalDuration, 1)) : max(bundle.totalDuration, 1)
@@ -465,25 +469,40 @@ struct WaveformSection: View {
         zoomWindow > 0 && zoomWindow < bundle.totalDuration
     }
 
-    /// Flow samples for the current zoom state. At "fit" we use the cheap
-    /// 1,500-point overview. At any zoom we binary-slice the 50k-point
-    /// detail array to just the visible window (plus a generous margin
-    /// so small scroll nudges don't re-slice on every frame). This keeps
-    /// the Chart's `ForEach` fed with at most a few thousand marks.
-    private var visibleFlowPoints: [FlatPoint] {
-        guard isZoomed else { return bundle.flatFlow }
-
+    /// Lo/hi bounds of the slice to feed each chart, with a generous
+    /// margin so small scroll nudges don't trigger re-slicing.
+    private var visibleBounds: (lo: TimeInterval, hi: TimeInterval)? {
+        guard isZoomed else { return nil }
         let margin = visibleDomainLength
-        let lo = max(0, scrollPosition - margin)
-        let hi = scrollPosition + visibleDomainLength + margin
+        return (max(0, scrollPosition - margin),
+                scrollPosition + visibleDomainLength + margin)
+    }
 
-        let source = bundle.flatFlowDetail
-        guard !source.isEmpty else { return [] }
-
-        let start = source.lowerBound(where: { $0.offset >= lo })
-        let end = source.lowerBound(where: { $0.offset > hi })
+    /// Slice a flat array to the visible window (plus margin). Returns
+    /// the full array at fit zoom, where there's no point slicing.
+    private func sliced(_ points: [FlatPoint]) -> [FlatPoint] {
+        guard let b = visibleBounds, !points.isEmpty else { return points }
+        let start = points.lowerBound(where: { $0.offset >= b.lo })
+        let end = points.lowerBound(where: { $0.offset > b.hi })
         guard start < end else { return [] }
-        return Array(source[start..<end])
+        return Array(points[start..<end])
+    }
+
+    /// Events filtered to the visible window (plus margin). Events don't
+    /// need the whole night's overlay when zoomed in to 30 s.
+    private var visibleEvents: [TimedEvent] {
+        guard let b = visibleBounds else { return bundle.events }
+        return bundle.events.filter {
+            $0.offset + $0.duration >= b.lo && $0.offset <= b.hi
+        }
+    }
+
+    /// Flow samples for the current zoom state. At "fit" we use the cheap
+    /// 1,500-point overview. When zoomed we slice the 50k-point detail
+    /// array to just the visible window so Chart's `ForEach` is fed with
+    /// at most a few thousand marks.
+    private var visibleFlowPoints: [FlatPoint] {
+        isZoomed ? sliced(bundle.flatFlowDetail) : bundle.flatFlow
     }
 
     private var flowUnit: String { bundle.sessions.first?.flowUnit ?? "" }
@@ -541,8 +560,6 @@ struct WaveformSection: View {
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
-            hoverReadout
-
             if bundle.isEmpty {
                 ContentUnavailableView(
                     "No session data",
@@ -559,59 +576,7 @@ struct WaveformSection: View {
                 )
                 zoomControls
 
-                lineChart(
-                    title: "Breathing",
-                    unit: flowUnit,
-                    points: visibleFlowPoints,
-                    color: .primary,
-                    overlayEvents: true,
-                    zeroReference: true
-                )
-                lineChart(
-                    title: "Pressure",
-                    unit: pressureUnit,
-                    points: bundle.flatPressure,
-                    color: .purple,
-                    overlayEvents: false,
-                    stepped: true
-                )
-                if hasLeak {
-                    lineChart(
-                        title: "Leak",
-                        unit: "L/min",
-                        points: bundle.flatLeak,
-                        color: .yellow,
-                        overlayEvents: false,
-                        thresholdY: 24
-                    )
-                }
-                if hasFlowLim {
-                    areaChart(
-                        title: "Flow Limitation",
-                        subtitle: "index (0–1)",
-                        points: bundle.flatFlowLimitation,
-                        color: .pink,
-                        yDomain: 0...1
-                    )
-                }
-                if hasTidalVolume {
-                    lineChart(
-                        title: "Tidal Volume",
-                        unit: "L",
-                        points: bundle.flatTidalVolume,
-                        color: .indigo,
-                        overlayEvents: false
-                    )
-                }
-                if hasSnore {
-                    areaChart(
-                        title: "Snore",
-                        subtitle: "index (0–5)",
-                        points: bundle.flatSnore,
-                        color: .green,
-                        yDomain: 0...5
-                    )
-                }
+                chartStack
             }
         }
     }
@@ -666,8 +631,8 @@ struct WaveformSection: View {
                     readoutChip(
                         "Tidal Volume",
                         value: hoverValue(bundle.flatTidalVolume),
-                        unit: "L",
-                        format: "%.2f",
+                        unit: "mL",
+                        format: "%.0f",
                         color: .indigo
                     )
                 }
@@ -683,8 +648,14 @@ struct WaveformSection: View {
             }
         }
         .padding(10)
-        .background(Color.platformControlBackground)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+        .allowsHitTesting(false)
     }
 
     private func readoutChip(
@@ -732,42 +703,20 @@ struct WaveformSection: View {
         return best.value
     }
 
-    private static let chartHeight: CGFloat = 140
+    static let chartHeight: CGFloat = 140
 
     /// Preset zoom windows in seconds. `0` means "fit the whole night".
     private static let zoomPresets: [(label: String, seconds: TimeInterval)] = [
         ("Fit", 0),
         ("1h", 3600),
         ("30m", 1800),
-        ("10m", 600),
-        ("2m", 120),
-        ("30s", 30)
+        ("10m", 600)
     ]
 
     @ViewBuilder
     private var zoomControls: some View {
         VStack(alignment: .leading, spacing: 4) {
             FlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-                Button {
-                    jumpToEvent(direction: .previous)
-                } label: {
-                    Image(systemName: "chevron.left.circle")
-                }
-                .buttonStyle(.bordered)
-                .disabled(bundle.events.isEmpty)
-                .help("Previous event (⌘⇧[)")
-                .keyboardShortcut("[", modifiers: [.command, .shift])
-
-                Button {
-                    jumpToEvent(direction: .next)
-                } label: {
-                    Image(systemName: "chevron.right.circle")
-                }
-                .buttonStyle(.bordered)
-                .disabled(bundle.events.isEmpty)
-                .help("Next event (⌘⇧])")
-                .keyboardShortcut("]", modifiers: [.command, .shift])
-
                 ForEach(Self.zoomPresets, id: \.label) { preset in
                     Button {
                         applyZoom(seconds: preset.seconds)
@@ -788,23 +737,6 @@ struct WaveformSection: View {
             }
         }
         .padding(.leading, Self.plotAreaLeadingInset)
-    }
-
-    private enum EventJumpDirection { case next, previous }
-
-    private func jumpToEvent(direction: EventJumpDirection) {
-        guard !bundle.events.isEmpty else { return }
-        let sorted = bundle.events.sorted { $0.offset < $1.offset }
-        let center = scrollPosition + visibleDomainLength / 2
-        let target: TimedEvent?
-        switch direction {
-        case .next:
-            target = sorted.first { $0.offset > center + 0.5 } ?? sorted.first
-        case .previous:
-            target = sorted.last { $0.offset < center - 0.5 } ?? sorted.last
-        }
-        guard let target else { return }
-        jumpTo(time: target.offset)
     }
 
     /// Pinch / magnify gesture that rescales `zoomWindow` around the
@@ -891,171 +823,142 @@ struct WaveformSection: View {
         return "\(startStr) – \(endStr)"
     }
 
-    /// Visual style for a per-sample chart.
-    /// `.line` connects the samples across the session (normal line chart).
-    /// `.bars` draws each sample as a thin vertical stem from the zero
-    /// baseline, matching the dense "hairy" flow waveform style used by
-    /// OSCAR / SleepHQ / ResScan.
-    enum PointChartStyle {
-        case line
-        case bars
-    }
-
+    /// Stack of signal charts. Each chart is its own `EquatableView` so
+    /// SwiftUI short-circuits re-rendering when only hover / scroll has
+    /// changed but the chart's own data hasn't.
     @ViewBuilder
-    private func lineChart(
-        title: String,
-        unit: String,
-        points: [FlatPoint],
-        color: Color,
-        overlayEvents: Bool,
-        zeroReference: Bool = false,
-        stepped: Bool = false,
-        thresholdY: Double? = nil,
-        style: PointChartStyle = .line
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            chartTitle(title, subtitle: unit.isEmpty ? "" : "(\(unit))")
-            Chart {
-                if zeroReference {
-                    // Dashed red zero baseline to match OSCAR / SleepHQ
-                    // convention for breath flow charts — makes
-                    // inhale-vs-exhale direction unambiguous.
-                    RuleMark(y: .value("Zero", 0))
-                        .foregroundStyle(Color.red.opacity(0.7))
-                        .lineStyle(StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
-                }
+    private var chartStack: some View {
+        let axes = SharedAxisConfig(
+            totalDuration: bundle.totalDuration,
+            visibleDomainLength: visibleDomainLength,
+            isZoomed: isZoomed,
+            scrollBinding: $scrollPosition,
+            hoverBinding: $hoverOffset,
+            clockLabel: clockLabel(for:)
+        )
 
-                if let thresholdY {
-                    RuleMark(y: .value("Threshold", thresholdY))
-                        .foregroundStyle(Color.red.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                }
-
-                ForEach(points) { point in
-                    switch style {
-                    case .bars:
-                        // Stem-plot style: a thin vertical bar from y=0
-                        // to the sample value. BarMark with a continuous
-                        // x axis renders one narrow bar per point, which
-                        // gives the dense flow-waveform look.
-                        BarMark(
-                            x: .value("Time", point.offset),
-                            yStart: .value("Zero", 0),
-                            yEnd: .value(title, point.value),
-                            width: .fixed(0.8)
-                        )
-                        .foregroundStyle(color)
-
-                    case .line:
-                        let mark = LineMark(
-                            x: .value("Time", point.offset),
-                            y: .value(title, point.value),
-                            series: .value("Session", point.sessionID.uuidString)
-                        )
-                        .foregroundStyle(color)
-                        .lineStyle(StrokeStyle(lineWidth: 1))
-
-                        if stepped {
-                            mark.interpolationMethod(.stepEnd)
-                        } else {
-                            mark
-                        }
-                    }
-                }
-
-                if overlayEvents {
-                    ForEach(Array(bundle.events.enumerated()), id: \.offset) { _, event in
-                        RectangleMark(
-                            xStart: .value("Start", event.offset),
-                            xEnd: .value("End", event.offset + event.duration)
-                        )
-                        .foregroundStyle(eventColor(event.text).opacity(0.22))
-                    }
-                }
-
-                if let hoverOffset {
-                    RuleMark(x: .value("Hover", hoverOffset))
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                }
+        withHoverOverlay(tag: "Breathing") {
+            EquatableSignalLineChart(
+                title: "Breathing",
+                unit: flowUnit,
+                points: visibleFlowPoints,
+                events: visibleEvents,
+                color: .primary,
+                zeroReference: true,
+                stepped: false,
+                thresholdY: nil,
+                hoverOffset: hoverOffset,
+                axes: axes
+            )
+        }
+        withHoverOverlay(tag: "Pressure") {
+            EquatableSignalLineChart(
+                title: "Pressure",
+                unit: pressureUnit,
+                points: sliced(bundle.flatPressure),
+                events: [],
+                color: .purple,
+                zeroReference: false,
+                stepped: true,
+                thresholdY: nil,
+                hoverOffset: hoverOffset,
+                axes: axes
+            )
+        }
+        if hasLeak {
+            withHoverOverlay(tag: "Leak") {
+                EquatableSignalLineChart(
+                    title: "Leak",
+                    unit: "L/min",
+                    points: sliced(bundle.flatLeak),
+                    events: [],
+                    color: .yellow,
+                    zeroReference: false,
+                    stepped: false,
+                    thresholdY: 24,
+                    hoverOffset: hoverOffset,
+                    axes: axes
+                )
             }
-            .modifier(SharedAxesModifier(
-                bundle: bundle,
-                clockLabel: clockLabel(for:)
-            ))
-            .chartXVisibleDomain(length: visibleDomainLength)
-            .chartScrollableAxes(isZoomed ? .horizontal : [])
-            .chartScrollPosition(x: $scrollPosition)
-            .chartXSelection(value: $hoverOffset)
-            .frame(height: Self.chartHeight)
+        }
+        if hasFlowLim {
+            withHoverOverlay(tag: "FlowLim") {
+                EquatableSignalAreaChart(
+                    title: "Flow Limitation",
+                    subtitle: "index (0–1)",
+                    points: sliced(bundle.flatFlowLimitation),
+                    color: .pink,
+                    yDomain: 0...1,
+                    hoverOffset: hoverOffset,
+                    axes: axes
+                )
+            }
+        }
+        if hasTidalVolume {
+            withHoverOverlay(tag: "TidalVol") {
+                EquatableSignalLineChart(
+                    title: "Tidal Volume",
+                    unit: "mL",
+                    points: sliced(bundle.flatTidalVolume),
+                    events: [],
+                    color: .indigo,
+                    zeroReference: false,
+                    stepped: false,
+                    thresholdY: nil,
+                    hoverOffset: hoverOffset,
+                    axes: axes
+                )
+            }
+        }
+        if hasSnore {
+            withHoverOverlay(tag: "Snore") {
+                EquatableSignalAreaChart(
+                    title: "Snore",
+                    subtitle: "index (0–5)",
+                    points: sliced(bundle.flatSnore),
+                    color: .green,
+                    yDomain: 0...5,
+                    hoverOffset: hoverOffset,
+                    axes: axes
+                )
+            }
         }
     }
 
+    /// Wrap a chart with hover tracking + a top-trailing popup of the
+    /// readout that only appears when the cursor is over *this* chart.
     @ViewBuilder
-    private func areaChart(
-        title: String,
-        subtitle: String,
-        points: [FlatPoint],
-        color: Color,
-        yDomain: ClosedRange<Double>
+    private func withHoverOverlay<C: View>(
+        tag: String,
+        @ViewBuilder content: () -> C
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            chartTitle(title, subtitle: subtitle)
-            Chart {
-                ForEach(points) { point in
-                    AreaMark(
-                        x: .value("Time", point.offset),
-                        y: .value(title, point.value),
-                        series: .value("Session", point.sessionID.uuidString)
-                    )
-                    .foregroundStyle(color.opacity(0.55))
-                    .interpolationMethod(.stepStart)
-                }
-                if let hoverOffset {
-                    RuleMark(x: .value("Hover", hoverOffset))
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        content()
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    activeHoverChart = tag
+                case .ended:
+                    if activeHoverChart == tag { activeHoverChart = nil }
                 }
             }
-            .chartYScale(domain: yDomain)
-            .modifier(SharedAxesModifier(
-                bundle: bundle,
-                clockLabel: clockLabel(for:)
-            ))
-            .chartXVisibleDomain(length: visibleDomainLength)
-            .chartScrollableAxes(isZoomed ? .horizontal : [])
-            .chartScrollPosition(x: $scrollPosition)
-            .chartXSelection(value: $hoverOffset)
-            .frame(height: Self.chartHeight)
-        }
+            .overlay(alignment: .topTrailing) {
+                if activeHoverChart == tag && hoverOffset != nil {
+                    hoverReadout
+                        .padding(.trailing, 12)
+                        .padding(.top, 4)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: activeHoverChart == tag && hoverOffset != nil)
     }
 
     /// Y-axis label column width (32) + a small gap so chart headers line
     /// up with where the plot area actually starts.
-    private static let plotAreaLeadingInset: CGFloat = 40
-
-    @ViewBuilder
-    private func chartTitle(_ title: String, subtitle: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.subheadline.weight(.medium))
-            if !subtitle.isEmpty {
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .padding(.leading, Self.plotAreaLeadingInset)
-    }
+    static let plotAreaLeadingInset: CGFloat = 40
 
     private func clockLabel(for offset: TimeInterval) -> String {
         let date = bundle.dayStart.addingTimeInterval(offset)
         return date.formatted(date: .omitted, time: .shortened)
-    }
-
-    private func eventColor(_ text: String) -> Color {
-        let lower = text.lowercased()
-        if lower.contains("obstructive") { return .red }
-        if lower.contains("central") { return .purple }
-        if lower.contains("hypopnea") { return .yellow }
-        return .gray
     }
 }
 
@@ -1079,18 +982,254 @@ extension Array {
     }
 }
 
+/// Axis / scroll / hover configuration passed down to each chart subview.
+/// Grouping it into one struct lets the subviews conform to `Equatable`
+/// cleanly — two `SharedAxisConfig` values are equal when the visible
+/// window and zoom state match, so SwiftUI can skip re-rendering charts
+/// whose data hasn't changed during a pure hover update.
+struct SharedAxisConfig: Equatable {
+    let totalDuration: TimeInterval
+    let visibleDomainLength: TimeInterval
+    let isZoomed: Bool
+    let scrollBinding: Binding<TimeInterval>
+    let hoverBinding: Binding<TimeInterval?>
+    let clockLabel: (TimeInterval) -> String
+
+    static func == (lhs: SharedAxisConfig, rhs: SharedAxisConfig) -> Bool {
+        lhs.totalDuration == rhs.totalDuration
+            && lhs.visibleDomainLength == rhs.visibleDomainLength
+            && lhs.isZoomed == rhs.isZoomed
+    }
+}
+
+/// One chart per signal, rendered with a line (or stepped line) mark.
+/// Equatable so SwiftUI re-renders it only when its own inputs change.
+struct SignalLineChart: View, Equatable {
+    let title: String
+    let unit: String
+    let points: [FlatPoint]
+    let events: [TimedEvent]
+    let color: Color
+    let zeroReference: Bool
+    let stepped: Bool
+    let thresholdY: Double?
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    nonisolated static func == (lhs: SignalLineChart, rhs: SignalLineChart) -> Bool {
+        lhs.title == rhs.title
+            && lhs.unit == rhs.unit
+            && lhs.points.count == rhs.points.count
+            && lhs.points.first?.offset == rhs.points.first?.offset
+            && lhs.points.last?.offset == rhs.points.last?.offset
+            && lhs.events.count == rhs.events.count
+            && lhs.zeroReference == rhs.zeroReference
+            && lhs.stepped == rhs.stepped
+            && lhs.thresholdY == rhs.thresholdY
+            && lhs.hoverOffset == rhs.hoverOffset
+            && lhs.axes == rhs.axes
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ChartSubviewTitle(title: title, subtitle: unit.isEmpty ? "" : "(\(unit))")
+            Chart {
+                if zeroReference {
+                    RuleMark(y: .value("Zero", 0))
+                        .foregroundStyle(Color.red.opacity(0.7))
+                        .lineStyle(StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
+                }
+                if let thresholdY {
+                    RuleMark(y: .value("Threshold", thresholdY))
+                        .foregroundStyle(Color.red.opacity(0.45))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
+                ForEach(points) { point in
+                    let mark = LineMark(
+                        x: .value("Time", point.offset),
+                        y: .value(title, point.value),
+                        series: .value("Session", point.sessionID.uuidString)
+                    )
+                    .foregroundStyle(color)
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+
+                    if stepped {
+                        mark.interpolationMethod(.stepEnd)
+                    } else {
+                        mark
+                    }
+                }
+                ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                    RectangleMark(
+                        xStart: .value("Start", event.offset),
+                        xEnd: .value("End", event.offset + event.duration)
+                    )
+                    .foregroundStyle(ChartSubviewHelpers.eventColor(event.text).opacity(0.22))
+                }
+                if let hoverOffset {
+                    RuleMark(x: .value("Hover", hoverOffset))
+                        .foregroundStyle(Color.secondary.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                }
+            }
+            .modifier(SharedAxesModifier(
+                totalDuration: axes.totalDuration,
+                clockLabel: axes.clockLabel
+            ))
+            .chartXVisibleDomain(length: axes.visibleDomainLength)
+            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
+            .chartScrollPosition(x: axes.scrollBinding)
+            .chartXSelection(value: axes.hoverBinding)
+            .frame(height: WaveformSection.chartHeight)
+        }
+    }
+}
+
+/// Area-filled chart used for index-scaled signals (snore, flow limit).
+struct SignalAreaChart: View, Equatable {
+    let title: String
+    let subtitle: String
+    let points: [FlatPoint]
+    let color: Color
+    let yDomain: ClosedRange<Double>
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    nonisolated static func == (lhs: SignalAreaChart, rhs: SignalAreaChart) -> Bool {
+        lhs.title == rhs.title
+            && lhs.subtitle == rhs.subtitle
+            && lhs.points.count == rhs.points.count
+            && lhs.points.first?.offset == rhs.points.first?.offset
+            && lhs.points.last?.offset == rhs.points.last?.offset
+            && lhs.yDomain == rhs.yDomain
+            && lhs.hoverOffset == rhs.hoverOffset
+            && lhs.axes == rhs.axes
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ChartSubviewTitle(title: title, subtitle: subtitle)
+            Chart {
+                ForEach(points) { point in
+                    AreaMark(
+                        x: .value("Time", point.offset),
+                        y: .value(title, point.value),
+                        series: .value("Session", point.sessionID.uuidString)
+                    )
+                    .foregroundStyle(color.opacity(0.55))
+                    .interpolationMethod(.stepStart)
+                }
+                if let hoverOffset {
+                    RuleMark(x: .value("Hover", hoverOffset))
+                        .foregroundStyle(Color.secondary.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                }
+            }
+            .chartYScale(domain: yDomain)
+            .modifier(SharedAxesModifier(
+                totalDuration: axes.totalDuration,
+                clockLabel: axes.clockLabel
+            ))
+            .chartXVisibleDomain(length: axes.visibleDomainLength)
+            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
+            .chartScrollPosition(x: axes.scrollBinding)
+            .chartXSelection(value: axes.hoverBinding)
+            .frame(height: WaveformSection.chartHeight)
+        }
+    }
+}
+
+/// Convenience wrappers that return `EquatableView` versions so the
+/// subview short-circuit actually engages.
+struct EquatableSignalLineChart: View {
+    let title: String
+    let unit: String
+    let points: [FlatPoint]
+    let events: [TimedEvent]
+    let color: Color
+    let zeroReference: Bool
+    let stepped: Bool
+    let thresholdY: Double?
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    var body: some View {
+        SignalLineChart(
+            title: title,
+            unit: unit,
+            points: points,
+            events: events,
+            color: color,
+            zeroReference: zeroReference,
+            stepped: stepped,
+            thresholdY: thresholdY,
+            hoverOffset: hoverOffset,
+            axes: axes
+        )
+        .equatable()
+    }
+}
+
+struct EquatableSignalAreaChart: View {
+    let title: String
+    let subtitle: String
+    let points: [FlatPoint]
+    let color: Color
+    let yDomain: ClosedRange<Double>
+    let hoverOffset: TimeInterval?
+    let axes: SharedAxisConfig
+
+    var body: some View {
+        SignalAreaChart(
+            title: title,
+            subtitle: subtitle,
+            points: points,
+            color: color,
+            yDomain: yDomain,
+            hoverOffset: hoverOffset,
+            axes: axes
+        )
+        .equatable()
+    }
+}
+
+private struct ChartSubviewTitle: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title).font(.subheadline.weight(.medium))
+            if !subtitle.isEmpty {
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.leading, WaveformSection.plotAreaLeadingInset)
+    }
+}
+
+private enum ChartSubviewHelpers {
+    static func eventColor(_ text: String) -> Color {
+        let lower = text.lowercased()
+        if lower.contains("obstructive") { return .red }
+        if lower.contains("central") { return .purple }
+        if lower.contains("hypopnea") { return .yellow }
+        return .gray
+    }
+}
+
 /// Applies the shared X/Y axis treatment to every waveform chart so tick
 /// placement and, crucially, plot-area width line up across the vertical
 /// stack. Fixed-width Y-axis labels make the left edge of every chart
 /// identical regardless of numeric value width.
 private struct SharedAxesModifier: ViewModifier {
-    let bundle: WaveformBundle
+    let totalDuration: TimeInterval
     let clockLabel: (TimeInterval) -> String
 
     func body(content: Content) -> some View {
         content
             .chartLegend(.hidden)
-            .chartXScale(domain: 0 ... max(bundle.totalDuration, 1))
+            .chartXScale(domain: 0 ... max(totalDuration, 1))
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 6)) { value in
                     if let seconds = value.as(Double.self) {
