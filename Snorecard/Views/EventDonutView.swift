@@ -46,8 +46,8 @@ struct EventDonutView: View {
         Chart {
             if hasData {
                 barSegment("Obstructive", value: stats.obstructiveApneaIndex, color: .red)
-                barSegment("Central", value: stats.centralApneaIndex, color: .purple)
                 barSegment("Hypopnea", value: stats.hypopneaIndex, color: .yellow)
+                barSegment("Central", value: stats.centralApneaIndex, color: .purple)
             } else {
                 BarMark(
                     x: .value("Index", 1),
@@ -91,9 +91,9 @@ struct EventDonutView: View {
 
     private func shortLabel(for name: String) -> String {
         switch name {
-        case "Obstructive": "OAI"
-        case "Central": "CAI"
-        case "Hypopnea": "HI"
+        case "Obstructive": "OA"
+        case "Central": "CA"
+        case "Hypopnea": "H"
         default: name
         }
     }

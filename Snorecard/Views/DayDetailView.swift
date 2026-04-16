@@ -58,7 +58,7 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Time in Apnea",
                             value: formatDurationShort(apneaSeconds),
-                            subtitle: "\(Int((apneaSeconds / (stats.usageMinutes * 60) * 100).rounded()))% of usage"
+                            subtitle: String(format: "%.2f%% of usage", apneaSeconds / (stats.usageMinutes * 60) * 100)
                         )
                     }
                     if let gi = stats.glasgowIndex {
@@ -100,7 +100,7 @@ struct DayDetailView: View {
                         )
                     }
                     if let tv = stats.tidalVolume50 {
-                        StatCard(label: "Tidal Volume (Median)", value: String(format: "%.2f L", tv))
+                        StatCard(label: "Tidal Volume (Median)", value: String(format: "%.0f mL", tv * 1000))
                     }
                 }
             }

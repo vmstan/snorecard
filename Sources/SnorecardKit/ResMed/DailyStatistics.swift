@@ -15,10 +15,10 @@ public struct DailyStatistics: Sendable, Equatable {
     public let centralApneaIndex: Double
     public let unspecifiedApneaIndex: Double
     public let pressureMedian: Double?
-    public let pressure95: Double?
+    public internal(set) var pressure95: Double?
     public let pressureMax: Double?
-    public let ipap95: Double?
-    public let epap95: Double?
+    public internal(set) var ipap95: Double?
+    public internal(set) var epap95: Double?
     public let leak95LPerMin: Double?
     public let leakMaxLPerMin: Double?
     /// Total seconds spent in apnea/hypopnea events — sum of every EVE
@@ -210,14 +210,28 @@ extension DailyStatistics {
         )
     }
 
+    /// Aggregate metrics computed from a day's raw EVE and PLD files.
+    /// Matches what OSCAR / SleepHQ show by computing percentiles
+    /// directly from PLD samples (STR.edf pre-aggregated values like
+    /// `TgtEPAP.95` are the *target* pressure, not the measured one).
+    public struct SupplementaryMetrics {
+        public var timeInApnea: Double?
+        public var largeLeak: Double?
+        public var flowLimit95: Double?
+        /// PLD-measured 95th percentile EPAP, on-therapy samples only.
+        public var maskEpap95: Double?
+        /// PLD-measured 95th percentile IPAP, on-therapy samples only.
+        public var maskIpap95: Double?
+        /// PLD-measured 95th percentile mask pressure, on-therapy only.
+        public var maskPressure95: Double?
+    }
+
     /// Re-read a day's EVE and PLD files to compute metrics that STR.edf
-    /// doesn't pre-aggregate: total time in apneas/hypopneas, time above
-    /// the large-leak threshold, and 95th-percentile flow limitation.
-    /// Called during SD card import for every day so the values are
-    /// available whether the base stats came from STR or compute().
+    /// doesn't pre-aggregate or that OSCAR computes differently (like
+    /// the measured pressure percentiles vs STR's target values).
     public static func supplementaryMetrics(
         for day: ResMedDay
-    ) -> (timeInApnea: Double?, largeLeak: Double?, flowLimit95: Double?) {
+    ) -> SupplementaryMetrics {
         var timeInApnea: Double = 0
         var sawAnyEVE = false
         for file in day.files(of: .events) {
@@ -234,6 +248,9 @@ extension DailyStatistics {
         var largeLeakSeconds: Double = 0
         var sawAnyPLD = false
         var flowLims: [Double] = []
+        var maskPressures: [Double] = []
+        var ipaps: [Double] = []
+        var epaps: [Double] = []
         // Leak is stored in L/s, so the 24 L/min threshold is 24/60 = 0.4 L/s.
         let threshold: Double = 24.0 / 60.0
         for file in day.files(of: .physiological) {
@@ -255,22 +272,32 @@ extension DailyStatistics {
                 }
             }
 
-            // Flow limitation — collect on-therapy samples (mask pressure > 1).
-            if let flIdx = edf.signals.firstIndex(where: { $0.label.hasPrefix("FlowLim") }),
-               let flSamples = try? edf.physicalSamples(ofSignal: flIdx) {
-                let pressure: [Double]? = edf.signals.firstIndex(where: { $0.label.hasPrefix("MaskPress") })
-                    .flatMap { try? edf.physicalSamples(ofSignal: $0) }
-                for i in flSamples.indices {
-                    if let p = pressure, i < p.count, p[i] <= 1.0 { continue }
-                    flowLims.append(flSamples[i])
-                }
+            // Pressure / flow-limit samples — filtered to on-therapy
+            // (mask pressure > 1 cmH2O).
+            let mp: [Double] = edf.signals.firstIndex(where: { $0.label.hasPrefix("MaskPress") })
+                .flatMap { try? edf.physicalSamples(ofSignal: $0) } ?? []
+            let ip: [Double] = edf.signals.firstIndex(where: { $0.label.hasPrefix("Press.") })
+                .flatMap { try? edf.physicalSamples(ofSignal: $0) } ?? []
+            let ep: [Double] = edf.signals.firstIndex(where: { $0.label.hasPrefix("EprPress") })
+                .flatMap { try? edf.physicalSamples(ofSignal: $0) } ?? []
+            let fl: [Double] = edf.signals.firstIndex(where: { $0.label.hasPrefix("FlowLim") })
+                .flatMap { try? edf.physicalSamples(ofSignal: $0) } ?? []
+
+            for i in mp.indices where mp[i] > 1.0 {
+                maskPressures.append(mp[i])
+                if i < ip.count { ipaps.append(ip[i]) }
+                if i < ep.count { epaps.append(ep[i]) }
+                if i < fl.count { flowLims.append(fl[i]) }
             }
         }
 
-        return (
+        return SupplementaryMetrics(
             timeInApnea: sawAnyEVE ? timeInApnea : nil,
             largeLeak: sawAnyPLD ? largeLeakSeconds : nil,
-            flowLimit95: percentile(flowLims, 95)
+            flowLimit95: percentile(flowLims, 95),
+            maskEpap95: percentile(epaps, 95),
+            maskIpap95: percentile(ipaps, 95),
+            maskPressure95: percentile(maskPressures, 95)
         )
     }
 

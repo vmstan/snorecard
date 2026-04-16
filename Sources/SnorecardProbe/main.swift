@@ -59,6 +59,43 @@ if let strURL = card.summaryFileURL {
 
 print()
 
+// Pressure debug — compare STR.edf TgtEPAP.95 to PLD-computed percentile.
+if let lastDay = card.days.last(where: { !$0.files(of: .physiological).isEmpty }) {
+    var epaps: [Double] = []
+    var ipaps: [Double] = []
+    var mps: [Double] = []
+    for file in lastDay.files(of: .physiological) {
+        guard let edf = try? EDFFile(contentsOf: file.url),
+              edf.header.recordCount > 0 else { continue }
+        func decode(_ prefix: String) -> [Double] {
+            guard let idx = edf.signals.firstIndex(where: { $0.label.hasPrefix(prefix) }),
+                  let s = try? edf.physicalSamples(ofSignal: idx) else { return [] }
+            return s
+        }
+        let mp = decode("MaskPress")
+        let ep = decode("EprPress")
+        let ip = decode("Press.")
+        for i in mp.indices where mp[i] > 1.0 {
+            mps.append(mp[i])
+            if i < ep.count { epaps.append(ep[i]) }
+            if i < ip.count { ipaps.append(ip[i]) }
+        }
+    }
+    func percentile(_ v: [Double], _ p: Double) -> Double {
+        guard !v.isEmpty else { return 0 }
+        var s = v; s.sort()
+        let rank = (p / 100) * Double(s.count - 1)
+        let low = Int(rank.rounded(.down))
+        let high = min(low + 1, s.count - 1)
+        let frac = rank - Double(low)
+        return s[low] * (1 - frac) + s[high] * frac
+    }
+    print("PLD-computed percentiles (on-therapy):")
+    print("  MaskPress.95 = \(String(format: "%.4f", percentile(mps, 95)))")
+    print("  EprPress.95  = \(String(format: "%.4f", percentile(epaps, 95)))")
+    print("  Press.95     = \(String(format: "%.4f", percentile(ipaps, 95)))")
+}
+
 // Glasgow Index debug
 if let lastDay = card.days.last(where: { !$0.files(of: .breath).isEmpty }) {
     let gi = GlasgowIndex.computeDay(brpFiles: lastDay.files(of: .breath))

@@ -151,6 +151,11 @@ public enum SDCardImporter {
                 if stats?.flowLimit95 == nil {
                     stats?.flowLimit95 = supplementary.flowLimit95
                 }
+                // Prefer PLD-measured pressure percentiles over STR.edf's
+                // target values so our numbers match OSCAR / SleepHQ.
+                if let v = supplementary.maskEpap95 { stats?.epap95 = v }
+                if let v = supplementary.maskIpap95 { stats?.ipap95 = v }
+                if let v = supplementary.maskPressure95 { stats?.pressure95 = v }
 
                 // Glasgow Index — computed per-BRP session then weighted
                 // by inspiration count. BRP stores flow in L/s; the
