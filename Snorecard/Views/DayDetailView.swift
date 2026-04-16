@@ -175,9 +175,8 @@ struct DayDetailView: View {
 
     private func ahiColor(_ ahi: Double) -> Color {
         switch ahi {
-        case ..<5: .severityGood
-        case ..<15: .severityLow
-        case ..<30: .severityMedium
+        case ..<2: .severityGood
+        case ..<5: .severityLow
         default: .severityHigh
         }
     }

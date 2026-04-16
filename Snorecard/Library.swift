@@ -95,6 +95,28 @@ final class Library {
             as? [String: String] ?? [:]
     }
 
+    /// Remove every `.snorecard-stats.json` sidecar inside the currently
+    /// loaded card's DATALOG tree and trigger a full re-import. Forces
+    /// the next scan to recompute every day from scratch — useful when
+    /// the computation logic has changed or a day's cache got out of
+    /// sync with the raw data.
+    func invalidateStatsCacheAndReload() {
+        guard let url = card?.rootURL else { return }
+        let datalog = url.appendingPathComponent("DATALOG", isDirectory: true)
+        let fm = FileManager.default
+        if let dayDirs = try? fm.contentsOfDirectory(
+            at: datalog,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) {
+            for dir in dayDirs {
+                let sidecar = dir.appendingPathComponent(DailyStatsCache.filename)
+                try? fm.removeItem(at: sidecar)
+            }
+        }
+        load(url)
+    }
+
     /// Auto-load data on launch. Tries iCloud first (the most up-to-date
     /// synced copy), then falls back to the last-opened local path.
     func loadLastOpenedIfPossible() {

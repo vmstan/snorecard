@@ -4,6 +4,7 @@ import SnorecardKit
 struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isRenamingDevice = false
+    @State private var isConfirmingRebuild = false
 
     var body: some View {
         @Bindable var library = library
@@ -33,6 +34,18 @@ struct ContentView: View {
                 )
             }
         }
+        .confirmationDialog(
+            "Rebuild Statistics?",
+            isPresented: $isConfirmingRebuild,
+            titleVisibility: .visible
+        ) {
+            Button("Rebuild", role: .destructive) {
+                library.invalidateStatsCacheAndReload()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This discards the cached per-day statistics and recomputes every day's summary from scratch. It can take a while for devices with months of data.")
+        }
     }
 
     @ToolbarContentBuilder
@@ -55,6 +68,11 @@ struct ContentView: View {
                         isRenamingDevice = true
                     } label: {
                         Label("Rename Device…", systemImage: "square.and.pencil")
+                    }
+                    Button {
+                        isConfirmingRebuild = true
+                    } label: {
+                        Label("Rebuild Statistics", systemImage: "arrow.clockwise")
                     }
                 }
             } label: {
