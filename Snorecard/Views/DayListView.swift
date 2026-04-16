@@ -5,22 +5,6 @@ struct DayListView: View {
     let card: ResMedSDCard
     @Binding var selection: SidebarSelection?
     @Environment(Library.self) private var library
-    @State private var knownDevices: [Library.DeviceFolder] = []
-
-    private var otherDevices: [Library.DeviceFolder] {
-        let currentSerial = card.identification?.serialNumber
-        return knownDevices.filter { $0.serial != currentSerial }
-    }
-
-    private func deviceMenuLabel(for folder: Library.DeviceFolder) -> String {
-        if let override = library.deviceNameOverrides[folder.serial], !override.isEmpty {
-            return "\(override) (\(folder.serial))"
-        }
-        if let product = folder.productName, !product.isEmpty {
-            return "\(product) (\(folder.serial))"
-        }
-        return "Device \(folder.serial)"
-    }
 
     var body: some View {
         List(selection: $selection) {
@@ -28,28 +12,10 @@ struct DayListView: View {
                 overviewRow(isSelected: selection == .overview)
                     .tag(SidebarSelection.overview)
             } header: {
-                Group {
-                    if otherDevices.isEmpty {
-                        Text(library.displayName(for: card))
-                            .font(.title2.weight(.semibold))
-                    } else {
-                        Menu {
-                            ForEach(otherDevices) { folder in
-                                Button(deviceMenuLabel(for: folder)) {
-                                    library.load(folder.url)
-                                }
-                            }
-                        } label: {
-                            Text(library.displayName(for: card))
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                    }
-                }
-                .padding(.bottom, 10)
-                .textCase(nil)
+                Text(library.displayName(for: card))
+                    .font(.title2.weight(.semibold))
+                    .padding(.bottom, 10)
+                    .textCase(nil)
             }
 
             ForEach(daysByMonth, id: \.month) { group in
@@ -65,9 +31,6 @@ struct DayListView: View {
             }
         }
         .listStyle(.sidebar)
-        .task(id: card.rootURL) {
-            knownDevices = Library.iCloudDeviceFolders()
-        }
     }
 
     /// Sidebar row for the "Overview" entry. Mirrors the day-row layout

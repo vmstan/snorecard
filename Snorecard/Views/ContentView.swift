@@ -5,6 +5,22 @@ struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isRenamingDevice = false
     @State private var isConfirmingRebuild = false
+    @State private var knownDevices: [Library.DeviceFolder] = []
+
+    private var otherDevices: [Library.DeviceFolder] {
+        let currentSerial = library.card?.identification?.serialNumber
+        return knownDevices.filter { $0.serial != currentSerial }
+    }
+
+    private func deviceMenuLabel(for folder: Library.DeviceFolder) -> String {
+        if let override = library.deviceNameOverrides[folder.serial], !override.isEmpty {
+            return "\(override) (\(folder.serial))"
+        }
+        if let product = folder.productName, !product.isEmpty {
+            return "\(product) (\(folder.serial))"
+        }
+        return "Device \(folder.serial)"
+    }
 
     var body: some View {
         @Bindable var library = library
@@ -46,6 +62,9 @@ struct ContentView: View {
         } message: {
             Text("This discards the cached per-day statistics and recomputes every day's summary from scratch. It can take a while for devices with months of data.")
         }
+        .task(id: library.card?.rootURL) {
+            knownDevices = Library.iCloudDeviceFolders()
+        }
     }
 
     @ToolbarContentBuilder
@@ -73,6 +92,18 @@ struct ContentView: View {
                         isConfirmingRebuild = true
                     } label: {
                         Label("Rebuild Statistics", systemImage: "arrow.clockwise")
+                    }
+                    if !otherDevices.isEmpty {
+                        Divider()
+                        Menu {
+                            ForEach(otherDevices) { folder in
+                                Button(deviceMenuLabel(for: folder)) {
+                                    library.load(folder.url)
+                                }
+                            }
+                        } label: {
+                            Label("Switch Device", systemImage: "arrow.triangle.2.circlepath")
+                        }
                     }
                 }
             } label: {
@@ -159,28 +190,33 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if case .loaded(let card) = library.state {
-            switch library.selection {
-            case .overview:
-                OverviewView(card: card)
-            case .day:
-                if let day = library.selectedDay {
-                    DayDetailView(day: day)
-                } else {
+        Group {
+            if case .loaded(let card) = library.state {
+                switch library.selection {
+                case .overview:
+                    OverviewView(card: card)
+                case .day:
+                    if let day = library.selectedDay {
+                        DayDetailView(day: day)
+                    } else {
+                        ContentUnavailableView(
+                            "Day not found",
+                            systemImage: "calendar.badge.exclamationmark"
+                        )
+                    }
+                case .none:
                     ContentUnavailableView(
-                        "Day not found",
-                        systemImage: "calendar.badge.exclamationmark"
+                        "Select Overview or a day",
+                        systemImage: "sidebar.left",
+                        description: Text("Pick something from the sidebar.")
                     )
                 }
-            case .none:
-                ContentUnavailableView(
-                    "Select Overview or a day",
-                    systemImage: "sidebar.left",
-                    description: Text("Pick something from the sidebar.")
-                )
+            } else {
+                Color.clear
             }
-        } else {
-            Color.clear
         }
+        #if os(iOS)
+        .toolbar { toolbarButtons }
+        #endif
     }
 }
