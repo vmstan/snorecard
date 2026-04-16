@@ -45,9 +45,9 @@ struct EventDonutView: View {
     private var stackedBar: some View {
         Chart {
             if hasData {
-                barSegment("Obstructive", value: stats.obstructiveApneaIndex, color: .red)
-                barSegment("Hypopnea", value: stats.hypopneaIndex, color: .yellow)
-                barSegment("Central", value: stats.centralApneaIndex, color: .purple)
+                barSegment("Obstructive", value: stats.obstructiveApneaIndex, color: .eventObstructive)
+                barSegment("Hypopnea", value: stats.hypopneaIndex, color: .eventHypopnea)
+                barSegment("Central", value: stats.centralApneaIndex, color: .eventCentral)
             } else {
                 BarMark(
                     x: .value("Index", 1),
@@ -65,9 +65,9 @@ struct EventDonutView: View {
         .chartYAxis(.hidden)
         .chartLegend(.hidden)
         .chartForegroundStyleScale([
-            "Obstructive": Color.red,
-            "Central": Color.purple,
-            "Hypopnea": Color.yellow
+            "Obstructive": Color.eventObstructive,
+            "Central": Color.eventCentral,
+            "Hypopnea": Color.eventHypopnea
         ])
         .frame(height: 36)
     }

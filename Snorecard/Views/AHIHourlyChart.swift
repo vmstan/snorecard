@@ -76,21 +76,21 @@ struct AHIHourlyChart: View {
 
                     BarMark(
                         x: .value("Hour", bucket.clockLabel),
-                        y: .value("Count", bucket.central)
-                    )
-                    .foregroundStyle(by: .value("Type", "Central"))
-
-                    BarMark(
-                        x: .value("Hour", bucket.clockLabel),
                         y: .value("Count", bucket.hypopnea)
                     )
                     .foregroundStyle(by: .value("Type", "Hypopnea"))
+
+                    BarMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Count", bucket.central)
+                    )
+                    .foregroundStyle(by: .value("Type", "Central"))
                 }
             }
             .chartForegroundStyleScale([
-                "Obstructive": Color.red,
-                "Central": Color.purple,
-                "Hypopnea": Color.yellow
+                "Obstructive": Color.eventObstructive,
+                "Central": Color.eventCentral,
+                "Hypopnea": Color.eventHypopnea
             ])
             .chartLegend(.hidden)
             .chartYScale(domain: 0 ... max(peakEventCount, 1))

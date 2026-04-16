@@ -1211,9 +1211,9 @@ private struct ChartSubviewTitle: View {
 private enum ChartSubviewHelpers {
     static func eventColor(_ text: String) -> Color {
         let lower = text.lowercased()
-        if lower.contains("obstructive") { return .red }
-        if lower.contains("central") { return .purple }
-        if lower.contains("hypopnea") { return .yellow }
+        if lower.contains("obstructive") { return .eventObstructive }
+        if lower.contains("central") { return .eventCentral }
+        if lower.contains("hypopnea") { return .eventHypopnea }
         return .gray
     }
 }

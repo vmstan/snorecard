@@ -27,7 +27,7 @@ struct SessionTimelineView: View {
                         yStart: .value("Bottom", 0),
                         yEnd: .value("Top", 1)
                     )
-                    .foregroundStyle(Color.accentColor.opacity(0.75))
+                    .foregroundStyle(Color.timelineSessionFill)
                     .cornerRadius(3)
                     .annotation(position: .overlay, alignment: .leading, spacing: 0) {
                         // Invisible accessibility / tooltip anchor per bar.
@@ -40,7 +40,7 @@ struct SessionTimelineView: View {
                 ForEach(Array(bundle.events.enumerated()), id: \.offset) { _, event in
                     RuleMark(x: .value("Event", event.offset))
                         .foregroundStyle(color(for: event.text))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1.8))
                 }
 
                 if showsViewportIndicator {
@@ -52,14 +52,14 @@ struct SessionTimelineView: View {
                         yStart: .value("Bottom", 0),
                         yEnd: .value("Top", 1)
                     )
-                    .foregroundStyle(Color.accentColor.opacity(0.3))
+                    .foregroundStyle(Color.timelineViewportFill)
                     .cornerRadius(2)
                     RuleMark(x: .value("VP Start", viewportStart))
-                        .foregroundStyle(Color.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .foregroundStyle(Color.timelineViewportEdge)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
                     RuleMark(x: .value("VP End", viewportStart + viewportLength))
-                        .foregroundStyle(Color.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .foregroundStyle(Color.timelineViewportEdge)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
                 }
             }
             .chartYScale(domain: 0 ... 1)
@@ -135,9 +135,9 @@ struct SessionTimelineView: View {
 
     private func color(for text: String) -> Color {
         let lower = text.lowercased()
-        if lower.contains("obstructive") { return .red }
-        if lower.contains("central") { return .purple }
-        if lower.contains("hypopnea") { return .yellow }
+        if lower.contains("obstructive") { return .eventObstructive }
+        if lower.contains("central") { return .eventCentral }
+        if lower.contains("hypopnea") { return .eventHypopnea }
         return .gray
     }
 }
