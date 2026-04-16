@@ -703,7 +703,7 @@ struct WaveformSection: View {
         return best.value
     }
 
-    static let chartHeight: CGFloat = 140
+    static let chartHeight: CGFloat = 180
 
     /// Preset zoom windows in seconds. `0` means "fit the whole night".
     private static let zoomPresets: [(label: String, seconds: TimeInterval)] = [
@@ -1031,7 +1031,7 @@ struct SignalLineChart: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             ChartSubviewTitle(title: title, subtitle: unit.isEmpty ? "" : "(\(unit))")
             Chart {
                 if zeroReference {
@@ -1107,7 +1107,7 @@ struct SignalAreaChart: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             ChartSubviewTitle(title: title, subtitle: subtitle)
             Chart {
                 ForEach(points) { point in
@@ -1198,8 +1198,8 @@ private struct ChartSubviewTitle: View {
     let subtitle: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.subheadline.weight(.medium))
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title).font(.headline)
             if !subtitle.isEmpty {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
