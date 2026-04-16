@@ -22,6 +22,22 @@ struct ContentView: View {
         return "Device \(folder.serial)"
     }
 
+    /// Best-effort display name to show while a given URL is loading —
+    /// resolved by matching the folder's serial against any known
+    /// iCloud device folder and applying the same override →
+    /// productName precedence as the sidebar.
+    private func loadingDeviceName(for url: URL) -> String? {
+        let serial = url.lastPathComponent
+        if let override = library.deviceNameOverrides[serial], !override.isEmpty {
+            return override
+        }
+        if let match = knownDevices.first(where: { $0.serial == serial }),
+           let product = match.productName, !product.isEmpty {
+            return product
+        }
+        return nil
+    }
+
     var body: some View {
         @Bindable var library = library
 
@@ -152,24 +168,11 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 }
             case .loading(let url):
-                VStack(spacing: 12) {
-                    if let progress = library.cloudPrefetchProgress {
-                        ProgressView(
-                            value: Double(progress.completed),
-                            total: Double(max(progress.total, 1))
-                        )
-                        .progressViewStyle(.linear)
-                        .frame(maxWidth: 240)
-                        Text("Downloading from iCloud — \(progress.completed)/\(progress.total)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ProgressView()
-                        Text("Scanning \(url.lastPathComponent)…")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingView(
+                    url: url,
+                    prefetchProgress: library.cloudPrefetchProgress,
+                    deviceName: loadingDeviceName(for: url)
+                )
             case .failed(let message):
                 ContentUnavailableView {
                     Label("Could not load", systemImage: "exclamationmark.triangle")

@@ -24,9 +24,7 @@ struct DayDetailView: View {
                         .padding(.vertical, 4)
                     WaveformSection(bundle: bundle)
                 } else {
-                    ProgressView("Decoding sessions…")
-                        .progressViewStyle(.circular)
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                    waveformLoadingPlaceholder
                 }
             }
             .padding(20)
@@ -43,6 +41,38 @@ struct DayDetailView: View {
     private var deviceSubtitle: String {
         guard let card = library.card else { return "" }
         return library.displayName(for: card)
+    }
+
+    /// Replaces the bare `ProgressView` placeholder with a centered
+    /// icon + headline + progress cluster that matches the sidebar
+    /// loading screen's voice.
+    private var waveformLoadingPlaceholder: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(.tint)
+                .symbolEffect(.pulse, options: .repeating)
+            VStack(spacing: 4) {
+                Text("Analyzing breath waveforms")
+                    .font(.headline)
+                Text(waveformLoadingSubtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            ProgressView()
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, minHeight: 260)
+        .padding(.vertical, 20)
+    }
+
+    private var waveformLoadingSubtitle: String {
+        let brp = day.files(of: .breath).count
+        if brp == 0 {
+            return "Reading the night's sessions…"
+        }
+        return "\(brp) session\(brp == 1 ? "" : "s") from this night"
     }
 
     @ViewBuilder
