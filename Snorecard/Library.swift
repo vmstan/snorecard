@@ -24,8 +24,32 @@ final class Library {
 
     var state: LoadState = .empty
     var selection: SidebarSelection? = nil
+    /// Map of CPAP serial number → custom display name. Backed by
+    /// `NSUbiquitousKeyValueStore` so the override syncs automatically
+    /// across all of the user's Macs and iOS devices.
+    private(set) var deviceNameOverrides: [String: String] = [:]
 
     private static let lastPathKey = "SnorecardLastSDPath"
+    private static let deviceNamesKey = "deviceNameOverrides"
+
+    init() {
+        let kvs = NSUbiquitousKeyValueStore.default
+        deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
+            as? [String: String] ?? [:]
+
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: kvs,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshDeviceNameOverrides()
+            }
+        }
+        // Kick off an initial pull so any value already synced to this
+        // device is picked up on first launch.
+        kvs.synchronize()
+    }
 
     var card: ResMedSDCard? {
         if case .loaded(let card) = state { return card }
@@ -35,6 +59,40 @@ final class Library {
     var selectedDay: ResMedDay? {
         guard let card, case .day(let id) = selection else { return nil }
         return card.days.first { $0.id == id }
+    }
+
+    // MARK: - Device name overrides
+
+    /// The user-facing name for a loaded card. Prefers the iCloud-synced
+    /// override (keyed on serial), falling back to the ResMed product name
+    /// and finally a generic label.
+    func displayName(for card: ResMedSDCard) -> String {
+        if let serial = card.identification?.serialNumber,
+           let override = deviceNameOverrides[serial],
+           !override.isEmpty {
+            return override
+        }
+        return card.identification?.productName ?? "ResMed Device"
+    }
+
+    /// Set or clear a custom name for a given serial. Passing an empty /
+    /// whitespace-only string removes the override.
+    func setDeviceName(_ name: String?, for serial: String) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, !trimmed.isEmpty {
+            deviceNameOverrides[serial] = trimmed
+        } else {
+            deviceNameOverrides.removeValue(forKey: serial)
+        }
+        let kvs = NSUbiquitousKeyValueStore.default
+        kvs.set(deviceNameOverrides, forKey: Self.deviceNamesKey)
+        kvs.synchronize()
+    }
+
+    private func refreshDeviceNameOverrides() {
+        let kvs = NSUbiquitousKeyValueStore.default
+        deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
+            as? [String: String] ?? [:]
     }
 
     /// Auto-load data on launch. Tries iCloud first (the most up-to-date

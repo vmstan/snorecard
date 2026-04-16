@@ -4,6 +4,8 @@ import SnorecardKit
 struct DayListView: View {
     let card: ResMedSDCard
     @Binding var selection: SidebarSelection?
+    @Environment(Library.self) private var library
+    @State private var isRenaming = false
 
     var body: some View {
         List(selection: $selection) {
@@ -12,8 +14,21 @@ struct DayListView: View {
                     .tag(SidebarSelection.overview)
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(card.identification?.productName ?? "ResMed Device")
-                        .font(.headline)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(library.displayName(for: card))
+                            .font(.headline)
+                        if card.identification?.serialNumber != nil {
+                            Button {
+                                isRenaming = true
+                            } label: {
+                                Image(systemName: "square.and.pencil")
+                                    .font(.callout)
+                                    .foregroundStyle(.tint)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Rename device")
+                        }
+                    }
                     if let serial = card.identification?.serialNumber {
                         Text("Serial \(serial)")
                             .font(.caption)
@@ -32,6 +47,18 @@ struct DayListView: View {
             }
         }
         .listStyle(.sidebar)
+        .sheet(isPresented: $isRenaming) {
+            if let serial = card.identification?.serialNumber {
+                RenameDeviceSheet(
+                    serial: serial,
+                    defaultName: card.identification?.productName ?? "ResMed Device",
+                    currentOverride: library.deviceNameOverrides[serial],
+                    onSave: { newName in
+                        library.setDeviceName(newName, for: serial)
+                    }
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -83,5 +110,76 @@ struct DayListView: View {
         case ..<30: .orange
         default: .red
         }
+    }
+}
+
+/// Sheet presented when the user wants to set or clear a custom name for
+/// the currently-loaded CPAP device. Saves via the shared Library so the
+/// value syncs to iCloud.
+private struct RenameDeviceSheet: View {
+    let serial: String
+    let defaultName: String
+    let currentOverride: String?
+    let onSave: (String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+
+    init(
+        serial: String,
+        defaultName: String,
+        currentOverride: String?,
+        onSave: @escaping (String?) -> Void
+    ) {
+        self.serial = serial
+        self.defaultName = defaultName
+        self.currentOverride = currentOverride
+        self.onSave = onSave
+        self._name = State(initialValue: currentOverride ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rename Device")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Serial \(serial)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Default: \(defaultName)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("Custom name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(save)
+
+            HStack {
+                Button("Use Default", role: .destructive) {
+                    onSave(nil)
+                    dismiss()
+                }
+                .disabled(currentOverride == nil)
+
+                Spacer()
+
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 340)
+    }
+
+    private func save() {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        onSave(trimmed.isEmpty ? nil : trimmed)
+        dismiss()
     }
 }

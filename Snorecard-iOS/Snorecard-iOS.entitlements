@@ -14,5 +14,7 @@
 	<array>
 		<string>iCloud.com.vmstan.Snorecard</string>
 	</array>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)com.vmstan.Snorecard</string>
 </dict>
 </plist>
