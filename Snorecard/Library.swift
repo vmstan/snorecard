@@ -35,6 +35,7 @@ final class Library {
 
     private static let lastPathKey = "SnorecardLastSDPath"
     private static let deviceNamesKey = "deviceNameOverrides"
+    private static let lastOpenedSerialKey = "lastOpenedSerial"
 
     init() {
         let kvs = NSUbiquitousKeyValueStore.default
@@ -121,18 +122,21 @@ final class Library {
         load(url)
     }
 
-    /// Auto-load data on launch. Tries iCloud first (the most up-to-date
-    /// synced copy), then falls back to the last-opened local path.
+    /// Auto-load data on launch. Tries to re-open the device the user
+    /// last actively selected (persisted in iCloud KVS so it follows
+    /// the user across Macs and iPhones). Falls back to the most
+    /// recently modified iCloud folder, and finally to whatever was
+    /// last opened locally.
     func loadLastOpenedIfPossible() {
         guard case .empty = state else { return }
 
-        // Prefer iCloud — pick the most recently modified device folder.
-        if let url = Self.bestICloudDeviceFolder() {
+        if let url = Self.preferredICloudDeviceFolder() {
             load(url)
             return
         }
 
-        // Fall back to whatever the user last opened locally.
+        // Last resort — whatever path we stashed in UserDefaults
+        // (used when iCloud is entirely unavailable).
         guard
             let path = UserDefaults.standard.string(forKey: Self.lastPathKey),
             !path.isEmpty,
@@ -141,11 +145,34 @@ final class Library {
         load(URL(fileURLWithPath: path, isDirectory: true))
     }
 
-    /// Returns the best device folder inside the iCloud backup root, or
-    /// `nil` when iCloud isn't available or no backups exist yet. When
-    /// multiple device folders exist the most recently modified one wins.
-    private static func bestICloudDeviceFolder() -> URL? {
-        iCloudDeviceFolders().first?.url
+    /// Pick the device folder to auto-load on launch. First priority
+    /// is the serial the user last explicitly opened (synced via
+    /// `NSUbiquitousKeyValueStore` so the choice persists between
+    /// devices). If that serial's folder isn't here yet, fall back to
+    /// the most recently modified folder.
+    private static func preferredICloudDeviceFolder() -> URL? {
+        let folders = iCloudDeviceFolders()
+        guard !folders.isEmpty else { return nil }
+
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let wanted = kvs.string(forKey: lastOpenedSerialKey),
+           let match = folders.first(where: { $0.serial == wanted }) {
+            return match.url
+        }
+        return folders.first?.url
+    }
+
+    /// Record a device's serial as the most recently opened one.
+    /// Syncs via iCloud KVS so every device remembers the last
+    /// selection across launches.
+    fileprivate func rememberLastOpened(serial: String?) {
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let serial, !serial.isEmpty {
+            kvs.set(serial, forKey: Self.lastOpenedSerialKey)
+        } else {
+            kvs.removeObject(forKey: Self.lastOpenedSerialKey)
+        }
+        kvs.synchronize()
     }
 
     /// Summary of a device folder stored inside Snorecard's iCloud
@@ -236,8 +263,10 @@ final class Library {
 
                 let loadedCard = finalCard
                 let persistedPath = finalURL.path
+                let loadedSerial = loadedCard.identification?.serialNumber
                 await MainActor.run {
                     UserDefaults.standard.set(persistedPath, forKey: Self.lastPathKey)
+                    self?.rememberLastOpened(serial: loadedSerial)
                     self?.state = .loaded(loadedCard)
                     // Default to the overview so the trends show immediately.
                     // Fall back to the latest day when there's no summary data.
