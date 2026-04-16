@@ -26,8 +26,13 @@ struct OverviewView: View {
                     summaryCards
                     ahiChart
                     usageChart
+                    glasgowChart
+                    timeInApneaChart
                     pressureChart
+                    flowLimitChart
                     leakChart
+                    largeLeakChart
+                    tidalVolumeChart
                 }
             }
             .padding(20)
@@ -44,8 +49,13 @@ struct OverviewView: View {
         let compliantDays = stats.filter { $0.usageHours >= 4 }.count
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
+        let avgGI = averaging(\.glasgowIndex)
+        let avgApnea = averaging(\.timeInApneaSeconds)
         let avgP95 = averaging(\.pressure95)
+        let avgFlow = averaging(\.flowLimit95)
         let avgLeak = averaging(\.leak95LPerMin)
+        let avgLargeLeakPct = avgLargeLeakPercent()
+        let avgTidal = averaging(\.tidalVolume50)
 
         return LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 160), spacing: 12)],
@@ -65,14 +75,41 @@ struct OverviewView: View {
                 value: String(format: "%.1f", avgAHI),
                 tint: ahiColor(avgAHI)
             )
+            if let gi = avgGI {
+                card("Avg Glasgow Index", value: String(format: "%.2f", gi))
+            }
+            if let apnea = avgApnea {
+                card(
+                    "Avg time in apnea",
+                    value: formatDurationShort(apnea),
+                    subtitle: "per night"
+                )
+            }
             if let p95 = avgP95 {
                 card("Avg pressure 95th", value: String(format: "%.1f cmH₂O", p95))
+            }
+            if let flow = avgFlow {
+                card("Avg flow limit 95th", value: String(format: "%.2f", flow))
             }
             if let leak = avgLeak {
                 card(
                     "Avg leak 95th",
                     value: String(format: "%.0f L/min", leak),
                     tint: leak > 24 ? .orange : .primary
+                )
+            }
+            if let largeLeak = avgLargeLeakPct {
+                card(
+                    "Avg large leak",
+                    value: String(format: "%.0f%%", largeLeak),
+                    subtitle: "of usage",
+                    tint: largeLeak > 5 ? .orange : .primary
+                )
+            }
+            if let tidal = avgTidal {
+                card(
+                    "Avg tidal volume",
+                    value: String(format: "%.0f mL", tidal * 1000)
                 )
             }
         }
@@ -144,6 +181,45 @@ struct OverviewView: View {
         }
     }
 
+    private var glasgowChart: some View {
+        let has = stats.contains { $0.glasgowIndex != nil }
+        return chartSection(title: "Glasgow Index", subtitle: "breath-quality score (lower is better)") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let gi = stat.glasgowIndex {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Index", gi)
+                        )
+                        .foregroundStyle(.teal)
+                        .symbol(Circle())
+                    }
+                }
+            } else {
+                emptyPlaceholder("No Glasgow Index recorded.")
+            }
+        }
+    }
+
+    private var timeInApneaChart: some View {
+        let has = stats.contains { $0.timeInApneaSeconds != nil }
+        return chartSection(title: "Time in Apnea", subtitle: "minutes per night") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let s = stat.timeInApneaSeconds {
+                        BarMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Minutes", s / 60)
+                        )
+                        .foregroundStyle(Color.red.opacity(0.7))
+                    }
+                }
+            } else {
+                emptyPlaceholder("No event-duration data recorded.")
+            }
+        }
+    }
+
     private var pressureChart: some View {
         let hasData = stats.contains { $0.pressure95 != nil }
         return chartSection(title: "Pressure", subtitle: "median and 95th percentile (cmH₂O)") {
@@ -173,9 +249,28 @@ struct OverviewView: View {
                     "Median": .blue
                 ])
             } else {
-                Text("No pressure data recorded.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                emptyPlaceholder("No pressure data recorded.")
+            }
+        }
+    }
+
+    private var flowLimitChart: some View {
+        let has = stats.contains { $0.flowLimit95 != nil }
+        return chartSection(title: "Flow Limit", subtitle: "95th percentile (0–1 scale)") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let fl = stat.flowLimit95 {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Flow Limit", fl)
+                        )
+                        .foregroundStyle(.pink)
+                        .symbol(Circle())
+                    }
+                }
+                .chartYScale(domain: 0...max(0.2, (stats.compactMap(\.flowLimit95).max() ?? 0) * 1.2))
+            } else {
+                emptyPlaceholder("No flow-limit data recorded.")
             }
         }
     }
@@ -198,9 +293,46 @@ struct OverviewView: View {
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
                 }
             } else {
-                Text("No leak data recorded.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                emptyPlaceholder("No leak data recorded.")
+            }
+        }
+    }
+
+    private var largeLeakChart: some View {
+        let has = stats.contains { largeLeakPercent(for: $0) != nil }
+        return chartSection(title: "Large Leak", subtitle: "percent of usage above 24 L/min") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let pct = largeLeakPercent(for: stat) {
+                        BarMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Percent", pct)
+                        )
+                        .foregroundStyle(pct > 5 ? Color.orange : Color.yellow)
+                    }
+                }
+            } else {
+                emptyPlaceholder("No large-leak data recorded.")
+            }
+        }
+    }
+
+    private var tidalVolumeChart: some View {
+        let has = stats.contains { $0.tidalVolume50 != nil }
+        return chartSection(title: "Tidal Volume", subtitle: "median (mL)") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let tv = stat.tidalVolume50 {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Tidal Volume", tv * 1000)
+                        )
+                        .foregroundStyle(.indigo)
+                        .symbol(Circle())
+                    }
+                }
+            } else {
+                emptyPlaceholder("No tidal-volume data recorded.")
             }
         }
     }
@@ -231,6 +363,12 @@ struct OverviewView: View {
         }
     }
 
+    private func emptyPlaceholder(_ text: String) -> some View {
+        Text(text)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 120)
+    }
+
     // MARK: - Helpers
 
     private var dateRangeLabel: String {
@@ -247,11 +385,37 @@ struct OverviewView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
+    private func largeLeakPercent(for stat: DailyStatistics) -> Double? {
+        guard let seconds = stat.largeLeakSeconds, stat.usageMinutes > 0 else { return nil }
+        return seconds / (stat.usageMinutes * 60) * 100
+    }
+
+    private func avgLargeLeakPercent() -> Double? {
+        let values = stats.compactMap { largeLeakPercent(for: $0) }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
     private func formatMinutes(_ minutes: Double) -> String {
         let total = Int(minutes.rounded())
         let h = total / 60
         let m = total % 60
         return "\(h)h \(m)m"
+    }
+
+    private func formatDurationShort(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        if total >= 3600 {
+            let h = total / 3600
+            let m = (total % 3600) / 60
+            return "\(h)h \(m)m"
+        }
+        if total >= 60 {
+            let m = total / 60
+            let s = total % 60
+            return s == 0 ? "\(m) min" : "\(m)m \(s)s"
+        }
+        return "\(total) sec"
     }
 
     private func ahiColor(_ ahi: Double) -> Color {
