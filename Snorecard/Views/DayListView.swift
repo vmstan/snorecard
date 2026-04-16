@@ -19,11 +19,6 @@ struct DayListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    let source = CardSource.detect(from: card.rootURL)
-                    Label("Source: \(source.label)", systemImage: source.systemImage)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .labelStyle(.titleAndIcon)
                 }
                 .padding(.bottom, 10)
                 .textCase(nil)

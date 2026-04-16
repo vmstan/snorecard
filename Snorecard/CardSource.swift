@@ -7,43 +7,17 @@ import SnorecardKit
 enum CardSource {
     case sdCard
     case iCloud
-    case localBackup
 
-    var label: String {
-        switch self {
-        case .sdCard: "SD Card"
-        case .iCloud: "iCloud Sync"
-        case .localBackup: "Local Backup"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .sdCard: "sdcard"
-        case .iCloud: "icloud"
-        case .localBackup: "archivebox"
-        }
-    }
-
-    /// Best-effort classification from a folder URL. We treat anything
-    /// inside the Mobile Documents iCloud Drive path as iCloud, any
-    /// `/Volumes/` mount on macOS as an SD card, and anything else as a
-    /// local backup. On iOS we can't reliably tell an external-volume pick
-    /// apart from a Files-app pick, so SD vs local collapses to
-    /// `.localBackup` unless the path obviously matches iCloud.
+    /// Classify a folder URL by checking whether it lives inside
+    /// Snorecard's iCloud ubiquity container. Everything else is
+    /// treated as an SD card import.
     static func detect(from url: URL) -> CardSource {
-        let path = url.path
-
-        if path.contains("/Mobile Documents/com~apple~CloudDocs/") {
+        if let container = FileManager.default
+            .url(forUbiquityContainerIdentifier: "iCloud.com.vmstan.Snorecard")?
+            .appendingPathComponent("Documents", isDirectory: true),
+           url.path.hasPrefix(container.path) {
             return .iCloud
         }
-
-        #if os(macOS)
-        if path.hasPrefix("/Volumes/") {
-            return .sdCard
-        }
-        #endif
-
-        return .localBackup
+        return .sdCard
     }
 }
