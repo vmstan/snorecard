@@ -1,18 +1,22 @@
 # Snorecard
 
-A native macOS and iOS app for reading and visualizing data from ResMed CPAP/BiPAP SD cards.
+A native macOS and iOS app for reading and analyzing data from ResMed CPAP/BiPAP SD cards.
 
-Snorecard parses the EDF files and summary records stored on a ResMed device's SD card, then presents nightly statistics, event breakdowns, pressure graphs, and waveform data in a SwiftUI interface.
+Snorecard parses the EDF files and summary records stored on a ResMed device's SD card, then presents nightly statistics, event breakdowns, pressure graphs, and waveform data in a SwiftUI interface. Pressure, flow limit, and leak percentiles are computed directly from the raw PLD samples.
 
 ## Features
 
-- Import data directly from a ResMed SD card or a previously saved backup folder
-- Daily statistics: usage hours, AHI, leak rates, pressure percentiles, respiratory metrics
-- Event timeline with apnea/hypopnea annotations from EVE files
-- Waveform visualization for flow, pressure, and leak signals
-- Overview with trends across multiple nights
-- Back up SD card data to a local folder or iCloud Drive
-- iCloud sync keeps one snapshot per device, accessible from any Mac or iOS device
+- Import data from a ResMed SD card — incremental merges only copy missing days
+- Per-device identification (AirSense 10-family `Identification.tgt` and AirSense 11 `Identification.json`)
+- Multi-machine support with a sidebar device picker; rename any device with a custom label that syncs across devices
+- Daily detail view with stat cards for Usage, Time in Apnea, Glasgow Index, Pressure, Flow Limit, Leak, Large Leak, and Tidal Volume — each color-coded by clinical severity
+- Horizontal stacked event bar for OA / H / CA and an Events-by-hour chart
+- Waveform viewer for breathing, pressure (IPAP + EPAP), leak, flow limitation, tidal volume, and snore — with pinch / preset zoom, session timeline, and a floating hover readout that follows the cursor
+- Overview view with Days, Compliance, AHI, Glasgow Index, and trend charts — filterable by All / 7 / 14 / 30 days / Custom
+- [Glasgow Index](https://github.com/DaveSkvn/GlasgowIndex) port for per-breath quality scoring
+- iCloud sync keeps every device's data accessible from any Mac or iPhone
+- Per-day stats sidecar cache — warm launches scan hundreds of days in under a second
+- Sandboxed macOS app, eligible for the App Store
 
 ## Requirements
 
@@ -35,13 +39,23 @@ The core parsing library (SnorecardKit) is also a Swift package and can be built
 swift build
 ```
 
+A CLI probe is included for inspecting a card's contents:
+
+```
+swift run snorecard-probe /path/to/SD
+```
+
 ## Project Structure
 
-- **Snorecard/** -- Shared SwiftUI views and app logic (cross-platform)
-- **Snorecard-macOS/** -- macOS app entry point and menu commands
-- **Snorecard-iOS/** -- iOS app entry point
-- **Sources/SnorecardKit/** -- SD card importer, EDF parser, ResMed data models
-- **Sources/SnorecardProbe/** -- CLI tool for inspecting SD card contents
+- **Snorecard/** — Shared SwiftUI views and app logic (cross-platform)
+- **Snorecard-macOS/** — macOS app entry point and menu commands
+- **Snorecard-iOS/** — iOS app entry point
+- **Sources/SnorecardKit/** — SD card importer, EDF parser, ResMed data models, Glasgow Index port, per-day stats cache
+- **Sources/SnorecardProbe/** — CLI tool for inspecting SD card contents
+
+## Acknowledgements
+
+- [DaveSkvn/GlasgowIndex](https://github.com/DaveSkvn/GlasgowIndex) — flow-quality index ported to Swift in `GlasgowIndex.swift`
 
 ## License
 
