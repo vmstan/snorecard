@@ -5,18 +5,55 @@ import SnorecardKit
 struct OverviewView: View {
     let card: ResMedSDCard
     @Environment(Library.self) private var library
+    @State private var rangeKind: RangeKind = .all
+    @State private var customStart: Date = Calendar.current
+        .date(byAdding: .day, value: -6, to: Calendar.current.startOfDay(for: Date()))!
+    @State private var customEnd: Date = Calendar.current.startOfDay(for: Date())
 
-    private var stats: [DailyStatistics] {
+    /// Date ranges selectable from the Overview header.
+    enum RangeKind: Hashable {
+        case all, last7, last14, last30, custom
+    }
+
+    /// All days with usage, ignoring the current range filter. Used by
+    /// `stats` (filtered) and by the empty-state check.
+    private var allStats: [DailyStatistics] {
         card.days
             .compactMap(\.stats)
             .filter(\.hasUsage)
             .sorted { $0.date < $1.date }
     }
 
+    /// Days that fall inside the currently-selected range.
+    private var stats: [DailyStatistics] {
+        allStats.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
+    }
+
+    private var rangeStart: Date {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        switch rangeKind {
+        case .all:    return allStats.first?.date ?? today
+        case .last7:  return cal.date(byAdding: .day, value: -6, to: today) ?? today
+        case .last14: return cal.date(byAdding: .day, value: -13, to: today) ?? today
+        case .last30: return cal.date(byAdding: .day, value: -29, to: today) ?? today
+        case .custom: return cal.startOfDay(for: customStart)
+        }
+    }
+
+    private var rangeEnd: Date {
+        let cal = Calendar.current
+        switch rangeKind {
+        case .all:    return allStats.last?.date ?? cal.startOfDay(for: Date())
+        case .custom: return cal.startOfDay(for: customEnd)
+        default:      return cal.startOfDay(for: Date())
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                if stats.isEmpty {
+                if allStats.isEmpty {
                     ContentUnavailableView(
                         "No summary data",
                         systemImage: "chart.bar.xaxis",
@@ -24,22 +61,65 @@ struct OverviewView: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: 240)
                 } else {
-                    summaryCards
-                    ahiChart
-                    usageChart
-                    glasgowChart
-                    timeInApneaChart
-                    pressureChart
-                    flowLimitChart
-                    leakChart
-                    largeLeakChart
-                    tidalVolumeChart
+                    rangePicker
+                    if stats.isEmpty {
+                        ContentUnavailableView(
+                            "No data in range",
+                            systemImage: "calendar",
+                            description: Text("No usage recorded between \(rangeStart, format: .dateTime.month(.abbreviated).day()) and \(rangeEnd, format: .dateTime.month(.abbreviated).day()).")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                    } else {
+                        summaryCards
+                        ahiChart
+                        usageChart
+                        glasgowChart
+                        timeInApneaChart
+                        pressureChart
+                        flowLimitChart
+                        leakChart
+                        largeLeakChart
+                        tidalVolumeChart
+                    }
                 }
             }
             .padding(20)
         }
         .navigationTitle("Overview")
         .navigationSubtitle(library.displayName(for: card))
+    }
+
+    /// Segmented preset picker plus optional custom date-range pickers.
+    @ViewBuilder
+    private var rangePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Range", selection: $rangeKind) {
+                Text("All").tag(RangeKind.all)
+                Text("7 Days").tag(RangeKind.last7)
+                Text("14 Days").tag(RangeKind.last14)
+                Text("30 Days").tag(RangeKind.last30)
+                Text("Custom").tag(RangeKind.custom)
+            }
+            .pickerStyle(.segmented)
+
+            if rangeKind == .custom {
+                HStack(spacing: 16) {
+                    DatePicker(
+                        "From",
+                        selection: $customStart,
+                        in: ...customEnd,
+                        displayedComponents: .date
+                    )
+                    DatePicker(
+                        "To",
+                        selection: $customEnd,
+                        in: customStart...Date(),
+                        displayedComponents: .date
+                    )
+                }
+                .font(.callout)
+            }
+        }
     }
 
     // MARK: - Aggregate cards
@@ -364,13 +444,47 @@ struct OverviewView: View {
             content()
                 .frame(height: 180)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .day)) { value in
+                    AxisMarks(values: xAxisTickDates) { value in
                         AxisGridLine()
                         AxisTick()
-                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                        AxisValueLabel {
+                            if let date = value.as(Date.self) {
+                                Text(date, format: .dateTime.day().month(.abbreviated))
+                                    .font(.caption2.monospacedDigit())
+                            }
+                        }
                     }
                 }
         }
+    }
+
+    /// Choose how many X-axis ticks to emit based on the active range
+    /// so labels like "14 Apr" never overlap. 7-day windows show every
+    /// day, 14-day windows show every other day, 30-day windows show
+    /// weekly.
+    private var xAxisTickDates: [Date] {
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: rangeStart, to: rangeEnd).day ?? 0
+        let stride: Int
+        switch days {
+        case ..<8:  stride = 1
+        case ..<15: stride = 2
+        case ..<22: stride = 3
+        default:    stride = 5
+        }
+        var dates: [Date] = []
+        var current = cal.startOfDay(for: rangeStart)
+        let end = cal.startOfDay(for: rangeEnd)
+        while current <= end {
+            dates.append(current)
+            guard let next = cal.date(byAdding: .day, value: stride, to: current) else { break }
+            current = next
+        }
+        // Always include the last day in the range for context.
+        if let last = dates.last, last != end {
+            dates.append(end)
+        }
+        return dates
     }
 
     private func emptyPlaceholder(_ text: String) -> some View {
@@ -389,11 +503,14 @@ struct OverviewView: View {
         return "\(first.formatted(date: .abbreviated, time: .omitted)) – \(last.formatted(date: .abbreviated, time: .omitted))"
     }
 
-    /// Mean number of BRP sessions across days that recorded usage.
-    /// Mirrors the "sessions" count surfaced on the daily detail view.
+    /// Mean number of BRP sessions across days inside the current range
+    /// that recorded usage. Mirrors the "sessions" count surfaced on
+    /// the daily detail view.
     private func averageSessionsPerNight() -> Double? {
+        let start = rangeStart, end = rangeEnd
         let counts = card.days
             .filter { $0.stats?.hasUsage == true }
+            .filter { $0.date >= start && $0.date <= end }
             .map { $0.files(of: .breath).count }
         guard !counts.isEmpty else { return nil }
         return Double(counts.reduce(0, +)) / Double(counts.count)

@@ -266,13 +266,21 @@ public enum GlasgowIndex {
                     if lookAhead < count {
                         let minValue = samples[minAt].y
                         let valuePlus1s = samples[lookAhead].y
-                        if valuePlus1s < 0 {
-                            let intersection = minAt + Int(
-                                (Double(extrapolationSamples) * minValue / (minValue - valuePlus1s)).rounded()
-                            )
-                            inspirations[nextInspIdx].preRest = Double(
-                                inspirations[nextInspIdx].start - intersection
-                            )
+                        // Extrapolation is only meaningful when the
+                        // expiration is still rising toward zero AND
+                        // the two samples differ — otherwise the
+                        // division would produce infinity / NaN and
+                        // crash the Int conversion below.
+                        if valuePlus1s < 0, minValue != valuePlus1s {
+                            let ratio = Double(extrapolationSamples) * minValue / (minValue - valuePlus1s)
+                            if ratio.isFinite {
+                                let intersection = minAt + Int(ratio.rounded())
+                                inspirations[nextInspIdx].preRest = Double(
+                                    inspirations[nextInspIdx].start - intersection
+                                )
+                            } else {
+                                inspirations[nextInspIdx].preRest = -10
+                            }
                         } else {
                             inspirations[nextInspIdx].preRest = -10
                         }
