@@ -27,6 +27,7 @@ public struct DailyStatistics: Sendable, Equatable {
     /// Total seconds where mask leak exceeded the 24 L/min large-leak
     /// threshold, summed across all PLD samples on therapy.
     public internal(set) var largeLeakSeconds: Double? = nil
+    public internal(set) var flowLimit95: Double?
     public let minuteVentilation50: Double?
     public let respirationRate50: Double?
     public let tidalVolume50: Double?
@@ -136,6 +137,7 @@ extension DailyStatistics {
         var ipaps: [Double] = []   // Target inspiratory pressure (base Press.2s).
         var epaps: [Double] = []   // Target expiratory pressure (EprPress.2s).
         var leaks: [Double] = []
+        var flowLims: [Double] = []
         var minVents: [Double] = []
         var respRates: [Double] = []
         var tidVols: [Double] = []
@@ -157,6 +159,7 @@ extension DailyStatistics {
             let ipap = decode("Press.")
             let epap = decode("EprPress")
             let leak = decode("Leak")
+            let fl = decode("FlowLim")
             let mv = decode("MinVent")
             let rr = decode("RespRate")
             let tv = decode("TidVol")
@@ -166,6 +169,7 @@ extension DailyStatistics {
                 if i < ipap.count { ipaps.append(ipap[i]) }
                 if i < epap.count { epaps.append(epap[i]) }
                 if i < leak.count { leaks.append(leak[i]) }
+                if i < fl.count { flowLims.append(fl[i]) }
                 if i < mv.count { minVents.append(mv[i]) }
                 if i < rr.count { respRates.append(rr[i]) }
                 if i < tv.count { tidVols.append(tv[i]) }
@@ -196,6 +200,7 @@ extension DailyStatistics {
             epap95: epap95,
             leak95LPerMin: leak95,
             leakMaxLPerMin: leakMax,
+            flowLimit95: percentile(flowLims, 95),
             minuteVentilation50: percentile(minVents, 50),
             respirationRate50: percentile(respRates, 50),
             tidalVolume50: percentile(tidVols, 50),
@@ -204,14 +209,14 @@ extension DailyStatistics {
         )
     }
 
-    /// Re-read a day's EVE and PLD files to compute the two metrics that
-    /// STR.edf doesn't pre-aggregate: total time spent in apneas/hypopneas
-    /// and total time above the 24 L/min large-leak threshold.
+    /// Re-read a day's EVE and PLD files to compute metrics that STR.edf
+    /// doesn't pre-aggregate: total time in apneas/hypopneas, time above
+    /// the large-leak threshold, and 95th-percentile flow limitation.
     /// Called during SD card import for every day so the values are
     /// available whether the base stats came from STR or compute().
     public static func supplementaryMetrics(
         for day: ResMedDay
-    ) -> (timeInApnea: Double?, largeLeak: Double?) {
+    ) -> (timeInApnea: Double?, largeLeak: Double?, flowLimit95: Double?) {
         var timeInApnea: Double = 0
         var sawAnyEVE = false
         for file in day.files(of: .events) {
@@ -227,27 +232,44 @@ extension DailyStatistics {
 
         var largeLeakSeconds: Double = 0
         var sawAnyPLD = false
+        var flowLims: [Double] = []
         // Leak is stored in L/s, so the 24 L/min threshold is 24/60 = 0.4 L/s.
         let threshold: Double = 24.0 / 60.0
         for file in day.files(of: .physiological) {
             guard let edf = try? EDFFile(contentsOf: file.url),
-                  edf.header.recordCount > 0,
-                  let idx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Leak") }),
-                  let samples = try? edf.physicalSamples(ofSignal: idx) else { continue }
-            let signal = edf.signals[idx]
-            let rate = Double(signal.samplesPerRecord) / edf.header.recordDuration
-            guard rate > 0 else { continue }
-            sawAnyPLD = true
-            let sampleInterval = 1.0 / rate
-            let aboveCount = samples.reduce(into: 0) { count, sample in
-                if sample > threshold { count += 1 }
+                  edf.header.recordCount > 0 else { continue }
+
+            // Leak large-leak accumulation.
+            if let idx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Leak") }),
+               let samples = try? edf.physicalSamples(ofSignal: idx) {
+                let signal = edf.signals[idx]
+                let rate = Double(signal.samplesPerRecord) / edf.header.recordDuration
+                if rate > 0 {
+                    sawAnyPLD = true
+                    let sampleInterval = 1.0 / rate
+                    let aboveCount = samples.reduce(into: 0) { count, sample in
+                        if sample > threshold { count += 1 }
+                    }
+                    largeLeakSeconds += Double(aboveCount) * sampleInterval
+                }
             }
-            largeLeakSeconds += Double(aboveCount) * sampleInterval
+
+            // Flow limitation — collect on-therapy samples (mask pressure > 1).
+            if let flIdx = edf.signals.firstIndex(where: { $0.label.hasPrefix("FlowLim") }),
+               let flSamples = try? edf.physicalSamples(ofSignal: flIdx) {
+                let pressure: [Double]? = edf.signals.firstIndex(where: { $0.label.hasPrefix("MaskPress") })
+                    .flatMap { try? edf.physicalSamples(ofSignal: $0) }
+                for i in flSamples.indices {
+                    if let p = pressure, i < p.count, p[i] <= 1.0 { continue }
+                    flowLims.append(flSamples[i])
+                }
+            }
         }
 
         return (
             timeInApnea: sawAnyEVE ? timeInApnea : nil,
-            largeLeak: sawAnyPLD ? largeLeakSeconds : nil
+            largeLeak: sawAnyPLD ? largeLeakSeconds : nil,
+            flowLimit95: percentile(flowLims, 95)
         )
     }
 
@@ -332,6 +354,7 @@ extension DailyStatistics {
                     epap95: scalar("TgtEPAP.95", record: record),
                     leak95LPerMin: leak95,
                     leakMaxLPerMin: leakMax,
+                    flowLimit95: scalar("FlowLim.95", record: record),
                     minuteVentilation50: scalar("MinVent.50", record: record),
                     respirationRate50: scalar("RespRate.50", record: record),
                     tidalVolume50: scalar("TidVol.50", record: record),

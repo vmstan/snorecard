@@ -148,6 +148,9 @@ public enum SDCardImporter {
                 let supplementary = DailyStatistics.supplementaryMetrics(for: placeholder)
                 stats?.timeInApneaSeconds = supplementary.timeInApnea
                 stats?.largeLeakSeconds = supplementary.largeLeak
+                if stats?.flowLimit95 == nil {
+                    stats?.flowLimit95 = supplementary.flowLimit95
+                }
             }
             return ResMedDay(date: date, files: files, stats: stats)
         }

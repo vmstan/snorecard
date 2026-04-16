@@ -54,6 +54,13 @@ struct DayDetailView: View {
                         value: formatHours(stats.usageHours),
                         subtitle: sessionCountLabel
                     )
+                    if let apneaSeconds = stats.timeInApneaSeconds {
+                        StatCard(
+                            label: "Time in Apnea",
+                            value: formatDurationShort(apneaSeconds),
+                            subtitle: "\(Int((apneaSeconds / (stats.usageMinutes * 60) * 100).rounded()))% of usage"
+                        )
+                    }
                     StatCard(
                         label: "Events",
                         value: "\(Int((stats.ahi * stats.usageHours).rounded()))"
@@ -67,18 +74,17 @@ struct DayDetailView: View {
                             subtitle: support.map { String(format: "Support %.1f", $0) }
                         )
                     }
+                    if let fl = stats.flowLimit95 {
+                        StatCard(
+                            label: "Flow Limit (95%)",
+                            value: String(format: "%.2f", fl)
+                        )
+                    }
                     if let leak = stats.leak95LPerMin {
                         StatCard(
                             label: "Leak (95%)",
                             value: String(format: "%.0f L/min", leak),
                             tint: leak > 24 ? .orange : .primary
-                        )
-                    }
-                    if let apneaSeconds = stats.timeInApneaSeconds {
-                        StatCard(
-                            label: "Time in Apnea",
-                            value: formatDurationShort(apneaSeconds),
-                            subtitle: "\(Int((apneaSeconds / (stats.usageMinutes * 60) * 100).rounded()))% of usage"
                         )
                     }
                     if let largeLeak = stats.largeLeakSeconds {

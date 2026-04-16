@@ -59,11 +59,12 @@ struct AHIHourlyChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Events by hour")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
+                .padding(.top, 8)
 
             Chart {
                 ForEach(buckets) { bucket in

@@ -38,7 +38,8 @@ for day in card.days {
         .sorted { $0.key.rawValue < $1.key.rawValue }
         .map { "\($0.key.rawValue):\($0.value)" }
         .joined(separator: " ")
-    print("  \(dateString)  \(counts)")
+    let fl95 = day.stats?.flowLimit95.map { String(format: "%.4f", $0) } ?? "nil"
+    print("  \(dateString)  \(counts)  flowLimit95=\(fl95)")
 }
 
 print()
