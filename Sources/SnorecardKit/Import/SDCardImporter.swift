@@ -151,6 +151,13 @@ public enum SDCardImporter {
                 if stats?.flowLimit95 == nil {
                     stats?.flowLimit95 = supplementary.flowLimit95
                 }
+
+                // Glasgow Index — computed per-BRP session then weighted
+                // by inspiration count. BRP stores flow in L/s; the
+                // algorithm expects L/min.
+                stats?.glasgowIndex = GlasgowIndex.computeDay(
+                    brpFiles: files.filter { $0.kind == .breath }
+                )
             }
             return ResMedDay(date: date, files: files, stats: stats)
         }

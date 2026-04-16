@@ -39,7 +39,8 @@ for day in card.days {
         .map { "\($0.key.rawValue):\($0.value)" }
         .joined(separator: " ")
     let fl95 = day.stats?.flowLimit95.map { String(format: "%.4f", $0) } ?? "nil"
-    print("  \(dateString)  \(counts)  flowLimit95=\(fl95)")
+    let gi = day.stats?.glasgowIndex.map { String(format: "%.4f", $0) } ?? "nil"
+    print("  \(dateString)  \(counts)  flowLimit95=\(fl95)  glasgow=\(gi)")
 }
 
 print()
@@ -54,6 +55,26 @@ if let strURL = card.summaryFileURL {
     print("  start:      \(str.header.startDate)")
     let labels = str.signals.prefix(10).map(\.label).joined(separator: ", ")
     print("  first 10:   \(labels)")
+}
+
+print()
+
+// Glasgow Index debug
+if let lastDay = card.days.last(where: { !$0.files(of: .breath).isEmpty }) {
+    let gi = GlasgowIndex.computeDay(brpFiles: lastDay.files(of: .breath))
+    print("Glasgow Index (weighted): \(gi.map { String(format: "%.4f", $0) } ?? "nil")")
+    for file in lastDay.files(of: .breath) {
+        guard let edf = try? EDFFile(contentsOf: file.url),
+              edf.header.recordCount > 0,
+              let idx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Flow") }),
+              let decoded = try? edf.physicalSamples(ofSignal: idx)
+        else { continue }
+        let unit = edf.signals[idx].physicalDimension
+            .trimmingCharacters(in: .whitespaces).lowercased()
+        let scale: Double = unit.contains("l/s") ? 60 : 1
+        let result = GlasgowIndex.compute(flowSamples: decoded.map { $0 * scale })
+        print("  \(file.url.lastPathComponent): score=\(result.map { String(format: "%.4f", $0.score) } ?? "nil") inspirations=\(result?.inspirationCount ?? 0)")
+    }
 }
 
 print()

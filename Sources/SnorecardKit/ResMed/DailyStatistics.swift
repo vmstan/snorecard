@@ -27,6 +27,7 @@ public struct DailyStatistics: Sendable, Equatable {
     /// Total seconds where mask leak exceeded the 24 L/min large-leak
     /// threshold, summed across all PLD samples on therapy.
     public internal(set) var largeLeakSeconds: Double? = nil
+    public internal(set) var glasgowIndex: Double? = nil
     public internal(set) var flowLimit95: Double?
     public let minuteVentilation50: Double?
     public let respirationRate50: Double?

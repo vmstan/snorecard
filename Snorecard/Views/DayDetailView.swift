@@ -61,10 +61,12 @@ struct DayDetailView: View {
                             subtitle: "\(Int((apneaSeconds / (stats.usageMinutes * 60) * 100).rounded()))% of usage"
                         )
                     }
-                    StatCard(
-                        label: "Events",
-                        value: "\(Int((stats.ahi * stats.usageHours).rounded()))"
-                    )
+                    if let gi = stats.glasgowIndex {
+                        StatCard(
+                            label: "Glasgow Index",
+                            value: String(format: "%.2f", gi)
+                        )
+                    }
 
                     if let epap = stats.epap95 {
                         let support = stats.ipap95.map { max(0, $0 - epap) }
