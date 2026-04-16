@@ -114,22 +114,27 @@ struct WaveformBundle: Sendable {
             let flowRate = Double(flowSig.samplesPerRecord) / file.header.recordDuration
             let pressRate = Double(pressSig.samplesPerRecord) / file.header.recordDuration
 
-            // Two-tier flow downsampling: a small overview series for the
-            // full-night fit view (cheap to render) and a high-resolution
-            // min-max series used only when the user zooms in — at which
-            // point we bin-slice down to just the visible window.
+            // Two-tier flow downsampling: a small overview series for
+            // the full-night fit view (cheap to render) and a near-
+            // native-resolution min-max series for zoomed-in detail.
+            // At ~25 Hz BRP sampling an 8-hour session has ~720k raw
+            // samples; 750k target points mean we essentially keep the
+            // native waveform when zoomed to a few minutes or less,
+            // which is where the user wants to see individual breaths.
+            // The Canvas-backed Breathing chart can render the full
+            // visible slice without breaking a sweat.
             let flowOverview = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 1500,
+                targetPoints: 30_000,
                 style: .minMax
             )
             let flowDetail = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 50000,
+                targetPoints: 750_000,
                 style: .minMax
             )
             let pressPoints = DownsampledSignal.points(
@@ -751,7 +756,8 @@ struct WaveformSection: View {
         ("Fit", 0),
         ("1h", 3600),
         ("30m", 1800),
-        ("10m", 600)
+        ("10m", 600),
+        ("2m", 120)
     ]
 
     @ViewBuilder
@@ -885,15 +891,13 @@ struct WaveformSection: View {
         )
 
         withHoverOverlay(tag: "Breathing") {
-            EquatableSignalLineChart(
-                title: "Breathing",
+            // Canvas-based renderer — much faster than LineMark
+            // ForEach for the dense flow trace, which can push many
+            // thousands of points at a typical zoom level.
+            EquatableBreathingCanvasChart(
                 unit: flowUnit,
                 points: visibleFlowPoints,
                 events: visibleEvents,
-                color: .primary,
-                zeroReference: true,
-                stepped: false,
-                thresholdY: nil,
                 hoverOffset: hoverOffset,
                 axes: axes
             )
@@ -1385,7 +1389,7 @@ struct EquatableSignalAreaChart: View {
     }
 }
 
-private struct ChartSubviewTitle: View {
+struct ChartSubviewTitle: View {
     let title: String
     let subtitle: String
 
@@ -1400,7 +1404,7 @@ private struct ChartSubviewTitle: View {
     }
 }
 
-private enum ChartSubviewHelpers {
+enum ChartSubviewHelpers {
     static func eventColor(_ text: String) -> Color {
         let lower = text.lowercased()
         if lower.contains("obstructive") { return .eventObstructive }

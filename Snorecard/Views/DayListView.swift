@@ -31,6 +31,11 @@ struct DayListView: View {
             }
         }
         .listStyle(.sidebar)
+        #if os(iOS)
+        .refreshable {
+            await library.reloadCurrentAndWait()
+        }
+        #endif
     }
 
     /// Sidebar row for the "Overview" entry. Mirrors the day-row layout

@@ -47,39 +47,35 @@ struct LoadingView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: iconName)
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating)
-
-            VStack(spacing: 6) {
+        // Matches the centering / padding of the `.empty` and
+        // `.failed` states which also use ContentUnavailableView —
+        // Apple's container lays out against the *visible* portion
+        // of the pane (respecting the translucent toolbar) instead
+        // of the raw geometry a manual VStack would measure.
+        ContentUnavailableView {
+            Label {
                 Text(title)
-                    .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                Text(statusText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            } icon: {
+                Image(systemName: iconName)
+                    .symbolEffect(.pulse, options: .repeating)
             }
-            .frame(maxWidth: .infinity)
-
+        } description: {
+            Text(statusText)
+                .multilineTextAlignment(.center)
+        } actions: {
             if case .downloading(let completed, let total) = phase {
                 ProgressView(
                     value: Double(completed),
                     total: Double(max(total, 1))
                 )
                 .progressViewStyle(.linear)
-                .frame(maxWidth: 260)
+                .frame(maxWidth: 240)
             } else {
                 ProgressView()
                     .controlSize(.small)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
         .transition(.opacity)
     }
 }

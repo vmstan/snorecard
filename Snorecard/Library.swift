@@ -100,6 +100,25 @@ final class Library {
             as? [String: String] ?? [:]
     }
 
+    /// Re-run the scan on the currently loaded card's folder without
+    /// discarding the cache. Picks up day folders and sidecars that
+    /// have synced down from iCloud since the initial load.
+    func reloadCurrent() {
+        guard let url = card?.rootURL else { return }
+        load(url)
+    }
+
+    /// `reloadCurrent()` that returns once the scan finishes — used
+    /// by the iOS sidebar's pull-to-refresh so the control's spinner
+    /// stays visible until fresh data is ready.
+    func reloadCurrentAndWait() async {
+        guard let url = card?.rootURL else { return }
+        load(url)
+        while case .loading = state {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
     /// Remove every `.snorecard-stats.json` sidecar inside the currently
     /// loaded card's DATALOG tree and trigger a full re-import. Forces
     /// the next scan to recompute every day from scratch — useful when

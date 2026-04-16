@@ -83,52 +83,69 @@ struct ContentView: View {
         }
     }
 
+    private var isLoading: Bool {
+        if case .loading = library.state { return true }
+        return false
+    }
+
     @ToolbarContentBuilder
     private var toolbarButtons: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button {
-                    openSDCard()
-                } label: {
-                    Label("Import from SD Card", systemImage: "sdcard")
-                }
-                #if os(macOS)
-                .keyboardShortcut("o", modifiers: [.command])
-                #endif
+            if !isLoading {
+                optionsMenu
+            }
+        }
+    }
 
-                if let card = library.card,
-                   card.identification?.serialNumber != nil {
-                    Divider()
-                    Button {
-                        isRenamingDevice = true
-                    } label: {
-                        Label("Rename Device…", systemImage: "square.and.pencil")
-                    }
-                    Button {
-                        isConfirmingRebuild = true
-                    } label: {
-                        Label("Rebuild Statistics", systemImage: "arrow.clockwise")
-                    }
-                    if !otherDevices.isEmpty {
-                        Divider()
-                        Menu {
-                            ForEach(otherDevices) { folder in
-                                Button(deviceMenuLabel(for: folder)) {
-                                    library.load(folder.url)
-                                }
-                            }
-                        } label: {
-                            Label("Switch Device", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                }
+    @ViewBuilder
+    private var optionsMenu: some View {
+        Menu {
+            Button {
+                openSDCard()
             } label: {
-                Label("Actions", systemImage: "ellipsis.circle")
+                Label("Import from SD Card", systemImage: "sdcard")
             }
             #if os(macOS)
-            .help("Import data or rename the current device")
+            .keyboardShortcut("o", modifiers: [.command])
             #endif
+
+            if let card = library.card,
+               card.identification?.serialNumber != nil {
+                Divider()
+                Button {
+                    library.reloadCurrent()
+                } label: {
+                    Label("Reload from iCloud", systemImage: "icloud.and.arrow.down")
+                }
+                Button {
+                    isRenamingDevice = true
+                } label: {
+                    Label("Rename Device…", systemImage: "square.and.pencil")
+                }
+                Button {
+                    isConfirmingRebuild = true
+                } label: {
+                    Label("Rebuild Statistics", systemImage: "arrow.clockwise")
+                }
+                if !otherDevices.isEmpty {
+                    Divider()
+                    Menu {
+                        ForEach(otherDevices) { folder in
+                            Button(deviceMenuLabel(for: folder)) {
+                                library.load(folder.url)
+                            }
+                        }
+                    } label: {
+                        Label("Switch Device", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+            }
+        } label: {
+            Label("Actions", systemImage: "ellipsis.circle")
         }
+        #if os(macOS)
+        .help("Import data or rename the current device")
+        #endif
     }
 
     // MARK: - Actions
@@ -188,7 +205,15 @@ struct ContentView: View {
                 DayListView(card: card, selection: $library.selection)
             }
         }
-        .navigationTitle("Snorecard")
+        .navigationTitle(sidebarNavigationTitle)
+    }
+
+    /// Hide the app name while the loading screen is up — the
+    /// LoadingView already says which device is being fetched, and a
+    /// bold "Snorecard" title above it looks redundant.
+    private var sidebarNavigationTitle: String {
+        if case .loading = library.state { return "" }
+        return "Snorecard"
     }
 
     @ViewBuilder
