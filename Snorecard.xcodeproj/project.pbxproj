@@ -55,6 +55,7 @@
 		31EE219CD297F228B03E4E9A /* Snorecard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snorecard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3936E5AE9456EE22D83787A3 /* Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Library.swift; sourceTree = "<group>"; };
 		49B7B53E724F0E12B081B827 /* EventDonutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDonutView.swift; sourceTree = "<group>"; };
+		66C6D04437C93A95643D4FE7 /* snorecard */ = {isa = PBXFileReference; lastKnownFileType = folder; name = snorecard; path = .; sourceTree = SOURCE_ROOT; };
 		6AF56B9E1D066E90C067AE57 /* Snorecard-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Snorecard-iOS.entitlements"; sourceTree = "<group>"; };
 		722D23C564C439409491B429 /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
 		755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AHIHourlyChart.swift; sourceTree = "<group>"; };
@@ -63,7 +64,6 @@
 		9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayDetailView.swift; sourceTree = "<group>"; };
 		ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		D2AF636BF6337EA599258DBC /* Snorecard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Snorecard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D8455B4B03DAA523885FEA4E /* snorecard */ = {isa = PBXFileReference; lastKnownFileType = folder; name = snorecard; path = .; sourceTree = SOURCE_ROOT; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
 		E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineView.swift; sourceTree = "<group>"; };
 		EA0E592B08C8DAE5450663B5 /* Snorecard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Snorecard.entitlements; sourceTree = "<group>"; };
@@ -126,7 +126,7 @@
 		52F18439A20DA704693A1730 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				D8455B4B03DAA523885FEA4E /* snorecard */,
+				66C6D04437C93A95643D4FE7 /* snorecard */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -363,7 +363,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = CVZLL7XC62;
-				ENABLE_APP_SANDBOX = NO;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "Snorecard-macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -389,7 +389,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = CVZLL7XC62;
-				ENABLE_APP_SANDBOX = NO;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "Snorecard-macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (

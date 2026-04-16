@@ -43,7 +43,7 @@ targets:
         SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "26.0"
         ENABLE_HARDENED_RUNTIME: YES
-        ENABLE_APP_SANDBOX: NO
+        ENABLE_APP_SANDBOX: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: CVZLL7XC62
         CODE_SIGN_ENTITLEMENTS: Snorecard/Snorecard.entitlements
