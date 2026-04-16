@@ -28,7 +28,7 @@ struct DayDetailView: View {
             }
             .padding(20)
         }
-        .navigationTitle(Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide).year()))
+        .navigationTitle(navigationTitleText)
         .task(id: day.id) {
             await loadAllSessions()
         }
@@ -138,6 +138,18 @@ struct DayDetailView: View {
     private var sessionCountLabel: String {
         let count = day.files(of: .breath).count
         return "\(count) session\(count == 1 ? "" : "s")"
+    }
+
+    /// Full weekday + month + day, with the year appended only when the
+    /// day isn't in the current calendar year.
+    private var navigationTitleText: Text {
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        let dayYear = calendar.component(.year, from: day.date)
+        if dayYear == currentYear {
+            return Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
+        }
+        return Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide).year())
     }
 
     private func ahiColor(_ ahi: Double) -> Color {

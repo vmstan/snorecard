@@ -10,7 +10,7 @@ struct DayListView: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                Label("Overview", systemImage: "chart.bar.xaxis")
+                overviewRow(isSelected: selection == .overview)
                     .tag(SidebarSelection.overview)
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
@@ -39,10 +39,15 @@ struct DayListView: View {
                 .textCase(nil)
             }
 
-            Section("Days") {
-                ForEach(card.days.reversed()) { day in
-                    row(for: day, isSelected: selection == .day(day.id))
-                        .tag(SidebarSelection.day(day.id))
+            ForEach(daysByMonth, id: \.month) { group in
+                Section {
+                    ForEach(group.days) { day in
+                        row(for: day, isSelected: selection == .day(day.id))
+                            .tag(SidebarSelection.day(day.id))
+                    }
+                } header: {
+                    Text(group.month, format: .dateTime.month(.wide).year())
+                        .textCase(nil)
                 }
             }
         }
@@ -61,20 +66,52 @@ struct DayListView: View {
         }
     }
 
+    /// Sidebar row for the "Overview" entry. Mirrors the day-row layout
+    /// (same-size glyph + label + right-aligned AHI) so the first entry
+    /// in the sidebar lines up visually with everything below.
+    @ViewBuilder
+    private func overviewRow(isSelected: Bool) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            OverviewGlyph(isSelected: isSelected)
+            Text("Overview")
+                .font(.body)
+            Spacer()
+            if let avg = overallAHI {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(String(format: "%.1f", avg))
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(isSelected ? Color.white : ahiColor(avg))
+                    Text("AHI")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Average AHI across every day that has recorded usage. `nil` when
+    /// there aren't any yet.
+    private var overallAHI: Double? {
+        let values = card.days
+            .compactMap(\.stats)
+            .filter(\.hasUsage)
+            .map(\.ahi)
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
     @ViewBuilder
     private func row(for day: ResMedDay, isSelected: Bool) -> some View {
         let hasData = !day.files.isEmpty || day.stats?.hasUsage == true
         HStack(alignment: .center, spacing: 10) {
+            CalendarDayTile(date: day.date, isSelected: isSelected)
             VStack(alignment: .leading, spacing: 1) {
-                Text(day.date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                Text(day.date, format: .dateTime.weekday(.wide))
                     .font(.body)
                 if let stats = day.stats, stats.hasUsage {
                     Text(formatUsage(stats.usageHours))
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(day.date, format: .dateTime.year())
-                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -93,7 +130,23 @@ struct DayListView: View {
                 }
             }
         }
+        .padding(.vertical, 4)
         .foregroundStyle(hasData ? .primary : .tertiary)
+    }
+
+    /// Groups card days by calendar month+year, sorted newest-first, with
+    /// each month's days sorted newest-first inside.
+    private var daysByMonth: [(month: Date, days: [ResMedDay])] {
+        let calendar = Calendar.current
+        let groups = Dictionary(grouping: card.days) { day -> Date in
+            calendar.date(from: calendar.dateComponents([.year, .month], from: day.date))
+                ?? day.date
+        }
+        return groups
+            .sorted { $0.key > $1.key }
+            .map { key, days in
+                (month: key, days: days.sorted { $0.date > $1.date })
+            }
     }
 
     private func formatUsage(_ hours: Double) -> String {
@@ -110,6 +163,88 @@ struct DayListView: View {
         case ..<30: .severityMedium
         default: .severityHigh
         }
+    }
+}
+
+/// Glyph placed next to the Overview label in the sidebar. Matches the
+/// calendar tile's footprint so the label text aligns with day-row
+/// labels below.
+private struct OverviewGlyph: View {
+    var isSelected: Bool = false
+
+    private var strokeColor: Color {
+        isSelected ? Color.white.opacity(0.65) : Color.secondary.opacity(0.45)
+    }
+
+    private var fillColor: Color {
+        isSelected ? Color.white.opacity(0.18) : Color.platformControlBackground
+    }
+
+    private var iconColor: Color {
+        isSelected ? .white : .primary
+    }
+
+    var body: some View {
+        Image(systemName: "chart.bar.xaxis")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(iconColor)
+            .frame(width: 21, height: 22)
+            .background(fillColor)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(strokeColor, lineWidth: 0.6)
+            )
+    }
+}
+
+/// Tiny calendar-tile glyph — a rounded square with a subtle header
+/// strip and the day-of-month number below. Used in the sidebar rows
+/// so the eye lands on the date before the weekday text. Monochrome,
+/// with a selected state that keeps the digit legible on the
+/// accent-tinted row background.
+private struct CalendarDayTile: View {
+    let date: Date
+    var isSelected: Bool = false
+
+    private var dayNumber: String {
+        String(Calendar.current.component(.day, from: date))
+    }
+
+    private var strokeColor: Color {
+        isSelected ? Color.white.opacity(0.65) : Color.secondary.opacity(0.45)
+    }
+
+    private var fillColor: Color {
+        isSelected ? Color.white.opacity(0.18) : Color.platformControlBackground
+    }
+
+    private var stripColor: Color {
+        isSelected ? Color.white.opacity(0.45) : Color.secondary.opacity(0.45)
+    }
+
+    private var numberColor: Color {
+        isSelected ? .white : .primary
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(stripColor)
+                .frame(height: 3)
+            Text(dayNumber)
+                .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 1)
+                .foregroundStyle(numberColor)
+        }
+        .frame(width: 21, height: 22)
+        .background(fillColor)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(strokeColor, lineWidth: 0.6)
+        )
     }
 }
 
