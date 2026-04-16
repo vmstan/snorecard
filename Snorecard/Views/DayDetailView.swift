@@ -86,7 +86,7 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Leak (95%)",
                             value: String(format: "%.0f L/min", leak),
-                            tint: leak > 24 ? .orange : .primary
+                            tint: leak > 24 ? .severityMedium : .primary
                         )
                     }
                     if let largeLeak = stats.largeLeakSeconds {
@@ -96,7 +96,7 @@ struct DayDetailView: View {
                             label: "Large Leak",
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
-                            tint: largeLeak > 300 ? .orange : .primary
+                            tint: largeLeak > 300 ? .severityMedium : .primary
                         )
                     }
                     if let tv = stats.tidalVolume50 {
@@ -142,10 +142,10 @@ struct DayDetailView: View {
 
     private func ahiColor(_ ahi: Double) -> Color {
         switch ahi {
-        case ..<5: .green
-        case ..<15: .yellow
-        case ..<30: .orange
-        default: .red
+        case ..<5: .severityGood
+        case ..<15: .severityLow
+        case ..<30: .severityMedium
+        default: .severityHigh
         }
     }
 

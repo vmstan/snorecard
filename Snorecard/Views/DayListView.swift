@@ -105,10 +105,10 @@ struct DayListView: View {
 
     private func ahiColor(_ ahi: Double) -> Color {
         switch ahi {
-        case ..<5: .green
-        case ..<15: .yellow
-        case ..<30: .orange
-        default: .red
+        case ..<5: .severityGood
+        case ..<15: .severityLow
+        case ..<30: .severityMedium
+        default: .severityHigh
         }
     }
 }

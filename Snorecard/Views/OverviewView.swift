@@ -67,7 +67,7 @@ struct OverviewView: View {
                 "Compliance",
                 value: "\(Int((compliance * 100).rounded()))%",
                 subtitle: "\(compliantDays) of \(days) days ≥ 4h",
-                tint: compliance >= 0.7 ? .green : .orange
+                tint: compliance >= 0.7 ? .severityGood : .severityMedium
             )
             card("Avg usage / night", value: formatMinutes(avgUsageMinutes))
             card(
@@ -95,7 +95,7 @@ struct OverviewView: View {
                 card(
                     "Avg leak 95th",
                     value: String(format: "%.0f L/min", leak),
-                    tint: leak > 24 ? .orange : .primary
+                    tint: leak > 24 ? .severityMedium : .primary
                 )
             }
             if let largeLeak = avgLargeLeakPct {
@@ -103,7 +103,7 @@ struct OverviewView: View {
                     "Avg large leak",
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
-                    tint: largeLeak > 5 ? .orange : .primary
+                    tint: largeLeak > 5 ? .severityMedium : .primary
                 )
             }
             if let tidal = avgTidal {
@@ -172,7 +172,7 @@ struct OverviewView: View {
                     x: .value("Day", stat.date, unit: .day),
                     y: .value("Hours", stat.usageHours)
                 )
-                .foregroundStyle(stat.usageHours >= 4 ? Color.accentColor : Color.accentColor.opacity(0.4))
+                .foregroundStyle(stat.usageHours >= 4 ? Color.chartUsageStrong : Color.chartUsageWeak)
                 RuleMark(y: .value("Compliance", 4))
                     .foregroundStyle(Color.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
@@ -191,7 +191,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Index", gi)
                         )
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(Color.chartTeal)
                         .symbol(Circle())
                     }
                 }
@@ -211,7 +211,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Minutes", s / 60)
                         )
-                        .foregroundStyle(Color.red.opacity(0.7))
+                        .foregroundStyle(Color.eventObstructive)
                     }
                 }
             } else {
@@ -231,7 +231,7 @@ struct OverviewView: View {
                             y: .value("P95", p95),
                             series: .value("Series", "95th")
                         )
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.chartOrange)
                         .symbol(Circle())
                     }
                     if let median = stat.pressureMedian {
@@ -240,13 +240,13 @@ struct OverviewView: View {
                             y: .value("Median", median),
                             series: .value("Series", "Median")
                         )
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.chartBlue)
                         .symbol(Circle())
                     }
                 }
                 .chartForegroundStyleScale([
-                    "95th": .orange,
-                    "Median": .blue
+                    "95th": Color.chartOrange,
+                    "Median": Color.chartBlue
                 ])
             } else {
                 emptyPlaceholder("No pressure data recorded.")
@@ -264,7 +264,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Flow Limit", fl)
                         )
-                        .foregroundStyle(.pink)
+                        .foregroundStyle(Color.chartPink)
                         .symbol(Circle())
                     }
                 }
@@ -285,7 +285,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Leak", leak)
                         )
-                        .foregroundStyle(.mint)
+                        .foregroundStyle(Color.chartMint)
                         .symbol(Circle())
                     }
                     RuleMark(y: .value("Threshold", 24))
@@ -308,7 +308,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Percent", pct)
                         )
-                        .foregroundStyle(pct > 5 ? Color.orange : Color.yellow)
+                        .foregroundStyle(pct > 5 ? Color.severityMedium : Color.severityLow)
                     }
                 }
             } else {
@@ -327,7 +327,7 @@ struct OverviewView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Tidal Volume", tv * 1000)
                         )
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(Color.chartIndigo)
                         .symbol(Circle())
                     }
                 }
@@ -420,10 +420,10 @@ struct OverviewView: View {
 
     private func ahiColor(_ ahi: Double) -> Color {
         switch ahi {
-        case ..<5: .green
-        case ..<15: .yellow
-        case ..<30: .orange
-        default: .red
+        case ..<5: .severityGood
+        case ..<15: .severityLow
+        case ..<30: .severityMedium
+        default: .severityHigh
         }
     }
 }
