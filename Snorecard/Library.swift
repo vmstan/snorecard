@@ -108,16 +108,6 @@ final class Library {
         load(url)
     }
 
-    /// `reloadCurrent()` that returns once the scan finishes — used
-    /// by the iOS sidebar's pull-to-refresh so the control's spinner
-    /// stays visible until fresh data is ready.
-    func reloadCurrentAndWait() async {
-        guard let url = card?.rootURL else { return }
-        load(url)
-        while case .loading = state {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-    }
 
     /// Remove every `.snorecard-stats.json` sidecar inside the currently
     /// loaded card's DATALOG tree and trigger a full re-import. Forces
@@ -244,6 +234,13 @@ final class Library {
     func load(_ url: URL) {
         state = .loading(url)
         cloudPrefetchProgress = nil
+        #if os(iOS)
+        // On iPhone NavigationSplitView is a stack — clear the
+        // selection immediately so the detail pane pops back to
+        // the sidebar instead of leaving the user stuck on a now-
+        // stale Overview / Day view while the new device loads.
+        selection = nil
+        #endif
         let source = CardSource.detect(from: url)
         Task.detached { [weak self] in
             // Eagerly download iCloud sidecar placeholders so the
@@ -287,8 +284,17 @@ final class Library {
                     UserDefaults.standard.set(persistedPath, forKey: Self.lastPathKey)
                     self?.rememberLastOpened(serial: loadedSerial)
                     self?.state = .loaded(loadedCard)
-                    // Default to the overview so the trends show immediately.
-                    // Fall back to the latest day when there's no summary data.
+                    #if os(iOS)
+                    // On iOS the split view collapses to a stack;
+                    // leaving selection nil surfaces the sidebar so
+                    // the user picks Overview or a day themselves
+                    // instead of being dropped straight into Overview.
+                    self?.selection = nil
+                    #else
+                    // On macOS the sidebar is always visible, so
+                    // default the detail pane to the Overview (or
+                    // the latest day with data if STR.edf is empty)
+                    // so there's something to look at immediately.
                     if loadedCard.days.contains(where: { $0.stats?.hasUsage == true }) {
                         self?.selection = .overview
                     } else if let fallback = loadedCard.days.last(where: { !$0.files.isEmpty })?.id {
@@ -296,6 +302,7 @@ final class Library {
                     } else {
                         self?.selection = nil
                     }
+                    #endif
                 }
             } catch {
                 await MainActor.run {

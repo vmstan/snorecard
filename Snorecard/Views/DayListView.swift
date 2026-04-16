@@ -8,6 +8,10 @@ struct DayListView: View {
 
     var body: some View {
         List(selection: $selection) {
+            #if os(macOS)
+            // macOS sidebar keeps the app-level "Snorecard" title in
+            // the window chrome, so surface the device name as the
+            // first section header.
             Section {
                 overviewRow(isSelected: selection == .overview)
                     .tag(SidebarSelection.overview)
@@ -17,6 +21,14 @@ struct DayListView: View {
                     .padding(.bottom, 10)
                     .textCase(nil)
             }
+            #else
+            // iOS uses the navigation title for the device name (see
+            // the .navigationTitle override below) so there's no
+            // secondary header — the Overview row sits directly
+            // under the nav bar like a normal list.
+            overviewRow(isSelected: selection == .overview)
+                .tag(SidebarSelection.overview)
+            #endif
 
             ForEach(daysByMonth, id: \.month) { group in
                 Section {
@@ -32,9 +44,8 @@ struct DayListView: View {
         }
         .listStyle(.sidebar)
         #if os(iOS)
-        .refreshable {
-            await library.reloadCurrentAndWait()
-        }
+        .navigationTitle(library.displayName(for: card))
+        .navigationBarTitleDisplayMode(.inline)
         #endif
     }
 
@@ -245,42 +256,70 @@ struct RenameDeviceSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Rename Device")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Serial \(serial)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Default: \(defaultName)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            TextField("Custom name", text: $name)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(save)
-
-            HStack {
-                Button("Use Default", role: .destructive) {
-                    onSave(nil)
-                    dismiss()
+        NavigationStack {
+            Form {
+                Section {
+                    nameField
+                } header: {
+                    Text("Name")
+                } footer: {
+                    Text("Shown in the sidebar. Syncs between your devices via iCloud.")
                 }
-                .disabled(currentOverride == nil)
 
-                Spacer()
+                Section {
+                    LabeledContent("Device", value: defaultName)
+                    LabeledContent("Serial", value: serial)
+                        .monospaced()
+                } header: {
+                    Text("Device")
+                }
 
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-
-                Button("Save", action: save)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if currentOverride != nil {
+                    Section {
+                        Button("Use Default Name", role: .destructive) {
+                            onSave(nil)
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Rename Device")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
         }
-        .padding(20)
-        .frame(minWidth: 340)
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 320)
+        #else
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        #endif
+    }
+
+    @ViewBuilder
+    private var nameField: some View {
+        let field = TextField("Custom name", text: $name)
+            .autocorrectionDisabled()
+            .onSubmit(save)
+        #if os(iOS)
+        field
+            .textInputAutocapitalization(.words)
+            .submitLabel(.done)
+        #else
+        field
+        #endif
     }
 
     private func save() {
