@@ -4,8 +4,8 @@ import SnorecardKit
 
 /// Full-width hero card for the day's apnea / hypopnea breakdown.
 ///
-/// Shows a large donut chart, the total event count centred inside it,
-/// and a legend listing each event type with its per-hour index.
+/// Shows the AHI number and a horizontal stacked bar of OAI / CAI / HI
+/// proportions, with the by-hour events chart below when available.
 struct EventDonutView: View {
     let stats: DailyStatistics
     var hourlyEvents: [TimedEvent] = []
@@ -17,163 +17,94 @@ struct EventDonutView: View {
             + stats.hypopneaIndex > 0
     }
 
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            // Wide layout: donut / legend / chart all in a single row.
-            wideLayout
-            // Medium layout: donut + legend side by side, chart stacked below.
-            mediumLayout
-            // Narrow layout: donut centred at top, legend below, chart below.
-            narrowLayout
-        }
-        .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var wideLayout: some View {
-        HStack(alignment: .center, spacing: 24) {
-            donutWithCenter(size: 192)
-            legendColumn
-                .fixedSize(horizontal: true, vertical: false)
-            if hasHourlyChart {
-                hourlyChart
-                    .frame(maxWidth: .infinity)
-            } else {
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private var mediumLayout: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 20) {
-                donutWithCenter(size: 192)
-                legendColumn
-                Spacer(minLength: 0)
-            }
-            if hasHourlyChart {
-                hourlyChart
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    private var narrowLayout: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Spacer()
-                donutWithCenter(size: 160)
-                Spacer()
-            }
-            legendColumn
-            if hasHourlyChart {
-                hourlyChart
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
     private var hasHourlyChart: Bool {
         hourlyDayStart != nil && !hourlyEvents.isEmpty
     }
 
-    @ViewBuilder
-    private var hourlyChart: some View {
-        if let hourlyDayStart {
-            AHIHourlyChart(events: hourlyEvents, dayStart: hourlyDayStart)
-        }
-    }
-
-    private func donutWithCenter(size: CGFloat) -> some View {
-        ZStack {
-            donut
-                .frame(width: size, height: size)
-            VStack(spacing: 2) {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(String(format: "%.1f", stats.ahi))
-                    .font(.system(size: size * 0.27, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 Text("AHI")
-                    .font(.callout)
+                    .font(.headline)
                     .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            stackedBar
+
+            if hasHourlyChart, let hourlyDayStart {
+                AHIHourlyChart(events: hourlyEvents, dayStart: hourlyDayStart)
             }
         }
-    }
-
-    private var legendColumn: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            legendRow(
-                color: .red,
-                fullLabel: "Obstructive Apnea",
-                shortLabel: "OAI",
-                value: stats.obstructiveApneaIndex
-            )
-            legendRow(
-                color: .purple,
-                fullLabel: "Central Apnea",
-                shortLabel: "CAI",
-                value: stats.centralApneaIndex
-            )
-            legendRow(
-                color: .yellow,
-                fullLabel: "Hypopnea",
-                shortLabel: "HI",
-                value: stats.hypopneaIndex
-            )
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private var donut: some View {
+    private var stackedBar: some View {
         Chart {
             if hasData {
-                SectorMark(
-                    angle: .value("OAI", stats.obstructiveApneaIndex),
-                    innerRadius: .ratio(0.62),
-                    angularInset: 1.2
-                )
-                .foregroundStyle(Color.red)
-                .cornerRadius(3)
-
-                SectorMark(
-                    angle: .value("CAI", stats.centralApneaIndex),
-                    innerRadius: .ratio(0.62),
-                    angularInset: 1.2
-                )
-                .foregroundStyle(Color.purple)
-                .cornerRadius(3)
-
-                SectorMark(
-                    angle: .value("HI", stats.hypopneaIndex),
-                    innerRadius: .ratio(0.62),
-                    angularInset: 1.2
-                )
-                .foregroundStyle(Color.yellow)
-                .cornerRadius(3)
+                barSegment("Obstructive", value: stats.obstructiveApneaIndex, color: .red)
+                barSegment("Central", value: stats.centralApneaIndex, color: .purple)
+                barSegment("Hypopnea", value: stats.hypopneaIndex, color: .yellow)
             } else {
-                SectorMark(
-                    angle: .value("None", 1),
-                    innerRadius: .ratio(0.62)
+                BarMark(
+                    x: .value("Index", 1),
+                    y: .value("", "ahi")
                 )
                 .foregroundStyle(Color.secondary.opacity(0.18))
+                .annotation(position: .overlay) {
+                    Text("No events")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
         .chartLegend(.hidden)
+        .chartForegroundStyleScale([
+            "Obstructive": Color.red,
+            "Central": Color.purple,
+            "Hypopnea": Color.yellow
+        ])
+        .frame(height: 36)
     }
 
-    private func legendRow(
-        color: Color,
-        fullLabel: String,
-        shortLabel: String,
-        value: Double
-    ) -> some View {
-        HStack(spacing: 10) {
-            Circle().fill(color).frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(fullLabel)
-                    .font(.subheadline.weight(.medium))
-                Text("\(shortLabel) · \(String(format: "%.1f", value))/hr")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+    private func barSegment(_ name: String, value: Double, color: Color) -> some ChartContent {
+        BarMark(
+            x: .value("Index", value),
+            y: .value("", "ahi")
+        )
+        .foregroundStyle(by: .value("Type", name))
+        .annotation(position: .overlay) {
+            if shouldLabel(value) {
+                Text(String(format: "%@ %.1f", shortLabel(for: name), value))
+                    .font(.caption2.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
+    }
+
+    private func shortLabel(for name: String) -> String {
+        switch name {
+        case "Obstructive": "OAI"
+        case "Central": "CAI"
+        case "Hypopnea": "HI"
+        default: name
+        }
+    }
+
+    /// Only label segments that take up at least ~8 % of the bar so the
+    /// text doesn't overflow its slice.
+    private func shouldLabel(_ value: Double) -> Bool {
+        let total = stats.obstructiveApneaIndex
+            + stats.centralApneaIndex
+            + stats.hypopneaIndex
+        guard total > 0 else { return false }
+        return value / total > 0.08
     }
 }
