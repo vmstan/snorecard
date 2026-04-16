@@ -828,13 +828,19 @@ struct WaveformSection: View {
     /// changed but the chart's own data hasn't.
     @ViewBuilder
     private var chartStack: some View {
+        // Capture the day-start by value so the closure doesn't need to
+        // capture `self` and can stay `@Sendable`.
+        let dayStart = bundle.dayStart
         let axes = SharedAxisConfig(
             totalDuration: bundle.totalDuration,
             visibleDomainLength: visibleDomainLength,
             isZoomed: isZoomed,
             scrollBinding: $scrollPosition,
             hoverBinding: $hoverOffset,
-            clockLabel: clockLabel(for:)
+            clockLabel: { offset in
+                dayStart.addingTimeInterval(offset)
+                    .formatted(date: .omitted, time: .shortened)
+            }
         )
 
         withHoverOverlay(tag: "Breathing") {
@@ -987,15 +993,15 @@ extension Array {
 /// cleanly — two `SharedAxisConfig` values are equal when the visible
 /// window and zoom state match, so SwiftUI can skip re-rendering charts
 /// whose data hasn't changed during a pure hover update.
-struct SharedAxisConfig: Equatable {
+struct SharedAxisConfig: Equatable, Sendable {
     let totalDuration: TimeInterval
     let visibleDomainLength: TimeInterval
     let isZoomed: Bool
     let scrollBinding: Binding<TimeInterval>
     let hoverBinding: Binding<TimeInterval?>
-    let clockLabel: (TimeInterval) -> String
+    let clockLabel: @Sendable (TimeInterval) -> String
 
-    static func == (lhs: SharedAxisConfig, rhs: SharedAxisConfig) -> Bool {
+    nonisolated static func == (lhs: SharedAxisConfig, rhs: SharedAxisConfig) -> Bool {
         lhs.totalDuration == rhs.totalDuration
             && lhs.visibleDomainLength == rhs.visibleDomainLength
             && lhs.isZoomed == rhs.isZoomed
