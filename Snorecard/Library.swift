@@ -89,24 +89,37 @@ final class Library {
         let source = CardSource.detect(from: url)
         Task.detached { [weak self] in
             do {
-                let card = try SDCardImporter.scan(url)
+                let sdCard = try SDCardImporter.scan(url)
+
+                // For SD card imports, merge new day folders into iCloud
+                // and then re-scan iCloud so the view reflects the
+                // combined history instead of only what was on the card.
+                var finalCard = sdCard
+                var finalURL = url
+                if source == .sdCard {
+                    if let iCloudURL = await Self.mergeIntoICloud(
+                        sourceURL: url,
+                        card: sdCard
+                    ),
+                       let merged = try? SDCardImporter.scan(iCloudURL) {
+                        finalCard = merged
+                        finalURL = iCloudURL
+                    }
+                }
+
+                let loadedCard = finalCard
+                let persistedPath = finalURL.path
                 await MainActor.run {
-                    UserDefaults.standard.set(url.path, forKey: Self.lastPathKey)
-                    self?.state = .loaded(card)
+                    UserDefaults.standard.set(persistedPath, forKey: Self.lastPathKey)
+                    self?.state = .loaded(loadedCard)
                     // Default to the overview so the trends show immediately.
                     // Fall back to the latest day when there's no summary data.
-                    if card.days.contains(where: { $0.stats?.hasUsage == true }) {
+                    if loadedCard.days.contains(where: { $0.stats?.hasUsage == true }) {
                         self?.selection = .overview
-                    } else if let fallback = card.days.last(where: { !$0.files.isEmpty })?.id {
+                    } else if let fallback = loadedCard.days.last(where: { !$0.files.isEmpty })?.id {
                         self?.selection = .day(fallback)
                     } else {
                         self?.selection = nil
-                    }
-
-                    // Auto-sync SD card imports to iCloud so the cloud
-                    // copy stays up to date without manual intervention.
-                    if source == .sdCard {
-                        self?.syncToICloud()
                     }
                 }
             } catch {
@@ -119,56 +132,80 @@ final class Library {
 
     // MARK: - iCloud sync
 
-    /// Sync the currently loaded data into Snorecard's iCloud ubiquity
-    /// container, keyed on the device's serial number so iCloud keeps a
-    /// single "latest" snapshot per CPAP machine. The container is marked
-    /// as document-scope public in Info.plist, so the resulting folder
-    /// shows up in Files / Finder under **iCloud Drive > Snorecard**.
-    private func syncToICloud() {
-        guard let card else { return }
+    /// Merge a newly-imported SD card into Snorecard's iCloud ubiquity
+    /// container. Day folders already present in iCloud are preserved
+    /// so repeat imports accumulate history; top-level summary files
+    /// (STR.edf, Identification.tgt, SETTINGS) are always refreshed.
+    /// Returns the iCloud device-folder URL on success so the caller
+    /// can re-scan it and present the combined dataset.
+    private static func mergeIntoICloud(
+        sourceURL: URL,
+        card: ResMedSDCard
+    ) async -> URL? {
+        guard let backupRoot = iCloudBackupRoot else { return nil }
 
-        guard let backupRoot = Self.iCloudBackupRoot else { return }
-
+        let fm = FileManager.default
         do {
-            try FileManager.default.createDirectory(
-                at: backupRoot,
-                withIntermediateDirectories: true
-            )
+            try fm.createDirectory(at: backupRoot, withIntermediateDirectories: true)
         } catch {
-            return
+            return nil
         }
 
         let deviceFolder = backupRoot.appendingPathComponent(
-            iCloudDeviceFolderName(for: card),
+            Self.iCloudDeviceFolderName(for: card),
             isDirectory: true
         )
 
-        let sourceURL = card.rootURL
-        Task.detached {
-            let fm = FileManager.default
+        return await Task.detached(priority: .userInitiated) { () -> URL? in
             do {
-                if fm.fileExists(atPath: deviceFolder.path) {
-                    try fm.removeItem(at: deviceFolder)
+                if !fm.fileExists(atPath: deviceFolder.path) {
+                    try fm.createDirectory(
+                        at: deviceFolder,
+                        withIntermediateDirectories: true
+                    )
                 }
 
-                try fm.createDirectory(
-                    at: deviceFolder,
-                    withIntermediateDirectories: true
-                )
-
-                let entries = try fm.contentsOfDirectory(
+                let topLevel = try fm.contentsOfDirectory(
                     at: sourceURL,
                     includingPropertiesForKeys: nil,
                     options: [.skipsHiddenFiles]
                 )
-                for entry in entries {
-                    let dest = deviceFolder.appendingPathComponent(entry.lastPathComponent)
-                    try fm.copyItem(at: entry, to: dest)
+
+                for entry in topLevel {
+                    let name = entry.lastPathComponent
+                    let dest = deviceFolder.appendingPathComponent(name)
+
+                    if name == "DATALOG" {
+                        if !fm.fileExists(atPath: dest.path) {
+                            try fm.createDirectory(
+                                at: dest,
+                                withIntermediateDirectories: true
+                            )
+                        }
+                        let dayDirs = (try? fm.contentsOfDirectory(
+                            at: entry,
+                            includingPropertiesForKeys: nil,
+                            options: [.skipsHiddenFiles]
+                        )) ?? []
+                        for dayDir in dayDirs {
+                            let dayDest = dest.appendingPathComponent(dayDir.lastPathComponent)
+                            guard !fm.fileExists(atPath: dayDest.path) else { continue }
+                            try? fm.copyItem(at: dayDir, to: dayDest)
+                        }
+                    } else {
+                        if fm.fileExists(atPath: dest.path) {
+                            try? fm.removeItem(at: dest)
+                        }
+                        try? fm.copyItem(at: entry, to: dest)
+                    }
                 }
+                return deviceFolder
             } catch {
-                // iCloud sync is best-effort; failures are silent.
+                // iCloud sync is best-effort; on failure the caller
+                // falls back to showing just the SD card data.
+                return nil
             }
-        }
+        }.value
     }
 
     // MARK: - iCloud paths
@@ -197,7 +234,7 @@ final class Library {
     /// Folder name for iCloud Drive syncs — keyed on serial only so a
     /// given device has exactly one folder that mirrors its current SD card.
     /// Falls back to `Unknown Device` when the SD card has no serial.
-    private func iCloudDeviceFolderName(for card: ResMedSDCard) -> String {
+    private static func iCloudDeviceFolderName(for card: ResMedSDCard) -> String {
         card.identification?.serialNumber.flatMap { $0.isEmpty ? nil : $0 }
             ?? "Unknown Device"
     }
