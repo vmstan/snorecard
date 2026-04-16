@@ -4,6 +4,7 @@ import SnorecardKit
 
 struct OverviewView: View {
     let card: ResMedSDCard
+    @Environment(Library.self) private var library
 
     private var stats: [DailyStatistics] {
         card.days
@@ -38,6 +39,7 @@ struct OverviewView: View {
             .padding(20)
         }
         .navigationTitle("Overview")
+        .navigationSubtitle(library.displayName(for: card))
     }
 
     // MARK: - Aggregate cards

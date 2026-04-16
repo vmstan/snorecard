@@ -83,10 +83,8 @@ public enum SDCardImporter {
         let strURL = root.appendingPathComponent("STR.edf")
         let summaryURL = fm.fileExists(atPath: strURL.path) ? strURL : nil
 
-        // Decode daily statistics once up front and build a date → stats map
-        // so the day folders below can carry pre-matched summary data.
-        // Pass the parsed product name so `modeName` can resolve a
-        // device-specific label (e.g. VPAPauto on AirCurve VAuto cards).
+        // Decode STR.edf once up front so every day can see if it has
+        // pre-computed summary stats available.
         var statsByDate: [Date: DailyStatistics] = [:]
         if let summaryURL,
            let strFile = try? EDFFile(contentsOf: summaryURL),
@@ -107,15 +105,77 @@ public enum SDCardImporter {
         .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        let days: [ResMedDay] = try dayDirs.compactMap { dir in
-            let name = dir.lastPathComponent
-            guard let date = parseFolderDate(name) else { return nil }
+        let productName = identification?.productName
 
-            let files = try fm.contentsOfDirectory(
-                at: dir,
-                includingPropertiesForKeys: [.fileSizeKey],
-                options: [.skipsHiddenFiles]
-            )
+        // Process each day folder concurrently. Each task is
+        // independent — they don't share mutable state — so a
+        // `TaskGroup` gives a near-linear speedup on multi-core
+        // machines.
+        let days: [ResMedDay] = importDaysConcurrently(
+            dayDirs: dayDirs,
+            statsByDate: statsByDate,
+            productName: productName
+        )
+
+        return ResMedSDCard(
+            rootURL: root,
+            identification: identification,
+            summaryFileURL: summaryURL,
+            days: days
+        )
+    }
+
+    /// Wraps a `TaskGroup` that processes day folders in parallel and
+    /// returns them sorted back into calendar order.
+    private static func importDaysConcurrently(
+        dayDirs: [URL],
+        statsByDate: [Date: DailyStatistics],
+        productName: String?
+    ) -> [ResMedDay] {
+        let semaphore = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var collected: [ResMedDay] = []
+        Task.detached(priority: .userInitiated) {
+            var result: [ResMedDay] = []
+            await withTaskGroup(of: ResMedDay?.self) { group in
+                for dir in dayDirs {
+                    group.addTask {
+                        await importDay(
+                            dir: dir,
+                            statsByDate: statsByDate,
+                            productName: productName
+                        )
+                    }
+                }
+                for await day in group {
+                    if let day { result.append(day) }
+                }
+            }
+            result.sort { $0.date < $1.date }
+            collected = result
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return collected
+    }
+
+    /// Build one day's `ResMedDay`, using the sidecar stats cache when
+    /// valid and falling back to the full `DailyStatistics.aggregate`
+    /// pass otherwise. Writes the sidecar back out so the next launch
+    /// hits the cache.
+    private static func importDay(
+        dir: URL,
+        statsByDate: [Date: DailyStatistics],
+        productName: String?
+    ) async -> ResMedDay? {
+        let fm = FileManager.default
+        let name = dir.lastPathComponent
+        guard let date = parseFolderDate(name) else { return nil }
+
+        let files: [ResMedDataFile] = ((try? fm.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )) ?? [])
             .filter { $0.pathExtension.lowercased() == "edf" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { url -> ResMedDataFile? in
@@ -131,49 +191,71 @@ public enum SDCardImporter {
                 )
             }
 
-            // If STR.edf didn't cover this date, derive a summary from the raw
-            // DATALOG files so the sidebar and overview still have numbers.
-            var stats: DailyStatistics? = {
-                if let direct = statsByDate[date] { return direct }
-                let placeholder = ResMedDay(date: date, files: files, stats: nil)
-                return DailyStatistics.compute(
-                    for: placeholder,
-                    productName: identification?.productName
-                )
-            }()
-            // Event-duration and large-leak aggregates are derived the same
-            // way whether STR.edf covered this day or not — they come from
-            // the raw EVE and PLD files.
-            if stats != nil {
-                let placeholder = ResMedDay(date: date, files: files, stats: nil)
-                let supplementary = DailyStatistics.supplementaryMetrics(for: placeholder)
-                stats?.timeInApneaSeconds = supplementary.timeInApnea
-                stats?.largeLeakSeconds = supplementary.largeLeak
-                if stats?.flowLimit95 == nil {
-                    stats?.flowLimit95 = supplementary.flowLimit95
-                }
-                // Prefer PLD-measured pressure percentiles over STR.edf's
-                // target values so our numbers match OSCAR / SleepHQ.
-                if let v = supplementary.maskEpap95 { stats?.epap95 = v }
-                if let v = supplementary.maskIpap95 { stats?.ipap95 = v }
-                if let v = supplementary.maskPressure95 { stats?.pressure95 = v }
+        let fingerprint = DailyStatsCache.Fingerprint.build(for: files)
 
-                // Glasgow Index — computed per-BRP session then weighted
-                // by inspiration count. BRP stores flow in L/s; the
-                // algorithm expects L/min.
-                stats?.glasgowIndex = GlasgowIndex.computeDay(
-                    brpFiles: files.filter { $0.kind == .breath }
-                )
-            }
-            return ResMedDay(date: date, files: files, stats: stats)
+        // Fast path — sidecar hit. Skip all EDF decoding.
+        if let cached = DailyStatsCache.load(for: dir, fingerprint: fingerprint) {
+            return ResMedDay(date: date, files: files, stats: cached)
         }
 
-        return ResMedSDCard(
-            rootURL: root,
-            identification: identification,
-            summaryFileURL: summaryURL,
-            days: days
+        // Slow path — decode once through the unified aggregate.
+        let placeholder = ResMedDay(date: date, files: files, stats: nil)
+        var stats = DailyStatistics.aggregate(
+            for: placeholder,
+            productName: productName
         )
+        // If the STR.edf had a record for this day, prefer its
+        // mode/maskEvents/etc. but keep the PLD-measured percentiles
+        // and Glasgow Index from the aggregate pass.
+        if let direct = statsByDate[date], stats != nil {
+            stats = mergeSTRWithAggregate(str: direct, aggregate: stats!)
+        }
+
+        if let finalStats = stats {
+            DailyStatsCache.save(finalStats, to: dir, fingerprint: fingerprint)
+        }
+        return ResMedDay(date: date, files: files, stats: stats)
+    }
+
+    /// STR.edf provides a few fields we can't derive from raw files
+    /// (mode code, mask-on event counts). Keep those, but let the
+    /// aggregate pass override everything else since its values match
+    /// OSCAR / SleepHQ.
+    private static func mergeSTRWithAggregate(
+        str: DailyStatistics,
+        aggregate: DailyStatistics
+    ) -> DailyStatistics {
+        var merged = aggregate
+        if merged.modeCode == nil {
+            merged = DailyStatistics(
+                date: merged.date,
+                usageMinutes: merged.usageMinutes,
+                maskEvents: str.maskEvents,
+                ahi: merged.ahi,
+                hypopneaIndex: merged.hypopneaIndex,
+                apneaIndex: merged.apneaIndex,
+                obstructiveApneaIndex: merged.obstructiveApneaIndex,
+                centralApneaIndex: merged.centralApneaIndex,
+                unspecifiedApneaIndex: merged.unspecifiedApneaIndex,
+                pressureMedian: merged.pressureMedian,
+                pressure95: merged.pressure95,
+                pressureMax: merged.pressureMax,
+                ipap95: merged.ipap95,
+                epap95: merged.epap95,
+                leak95LPerMin: merged.leak95LPerMin,
+                leakMaxLPerMin: merged.leakMaxLPerMin,
+                timeInApneaSeconds: merged.timeInApneaSeconds,
+                largeLeakSeconds: merged.largeLeakSeconds,
+                glasgowIndex: merged.glasgowIndex,
+                flowLimit95: merged.flowLimit95,
+                minuteVentilation50: merged.minuteVentilation50,
+                respirationRate50: merged.respirationRate50,
+                tidalVolume50: merged.tidalVolume50,
+                modeCode: str.modeCode,
+                productName: merged.productName
+            )
+        }
+        return merged
     }
 
     private static func parseFolderDate(_ name: String) -> Date? {

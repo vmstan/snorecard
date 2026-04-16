@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Only the fields a CPAP user typically cares about are surfaced here.
 /// `-1` sentinel values from the device are normalised to `nil`.
-public struct DailyStatistics: Sendable, Equatable {
+public struct DailyStatistics: Sendable, Equatable, Codable {
     public let date: Date
     public let usageMinutes: Double
     public let maskEvents: Int
@@ -298,6 +298,164 @@ extension DailyStatistics {
             maskEpap95: percentile(epaps, 95),
             maskIpap95: percentile(ipaps, 95),
             maskPressure95: percentile(maskPressures, 95)
+        )
+    }
+
+    /// Single-pass aggregate for a day's raw files — decodes each BRP /
+    /// EVE / PLD file exactly once and builds a fully-populated
+    /// `DailyStatistics`. Replaces the combination of `compute` +
+    /// `supplementaryMetrics` + `GlasgowIndex.computeDay` that the
+    /// importer previously ran, cutting ~50 % of I/O per day.
+    public static func aggregate(
+        for day: ResMedDay,
+        productName: String? = nil
+    ) -> DailyStatistics? {
+        let brpFiles = day.files(of: .breath)
+        guard !brpFiles.isEmpty else { return nil }
+
+        // BRP pass: session duration + Glasgow Index per file.
+        var usageSeconds: Double = 0
+        var totalGlasgowScore: Double = 0
+        var totalInspirations = 0
+        for file in brpFiles {
+            guard let edf = try? EDFFile(contentsOf: file.url),
+                  edf.header.recordCount > 0 else { continue }
+            usageSeconds += Double(edf.header.recordCount) * edf.header.recordDuration
+
+            guard let flowIdx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Flow") }),
+                  let flowSamples = try? edf.physicalSamples(ofSignal: flowIdx)
+            else { continue }
+            let unit = edf.signals[flowIdx].physicalDimension
+                .trimmingCharacters(in: .whitespaces).lowercased()
+            let scale: Double = unit.contains("l/s") ? 60 : 1
+            let flowLPerMin = scale == 1 ? flowSamples : flowSamples.map { $0 * scale }
+            if let result = GlasgowIndex.compute(flowSamples: flowLPerMin) {
+                totalGlasgowScore += result.score * Double(result.inspirationCount)
+                totalInspirations += result.inspirationCount
+            }
+        }
+        let usageMinutes = usageSeconds / 60
+        let usageHours = usageMinutes / 60
+        let glasgowIndex: Double? = totalInspirations > 0
+            ? totalGlasgowScore / Double(totalInspirations)
+            : nil
+
+        // EVE pass: apnea/hypopnea counts + total time in events.
+        var obstructive = 0
+        var central = 0
+        var unspecified = 0
+        var hypopnea = 0
+        var timeInApnea: Double = 0
+        var sawAnyEVE = false
+        for file in day.files(of: .events) {
+            guard let edf = try? EDFFile(contentsOf: file.url),
+                  let annotations = try? edf.annotations() else { continue }
+            sawAnyEVE = true
+            for annotation in annotations {
+                let text = annotation.text.lowercased()
+                let isEvent: Bool
+                if text.contains("obstructive") { obstructive += 1; isEvent = true }
+                else if text.contains("central") { central += 1; isEvent = true }
+                else if text.contains("hypopnea") { hypopnea += 1; isEvent = true }
+                else if text.contains("apnea") { unspecified += 1; isEvent = true }
+                else { isEvent = false }
+                if isEvent { timeInApnea += annotation.duration ?? 0 }
+            }
+        }
+        let apneas = obstructive + central + unspecified
+        func rate(_ count: Int) -> Double {
+            usageHours > 0 ? Double(count) / usageHours : 0
+        }
+
+        // PLD pass: all percentile metrics + large-leak seconds in one
+        // trip through each physiological file.
+        var pressures: [Double] = []
+        var ipaps: [Double] = []
+        var epaps: [Double] = []
+        var leaks: [Double] = []
+        var flowLims: [Double] = []
+        var minVents: [Double] = []
+        var respRates: [Double] = []
+        var tidVols: [Double] = []
+        var largeLeakSeconds: Double = 0
+        var sawAnyPLD = false
+        let leakThreshold: Double = 24.0 / 60.0 // 24 L/min in L/s
+
+        for file in day.files(of: .physiological) {
+            guard let edf = try? EDFFile(contentsOf: file.url),
+                  edf.header.recordCount > 0 else { continue }
+
+            func samples(_ prefix: String) -> [Double] {
+                guard let idx = edf.signals.firstIndex(where: { $0.label.hasPrefix(prefix) }),
+                      let decoded = try? edf.physicalSamples(ofSignal: idx)
+                else { return [] }
+                return decoded
+            }
+
+            let pressure = samples("MaskPress")
+            guard !pressure.isEmpty else { continue }
+            let ipap = samples("Press.")
+            let epap = samples("EprPress")
+            let leak = samples("Leak")
+            let fl = samples("FlowLim")
+            let mv = samples("MinVent")
+            let rr = samples("RespRate")
+            let tv = samples("TidVol")
+
+            sawAnyPLD = true
+
+            for i in pressure.indices where pressure[i] > 1.0 {
+                pressures.append(pressure[i])
+                if i < ipap.count { ipaps.append(ipap[i]) }
+                if i < epap.count { epaps.append(epap[i]) }
+                if i < leak.count { leaks.append(leak[i]) }
+                if i < fl.count { flowLims.append(fl[i]) }
+                if i < mv.count { minVents.append(mv[i]) }
+                if i < rr.count { respRates.append(rr[i]) }
+                if i < tv.count { tidVols.append(tv[i]) }
+            }
+
+            // Large-leak seconds uses every sample (matches existing
+            // behavior in `supplementaryMetrics`).
+            if let leakIdx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Leak") }) {
+                let sig = edf.signals[leakIdx]
+                let sampleRate = Double(sig.samplesPerRecord) / edf.header.recordDuration
+                if sampleRate > 0 {
+                    let interval = 1.0 / sampleRate
+                    let above = leak.reduce(into: 0) { count, sample in
+                        if sample > leakThreshold { count += 1 }
+                    }
+                    largeLeakSeconds += Double(above) * interval
+                }
+            }
+        }
+
+        return DailyStatistics(
+            date: day.date,
+            usageMinutes: usageMinutes,
+            maskEvents: brpFiles.count,
+            ahi: rate(apneas + hypopnea),
+            hypopneaIndex: rate(hypopnea),
+            apneaIndex: rate(apneas),
+            obstructiveApneaIndex: rate(obstructive),
+            centralApneaIndex: rate(central),
+            unspecifiedApneaIndex: rate(unspecified),
+            pressureMedian: percentile(pressures, 50),
+            pressure95: percentile(pressures, 95),
+            pressureMax: pressures.max(),
+            ipap95: percentile(ipaps, 95),
+            epap95: percentile(epaps, 95),
+            leak95LPerMin: percentile(leaks, 95).map { $0 * 60 },
+            leakMaxLPerMin: leaks.max().map { $0 * 60 },
+            timeInApneaSeconds: sawAnyEVE ? timeInApnea : nil,
+            largeLeakSeconds: sawAnyPLD ? largeLeakSeconds : nil,
+            glasgowIndex: glasgowIndex,
+            flowLimit95: percentile(flowLims, 95),
+            minuteVentilation50: percentile(minVents, 50),
+            respirationRate50: percentile(respRates, 50),
+            tidalVolume50: percentile(tidVols, 50),
+            modeCode: nil,
+            productName: productName
         )
     }
 

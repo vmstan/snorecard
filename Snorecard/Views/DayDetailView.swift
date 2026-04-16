@@ -7,6 +7,7 @@ private let waveformLog = Logger(subsystem: "com.vmstan.Snorecard", category: "W
 
 struct DayDetailView: View {
     let day: ResMedDay
+    @Environment(Library.self) private var library
     @State private var loadedWaveform: WaveformBundle?
     @State private var loadError: String?
 
@@ -31,9 +32,17 @@ struct DayDetailView: View {
             .padding(20)
         }
         .navigationTitle(navigationTitleText)
+        .navigationSubtitle(deviceSubtitle)
         .task(id: day.id) {
             await loadAllSessions()
         }
+    }
+
+    /// Device name pulled from the currently-loaded card so the daily
+    /// view's nav bar shows which machine the data belongs to.
+    private var deviceSubtitle: String {
+        guard let card = library.card else { return "" }
+        return library.displayName(for: card)
     }
 
     @ViewBuilder

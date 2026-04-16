@@ -5,7 +5,6 @@ struct DayListView: View {
     let card: ResMedSDCard
     @Binding var selection: SidebarSelection?
     @Environment(Library.self) private var library
-    @State private var isRenaming = false
     @State private var knownDevices: [Library.DeviceFolder] = []
 
     private var otherDevices: [Library.DeviceFolder] {
@@ -29,47 +28,24 @@ struct DayListView: View {
                 overviewRow(isSelected: selection == .overview)
                     .tag(SidebarSelection.overview)
             } header: {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        if otherDevices.isEmpty {
+                Group {
+                    if otherDevices.isEmpty {
+                        Text(library.displayName(for: card))
+                            .font(.title2.weight(.semibold))
+                    } else {
+                        Menu {
+                            ForEach(otherDevices) { folder in
+                                Button(deviceMenuLabel(for: folder)) {
+                                    library.load(folder.url)
+                                }
+                            }
+                        } label: {
                             Text(library.displayName(for: card))
-                                .font(.headline)
-                        } else {
-                            Menu {
-                                ForEach(otherDevices) { folder in
-                                    Button(deviceMenuLabel(for: folder)) {
-                                        library.load(folder.url)
-                                    }
-                                }
-                            } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text(library.displayName(for: card))
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Image(systemName: "chevron.down")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.primary)
                         }
-                        if card.identification?.serialNumber != nil {
-                            Button {
-                                isRenaming = true
-                            } label: {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.callout)
-                                    .foregroundStyle(.tint)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Rename device")
-                        }
-                    }
-                    if let serial = card.identification?.serialNumber {
-                        Text("Serial \(serial)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
                     }
                 }
                 .padding(.bottom, 10)
@@ -91,18 +67,6 @@ struct DayListView: View {
         .listStyle(.sidebar)
         .task(id: card.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
-        }
-        .sheet(isPresented: $isRenaming) {
-            if let serial = card.identification?.serialNumber {
-                RenameDeviceSheet(
-                    serial: serial,
-                    defaultName: card.identification?.productName ?? "ResMed Device",
-                    currentOverride: library.deviceNameOverrides[serial],
-                    onSave: { newName in
-                        library.setDeviceName(newName, for: serial)
-                    }
-                )
-            }
         }
     }
 
@@ -291,7 +255,7 @@ private struct CalendarDayTile: View {
 /// Sheet presented when the user wants to set or clear a custom name for
 /// the currently-loaded CPAP device. Saves via the shared Library so the
 /// value syncs to iCloud.
-private struct RenameDeviceSheet: View {
+struct RenameDeviceSheet: View {
     let serial: String
     let defaultName: String
     let currentOverride: String?
