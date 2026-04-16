@@ -28,6 +28,10 @@ final class Library {
     /// `NSUbiquitousKeyValueStore` so the override syncs automatically
     /// across all of the user's Macs and iOS devices.
     private(set) var deviceNameOverrides: [String: String] = [:]
+    /// Non-nil while iCloud placeholder sidecars are being fetched so
+    /// the sidebar can show a "Downloading from iCloud — N/M" hint
+    /// instead of looking stuck.
+    var cloudPrefetchProgress: CloudPrefetcher.Progress?
 
     private static let lastPathKey = "SnorecardLastSDPath"
     private static let deviceNamesKey = "deviceNameOverrides"
@@ -193,8 +197,24 @@ final class Library {
 
     func load(_ url: URL) {
         state = .loading(url)
+        cloudPrefetchProgress = nil
         let source = CardSource.detect(from: url)
         Task.detached { [weak self] in
+            // Eagerly download iCloud sidecar placeholders so the
+            // scan hits its cache path for every day.
+            if source == .iCloud {
+                await CloudPrefetcher.prefetchSidecars(in: url) { progress in
+                    await MainActor.run {
+                        // Hide the indicator once everything has
+                        // finished; keep it visible while downloading.
+                        self?.cloudPrefetchProgress = progress.completed < progress.total
+                            ? progress
+                            : nil
+                    }
+                }
+                await MainActor.run { self?.cloudPrefetchProgress = nil }
+            }
+
             do {
                 let sdCard = try SDCardImporter.scan(url)
 

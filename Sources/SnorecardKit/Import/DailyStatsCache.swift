@@ -14,17 +14,17 @@ public enum DailyStatsCache {
 
     /// Fingerprint summary for a day's EDF files. Encoded into the
     /// sidecar so we can compare on read and invalidate when the data
-    /// underneath has changed.
+    /// underneath has changed. ResMed writes each EDF exactly once,
+    /// so the `(name, size)` tuple is stable across iCloud syncs —
+    /// we intentionally don't include modification dates because
+    /// those drift by seconds between devices and would cause
+    /// spurious cache misses on iOS after a Mac import.
     public struct Fingerprint: Codable, Equatable, Sendable {
         public let files: [FileEntry]
 
         public struct FileEntry: Codable, Equatable, Sendable {
             public let name: String
             public let size: Int
-            /// Seconds since 1970, truncated to whole seconds so the
-            /// fingerprint survives the small mtime shifts that iCloud
-            /// and Finder both introduce.
-            public let modifiedEpoch: Int
         }
 
         /// Build a fingerprint from the day's `ResMedDataFile` list by
@@ -33,15 +33,12 @@ public enum DailyStatsCache {
             let fm = FileManager.default
             let entries = files
                 .sorted { $0.url.lastPathComponent < $1.url.lastPathComponent }
-                .compactMap { file -> FileEntry? in
+                .map { file -> FileEntry in
                     let attrs = try? fm.attributesOfItem(atPath: file.url.path)
                     let size = (attrs?[.size] as? Int) ?? file.byteSize ?? 0
-                    let date = attrs?[.modificationDate] as? Date
-                    let epoch = Int((date ?? Date.distantPast).timeIntervalSince1970)
                     return FileEntry(
                         name: file.url.lastPathComponent,
-                        size: size,
-                        modifiedEpoch: epoch
+                        size: size
                     )
                 }
             return Fingerprint(files: entries)

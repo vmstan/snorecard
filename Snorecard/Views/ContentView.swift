@@ -122,9 +122,21 @@ struct ContentView: View {
                 }
             case .loading(let url):
                 VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Scanning \(url.lastPathComponent)…")
-                        .foregroundStyle(.secondary)
+                    if let progress = library.cloudPrefetchProgress {
+                        ProgressView(
+                            value: Double(progress.completed),
+                            total: Double(max(progress.total, 1))
+                        )
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 240)
+                        Text("Downloading from iCloud — \(progress.completed)/\(progress.total)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                        Text("Scanning \(url.lastPathComponent)…")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
