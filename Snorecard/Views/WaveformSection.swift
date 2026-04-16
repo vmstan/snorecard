@@ -16,8 +16,10 @@ struct WaveformBundle: Sendable {
     /// `ForEach` instead of nested session/point loops — the latter costs
     /// measurable rendering time on overnight datasets.
     let flatFlow: [FlatPoint]
-    /// High-resolution min-max breath flow, ~50k points total. Used when
-    /// the user zooms in; `flatFlow` stays the cheap overview-scale series.
+    /// Mid-density breath flow used at 30m / 1h zooms — trades some
+    /// detail for a lighter render than `flatFlowDetail`.
+    let flatFlowMid: [FlatPoint]
+    /// Near-native breath flow used at tight zooms (≤ 10m).
     let flatFlowDetail: [FlatPoint]
     let flatPressure: [FlatPoint]
     let flatLeak: [FlatPoint]
@@ -53,6 +55,7 @@ struct WaveformBundle: Sendable {
                 sessions: [],
                 events: [],
                 flatFlow: [],
+                flatFlowMid: [],
                 flatFlowDetail: [],
                 flatPressure: [],
                 flatLeak: [],
@@ -114,27 +117,30 @@ struct WaveformBundle: Sendable {
             let flowRate = Double(flowSig.samplesPerRecord) / file.header.recordDuration
             let pressRate = Double(pressSig.samplesPerRecord) / file.header.recordDuration
 
-            // Two-tier flow downsampling: a small overview series for
-            // the full-night fit view (cheap to render) and a near-
-            // native-resolution min-max series for zoomed-in detail.
-            // At ~25 Hz BRP sampling an 8-hour session has ~720k raw
-            // samples; 750k target points mean we essentially keep the
-            // native waveform when zoomed to a few minutes or less,
-            // which is where the user wants to see individual breaths.
-            // The Canvas-backed Breathing chart can render the full
-            // visible slice without breaking a sweat.
+            // Three-tier flow downsampling. Fit view uses the small
+            // overview. Medium zooms (30m–1h) use a mid-density tier
+            // so the visible slice stays around a few thousand marks.
+            // Tight zooms (2m–10m) get near-native detail because the
+            // slicer narrows it to a small on-screen window anyway.
             let flowOverview = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 30_000,
+                targetPoints: 6_000,
+                style: .minMax
+            )
+            let flowMid = DownsampledSignal.points(
+                samples: flowSamples,
+                sampleRate: flowRate,
+                startOffset: startOffset,
+                targetPoints: 60_000,
                 style: .minMax
             )
             let flowDetail = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 750_000,
+                targetPoints: 400_000,
                 style: .minMax
             )
             let pressPoints = DownsampledSignal.points(
@@ -165,6 +171,7 @@ struct WaveformBundle: Sendable {
                     pressureLabel: pressSig.label,
                     pressureUnit: pressSig.physicalDimension,
                     flow: flowOverview,
+                    flowMid: flowMid,
                     flowDetail: flowDetail,
                     pressure: pressPoints,
                     leak: pld.leak,
@@ -224,6 +231,7 @@ struct WaveformBundle: Sendable {
             sessions: sortedSessions,
             events: events,
             flatFlow: flatten(\.flow),
+            flatFlowMid: flatten(\.flowMid),
             flatFlowDetail: flatten(\.flowDetail),
             flatPressure: flatten(\.pressure),
             flatLeak: flatten(\.leak),
@@ -338,7 +346,9 @@ struct SessionSegment: Sendable, Identifiable {
     let pressureUnit: String
     /// Overview-resolution flow samples (cheap to render, used at fit zoom).
     let flow: [TimePoint]
-    /// High-resolution min-max flow samples used when zoomed in.
+    /// Mid-density flow samples used at 30m / 1h zooms.
+    let flowMid: [TimePoint]
+    /// High-resolution min-max flow samples used at tight zooms.
     let flowDetail: [TimePoint]
     let pressure: [TimePoint]
     /// 0.5 Hz signals from the paired PLD file. All empty when no PLD exists.
@@ -528,7 +538,23 @@ struct WaveformSection: View {
     /// array to just the visible window so Chart's `ForEach` is fed with
     /// at most a few thousand marks.
     private var visibleFlowPoints: [FlatPoint] {
-        isZoomed ? sliced(bundle.flatFlowDetail) : bundle.flatFlow
+        guard isZoomed else { return bundle.flatFlow }
+        // Detail tier for ≤ 10m, mid tier above that (30m / 1h) so
+        // wider zooms don't end up with tens of thousands of marks.
+        if visibleDomainLength <= 600 + 1 {
+            return sliced(bundle.flatFlowDetail)
+        }
+        return sliced(bundle.flatFlowMid)
+    }
+
+    /// Matching tier for the hover readout chip, so the sampled
+    /// value shown there comes from the same array the chart drew.
+    private var hoverFlowSource: [FlatPoint] {
+        guard isZoomed else { return bundle.flatFlow }
+        if visibleDomainLength <= 600 + 1 {
+            return bundle.flatFlowDetail
+        }
+        return bundle.flatFlowMid
     }
 
     private var flowUnit: String { bundle.sessions.first?.flowUnit ?? "" }
@@ -542,6 +568,18 @@ struct WaveformSection: View {
         content
             .simultaneousGesture(magnifyGesture)
             .background(keyboardShortcuts)
+            // Auto-dismiss the readout after a few seconds so it
+            // doesn't linger once the user has glanced at it. The
+            // task re-starts every time `hoverOffset` changes
+            // (different click position, or cleared by a second tap),
+            // and cancels when the view goes away.
+            .task(id: hoverOffset) {
+                guard hoverOffset != nil else { return }
+                try? await Task.sleep(nanoseconds: 4_000_000_000) // 4 s
+                guard !Task.isCancelled else { return }
+                hoverOffset = nil
+                activeHoverChart = nil
+            }
     }
 
     @ViewBuilder
@@ -623,7 +661,7 @@ struct WaveformSection: View {
             FlowLayout(horizontalSpacing: 16, verticalSpacing: 6) {
                 readoutChip(
                     "Breathing",
-                    value: hoverValue(isZoomed ? bundle.flatFlowDetail : bundle.flatFlow),
+                    value: hoverValue(hoverFlowSource),
                     unit: flowUnit,
                     format: "%.1f",
                     color: .primary
@@ -891,13 +929,15 @@ struct WaveformSection: View {
         )
 
         withHoverOverlay(tag: "Breathing") {
-            // Canvas-based renderer — much faster than LineMark
-            // ForEach for the dense flow trace, which can push many
-            // thousands of points at a typical zoom level.
-            EquatableBreathingCanvasChart(
+            EquatableSignalLineChart(
+                title: "Breathing",
                 unit: flowUnit,
                 points: visibleFlowPoints,
                 events: visibleEvents,
+                color: .primary,
+                zeroReference: true,
+                stepped: false,
+                thresholdY: nil,
                 hoverOffset: hoverOffset,
                 axes: axes
             )
@@ -990,20 +1030,28 @@ struct WaveformSection: View {
 
     /// Wrap a chart with hover tracking + a top-trailing popup of the
     /// readout that only appears when the cursor is over *this* chart.
+    /// Wraps a chart so the per-chart readout popup surfaces only
+    /// while `hoverOffset` is non-nil — which, under the tap-to-show
+    /// model, means the user has actively clicked a chart to drop a
+    /// probe. `tag` scopes which chart displays the popup so we show
+    /// it over the one that was just tapped.
     @ViewBuilder
     private func withHoverOverlay<C: View>(
         tag: String,
         @ViewBuilder content: () -> C
     ) -> some View {
         content()
-            .onContinuousHover { phase in
-                switch phase {
-                case .active:
-                    activeHoverChart = tag
-                case .ended:
-                    if activeHoverChart == tag { activeHoverChart = nil }
-                }
-            }
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded {
+                        // Record which chart received the tap so the
+                        // readout appears over it. The chart itself
+                        // still owns hover-offset positioning (via
+                        // its own tap/selection handler) since the
+                        // x coordinate lives there.
+                        activeHoverChart = tag
+                    }
+            )
             .overlay(alignment: .topTrailing) {
                 if activeHoverChart == tag && hoverOffset != nil {
                     hoverReadout
@@ -1145,7 +1193,7 @@ struct SignalLineChart: View, Equatable {
             .chartXVisibleDomain(length: axes.visibleDomainLength)
             .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
             .chartScrollPosition(x: axes.scrollBinding)
-            .chartXSelection(value: axes.hoverBinding)
+            .chartTapProbe(hoverBinding: axes.hoverBinding)
             .frame(height: WaveformSection.chartHeight)
         }
     }
@@ -1158,6 +1206,35 @@ extension View {
             self.chartYScale(domain: range)
         } else {
             self
+        }
+    }
+
+    /// Overlay an invisible tap-catcher on a SwiftUI Chart that sets
+    /// `hoverBinding` to the x-data-offset under the tap point, and
+    /// clears it on a second tap. Replaces `.chartXSelection` so the
+    /// readout only appears on an explicit click — hover / drag on
+    /// macOS no longer triggers per-frame chart re-renders.
+    fileprivate func chartTapProbe(
+        hoverBinding: Binding<TimeInterval?>
+    ) -> some View {
+        self.chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        if hoverBinding.wrappedValue != nil {
+                            hoverBinding.wrappedValue = nil
+                            return
+                        }
+                        guard let plotFrame = proxy.plotFrame else { return }
+                        let frame = geo[plotFrame]
+                        let xInPlot = location.x - frame.origin.x
+                        if let offset: TimeInterval = proxy.value(atX: xInPlot) {
+                            hoverBinding.wrappedValue = offset
+                        }
+                    }
+            }
         }
     }
 }
@@ -1210,7 +1287,7 @@ struct SignalAreaChart: View, Equatable {
             .chartXVisibleDomain(length: axes.visibleDomainLength)
             .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
             .chartScrollPosition(x: axes.scrollBinding)
-            .chartXSelection(value: axes.hoverBinding)
+            .chartTapProbe(hoverBinding: axes.hoverBinding)
             .frame(height: WaveformSection.chartHeight)
         }
     }
@@ -1302,7 +1379,7 @@ struct PressureChart: View, Equatable {
             .chartXVisibleDomain(length: axes.visibleDomainLength)
             .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
             .chartScrollPosition(x: axes.scrollBinding)
-            .chartXSelection(value: axes.hoverBinding)
+            .chartTapProbe(hoverBinding: axes.hoverBinding)
             .frame(height: WaveformSection.chartHeight)
         }
     }

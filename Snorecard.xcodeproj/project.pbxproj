@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
-		0B855E4069B9B5046B73C81B /* BreathingCanvasChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A1408B5B74F3ED270419E2 /* BreathingCanvasChart.swift */; };
 		14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		18CF72984BFE0EB49DA214A2 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
 		1A890808947AEFF17CE27908 /* StatCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86917F47386EB72167DE2A0F /* StatCard.swift */; };
@@ -33,7 +32,6 @@
 		91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
-		B1810095548E02F6F2EDEFF5 /* BreathingCanvasChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A1408B5B74F3ED270419E2 /* BreathingCanvasChart.swift */; };
 		B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */; };
 		C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
 		D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
@@ -67,7 +65,6 @@
 		86917F47386EB72167DE2A0F /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayDetailView.swift; sourceTree = "<group>"; };
-		A3A1408B5B74F3ED270419E2 /* BreathingCanvasChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreathingCanvasChart.swift; sourceTree = "<group>"; };
 		ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		D2AF636BF6337EA599258DBC /* Snorecard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Snorecard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
@@ -169,7 +166,6 @@
 			isa = PBXGroup;
 			children = (
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
-				A3A1408B5B74F3ED270419E2 /* BreathingCanvasChart.swift */,
 				FB115042FD0555DF4AFECD0E /* ContentView.swift */,
 				9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */,
 				DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */,
@@ -294,7 +290,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */,
-				B1810095548E02F6F2EDEFF5 /* BreathingCanvasChart.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
 				AC510E3F49A711C07D621669 /* ContentView.swift in Sources */,
 				EA007307D3AE23AD81FAF0D9 /* DayDetailView.swift in Sources */,
@@ -318,7 +313,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A654618BFC0E167BFA4B8FF /* AHIHourlyChart.swift in Sources */,
-				0B855E4069B9B5046B73C81B /* BreathingCanvasChart.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
 				14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */,
