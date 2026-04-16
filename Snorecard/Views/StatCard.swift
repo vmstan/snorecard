@@ -30,7 +30,10 @@ struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: StatCard.cardHeight, alignment: .topLeading)
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            Color.primary.opacity(0.05),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
     }
 
     /// Shared minimum card height so rows in the grid line up regardless of

@@ -568,13 +568,13 @@ struct WaveformSection: View {
                 )
                 .frame(maxWidth: .infinity, minHeight: 200)
             } else {
+                zoomControls
                 SessionTimelineView(
                     bundle: bundle,
                     onJumpToTime: { time in jumpTo(time: time) },
                     viewportStart: scrollPosition,
                     viewportLength: isZoomed ? visibleDomainLength : 0
                 )
-                zoomControls
 
                 chartStack
             }

@@ -19,6 +19,8 @@ struct DayDetailView: View {
                     Text(error)
                         .foregroundStyle(.red)
                 } else if let bundle = loadedWaveform {
+                    Divider()
+                        .padding(.vertical, 4)
                     WaveformSection(bundle: bundle)
                 } else {
                     ProgressView("Decoding sessions…")
@@ -52,19 +54,23 @@ struct DayDetailView: View {
                     StatCard(
                         label: "Usage",
                         value: formatHours(stats.usageHours),
-                        subtitle: sessionCountLabel
+                        subtitle: sessionCountLabel,
+                        tint: usageColor(stats.usageHours)
                     )
                     if let apneaSeconds = stats.timeInApneaSeconds {
+                        let percent = apneaSeconds / (stats.usageMinutes * 60) * 100
                         StatCard(
                             label: "Time in Apnea",
                             value: formatDurationShort(apneaSeconds),
-                            subtitle: String(format: "%.2f%% of usage", apneaSeconds / (stats.usageMinutes * 60) * 100)
+                            subtitle: String(format: "%.2f%% of usage", percent),
+                            tint: apneaColor(percent)
                         )
                     }
                     if let gi = stats.glasgowIndex {
                         StatCard(
                             label: "Glasgow Index",
-                            value: String(format: "%.2f", gi)
+                            value: String(format: "%.2f", gi),
+                            tint: glasgowColor(gi)
                         )
                     }
 
@@ -79,14 +85,15 @@ struct DayDetailView: View {
                     if let fl = stats.flowLimit95 {
                         StatCard(
                             label: "Flow Limit (95%)",
-                            value: String(format: "%.2f", fl)
+                            value: String(format: "%.2f", fl),
+                            tint: flowLimitColor(fl)
                         )
                     }
                     if let leak = stats.leak95LPerMin {
                         StatCard(
                             label: "Leak (95%)",
                             value: String(format: "%.0f L/min", leak),
-                            tint: leak > 24 ? .severityMedium : .primary
+                            tint: leakColor(leak)
                         )
                     }
                     if let largeLeak = stats.largeLeakSeconds {
@@ -96,11 +103,16 @@ struct DayDetailView: View {
                             label: "Large Leak",
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
-                            tint: largeLeak > 300 ? .severityMedium : .primary
+                            tint: percent < 0.5 ? .severityGood : .severityHigh
                         )
                     }
                     if let tv = stats.tidalVolume50 {
-                        StatCard(label: "Tidal Volume (Median)", value: String(format: "%.0f mL", tv * 1000))
+                        let mL = tv * 1000
+                        StatCard(
+                            label: "Tidal Volume (Median)",
+                            value: String(format: "%.0f mL", mL),
+                            tint: tidalVolumeColor(mL)
+                        )
                     }
                 }
             }
@@ -157,6 +169,66 @@ struct DayDetailView: View {
         case ..<5: .severityGood
         case ..<15: .severityLow
         case ..<30: .severityMedium
+        default: .severityHigh
+        }
+    }
+
+    /// Leak-severity palette — green under 5 L/min, amber 5–9, red ≥ 10.
+    private func leakColor(_ leak: Double) -> Color {
+        switch leak {
+        case ..<5: .severityGood
+        case ..<10: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Flow-limit palette — green when the 95th percentile rounds to
+    /// 0.00, amber in between, red ≥ 0.10.
+    private func flowLimitColor(_ value: Double) -> Color {
+        switch value {
+        case ..<0.005: .severityGood
+        case ..<0.10: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Glasgow Index palette — green ≤ 0.2, amber in between, red ≥ 3.0.
+    private func glasgowColor(_ value: Double) -> Color {
+        switch value {
+        case ..<0.2: .severityGood
+        case ..<3.0: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Usage palette — red under 4h compliance, amber 4–7h, green ≥ 7h.
+    private func usageColor(_ hours: Double) -> Color {
+        switch hours {
+        case ..<4: .severityHigh
+        case ..<7: .severityLow
+        default: .severityGood
+        }
+    }
+
+    /// Time-in-apnea palette (percent of usage) — green < 1 %, amber
+    /// 1–3 %, red ≥ 3 %. Tighter than the clinical AHI bands.
+    private func apneaColor(_ percent: Double) -> Color {
+        switch percent {
+        case ..<1: .severityGood
+        case ..<3: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Tidal-volume palette (median mL) — two-sided: green in the 420–
+    /// 600 mL sweet spot (roughly 7 mL/kg IBW for an average adult),
+    /// amber on either side of the healthy window, red at the extremes.
+    private func tidalVolumeColor(_ mL: Double) -> Color {
+        switch mL {
+        case ..<350: .severityHigh
+        case ..<420: .severityLow
+        case ...600: .severityGood
+        case ...700: .severityLow
         default: .severityHigh
         }
     }

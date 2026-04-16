@@ -105,7 +105,7 @@ struct SessionTimelineView: View {
                         )
                 }
             }
-            .frame(height: 38)
+            .frame(height: 57)
         }
     }
 

@@ -70,7 +70,11 @@ struct OverviewView: View {
                 subtitle: "\(compliantDays) of \(days) days ≥ 4h",
                 tint: compliance >= 0.7 ? .severityGood : .severityMedium
             )
-            card("Avg usage / night", value: formatMinutes(avgUsageMinutes))
+            card(
+                "Avg usage / night",
+                value: formatMinutes(avgUsageMinutes),
+                tint: usageColor(avgUsageMinutes / 60)
+            )
             if let avgSessions {
                 card(
                     "Avg sessions / night",
@@ -83,26 +87,36 @@ struct OverviewView: View {
                 tint: ahiColor(avgAHI)
             )
             if let gi = avgGI {
-                card("Avg Glasgow Index", value: String(format: "%.2f", gi))
+                card(
+                    "Avg Glasgow Index",
+                    value: String(format: "%.2f", gi),
+                    tint: glasgowColor(gi)
+                )
             }
             if let apnea = avgApnea {
+                let pct = avgApneaPercent() ?? 0
                 card(
                     "Avg time in apnea",
                     value: formatDurationShort(apnea),
-                    subtitle: "per night"
+                    subtitle: "per night",
+                    tint: apneaColor(pct)
                 )
             }
             if let p95 = avgP95 {
                 card("Avg pressure 95th", value: String(format: "%.1f cmH₂O", p95))
             }
             if let flow = avgFlow {
-                card("Avg flow limit 95th", value: String(format: "%.2f", flow))
+                card(
+                    "Avg flow limit 95th",
+                    value: String(format: "%.2f", flow),
+                    tint: flowLimitColor(flow)
+                )
             }
             if let leak = avgLeak {
                 card(
                     "Avg leak 95th",
                     value: String(format: "%.0f L/min", leak),
-                    tint: leak > 24 ? .severityMedium : .primary
+                    tint: leakColor(leak)
                 )
             }
             if let largeLeak = avgLargeLeakPct {
@@ -110,13 +124,15 @@ struct OverviewView: View {
                     "Avg large leak",
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
-                    tint: largeLeak > 5 ? .severityMedium : .primary
+                    tint: largeLeak < 0.5 ? .severityGood : .severityHigh
                 )
             }
             if let tidal = avgTidal {
+                let mL = tidal * 1000
                 card(
                     "Avg tidal volume",
-                    value: String(format: "%.0f mL", tidal * 1000)
+                    value: String(format: "%.0f mL", mL),
+                    tint: tidalVolumeColor(mL)
                 )
             }
         }
@@ -427,5 +443,77 @@ struct OverviewView: View {
         case ..<30: .severityMedium
         default: .severityHigh
         }
+    }
+
+    /// Leak-severity palette — green under 5 L/min, amber 5–9, red ≥ 10.
+    private func leakColor(_ leak: Double) -> Color {
+        switch leak {
+        case ..<5: .severityGood
+        case ..<10: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Flow-limit palette — green when the 95th percentile rounds to
+    /// 0.00, amber in between, red ≥ 0.10.
+    private func flowLimitColor(_ value: Double) -> Color {
+        switch value {
+        case ..<0.005: .severityGood
+        case ..<0.10: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Glasgow Index palette — green ≤ 0.2, amber in between, red ≥ 3.0.
+    private func glasgowColor(_ value: Double) -> Color {
+        switch value {
+        case ..<0.2: .severityGood
+        case ..<3.0: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Usage palette — red under 4h compliance, amber 4–7h, green ≥ 7h.
+    private func usageColor(_ hours: Double) -> Color {
+        switch hours {
+        case ..<4: .severityHigh
+        case ..<7: .severityLow
+        default: .severityGood
+        }
+    }
+
+    /// Time-in-apnea palette (percent of usage) — green < 1 %, amber
+    /// 1–3 %, red ≥ 3 %. Tighter than the clinical AHI bands.
+    private func apneaColor(_ percent: Double) -> Color {
+        switch percent {
+        case ..<1: .severityGood
+        case ..<3: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Tidal-volume palette (median mL) — two-sided: green in the 420–
+    /// 600 mL sweet spot, amber on either side of that window, red at
+    /// the extremes.
+    private func tidalVolumeColor(_ mL: Double) -> Color {
+        switch mL {
+        case ..<350: .severityHigh
+        case ..<420: .severityLow
+        case ...600: .severityGood
+        case ...700: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Average per-night percent of usage spent in apnea, computed
+    /// across days that recorded both usage and an apnea-seconds value.
+    private func avgApneaPercent() -> Double? {
+        let values = stats.compactMap { stat -> Double? in
+            guard let seconds = stat.timeInApneaSeconds,
+                  stat.usageMinutes > 0 else { return nil }
+            return seconds / (stat.usageMinutes * 60) * 100
+        }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
     }
 }
