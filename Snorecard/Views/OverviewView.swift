@@ -49,6 +49,7 @@ struct OverviewView: View {
         let compliantDays = stats.filter { $0.usageHours >= 4 }.count
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
+        let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgApnea = averaging(\.timeInApneaSeconds)
         let avgP95 = averaging(\.pressure95)
@@ -70,9 +71,15 @@ struct OverviewView: View {
                 tint: compliance >= 0.7 ? .severityGood : .severityMedium
             )
             card("Avg usage / night", value: formatMinutes(avgUsageMinutes))
+            if let avgSessions {
+                card(
+                    "Avg sessions / night",
+                    value: String(format: "%.1f", avgSessions)
+                )
+            }
             card(
                 "Avg AHI",
-                value: String(format: "%.1f", avgAHI),
+                value: String(format: "%.2f", avgAHI),
                 tint: ahiColor(avgAHI)
             )
             if let gi = avgGI {
@@ -115,30 +122,15 @@ struct OverviewView: View {
         }
     }
 
+    /// Thin wrapper around `StatCard` so the Overview grid shares the
+    /// same visual treatment and vertical alignment as the daily view.
     private func card(
         _ label: String,
         value: String,
         subtitle: String? = nil,
         tint: Color = .primary
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            Text(value)
-                .font(.title2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(tint)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.platformControlBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        StatCard(label: label, value: value, subtitle: subtitle, tint: tint)
     }
 
     // MARK: - Charts
@@ -377,6 +369,16 @@ struct OverviewView: View {
             return first.formatted(date: .abbreviated, time: .omitted)
         }
         return "\(first.formatted(date: .abbreviated, time: .omitted)) – \(last.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    /// Mean number of BRP sessions across days that recorded usage.
+    /// Mirrors the "sessions" count surfaced on the daily detail view.
+    private func averageSessionsPerNight() -> Double? {
+        let counts = card.days
+            .filter { $0.stats?.hasUsage == true }
+            .map { $0.files(of: .breath).count }
+        guard !counts.isEmpty else { return nil }
+        return Double(counts.reduce(0, +)) / Double(counts.count)
     }
 
     private func averaging(_ keyPath: KeyPath<DailyStatistics, Double?>) -> Double? {

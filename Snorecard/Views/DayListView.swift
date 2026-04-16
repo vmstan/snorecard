@@ -78,7 +78,7 @@ struct DayListView: View {
             Spacer()
             if let avg = overallAHI {
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(String(format: "%.1f", avg))
+                    Text(String(format: "%.2f", avg))
                         .font(.body.monospacedDigit())
                         .foregroundStyle(isSelected ? Color.white : ahiColor(avg))
                     Text("AHI")
@@ -121,7 +121,7 @@ struct DayListView: View {
                     // When the row is selected the accent-tinted background
                     // makes the severity colours unreadable, so fall back to
                     // the selected-row foreground (white) in that case.
-                    Text(String(format: "%.1f", stats.ahi))
+                    Text(String(format: "%.2f", stats.ahi))
                         .font(.body.monospacedDigit())
                         .foregroundStyle(isSelected ? Color.white : ahiColor(stats.ahi))
                     Text("AHI")

@@ -24,7 +24,7 @@ struct EventDonutView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.1f", stats.ahi))
+                Text(String(format: "%.2f", stats.ahi))
                     .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 Text("AHI")
                     .font(.headline)
