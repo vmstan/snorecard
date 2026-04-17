@@ -29,6 +29,11 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     public internal(set) var largeLeakSeconds: Double? = nil
     public internal(set) var glasgowIndex: Double? = nil
     public internal(set) var flowLimit95: Double?
+    /// Snapshot of therapy / comfort / humidifier / accessory
+    /// settings active for this day, decoded from STR.edf's `S.*`
+    /// signals. Nil when STR.edf has no record for the day (e.g.
+    /// AirSense 11 where STR.edf is empty).
+    public internal(set) var settings: DeviceSettings? = nil
     public let minuteVentilation50: Double?
     public let respirationRate50: Double?
     public let tidalVolume50: Double?
@@ -548,6 +553,11 @@ extension DailyStatistics {
                     productName: productName
                 )
             )
+            // Settings live on the per-record scalars alongside the
+            // aggregate signals — pull them in via the same reader.
+            out[out.count - 1].settings = DeviceSettings.decode { label in
+                scalar(label, record: record)
+            }
         }
         return out
     }

@@ -218,9 +218,10 @@ public enum SDCardImporter {
     }
 
     /// STR.edf provides a few fields we can't derive from raw files
-    /// (mode code, mask-on event counts). Keep those, but let the
-    /// aggregate pass override everything else since its values match
-    /// OSCAR / SleepHQ.
+    /// (mode code, mask-on event counts, the full `S.*` settings
+    /// block). Keep those, but let the aggregate pass override
+    /// everything else since its PLD-derived values match OSCAR /
+    /// SleepHQ.
     private static func mergeSTRWithAggregate(
         str: DailyStatistics,
         aggregate: DailyStatistics
@@ -255,6 +256,10 @@ public enum SDCardImporter {
                 productName: merged.productName
             )
         }
+        // Always carry the STR-derived settings block through — the
+        // aggregate pass can't produce it, and merged.settings is
+        // either nil (pre-settings code path) or already equal.
+        merged.settings = str.settings ?? merged.settings
         return merged
     }
 

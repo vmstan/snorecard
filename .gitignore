@@ -13,3 +13,4 @@ DerivedData/
 
 # Claude Code
 .claude/settings.local.json
+build/

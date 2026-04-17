@@ -10,6 +10,7 @@ struct DayDetailView: View {
     @Environment(Library.self) private var library
     @State private var loadedWaveform: WaveformBundle?
     @State private var loadError: String?
+    @State private var isShowingSettings = false
 
     var body: some View {
         ScrollView {
@@ -31,6 +32,22 @@ struct DayDetailView: View {
         }
         .navigationTitle(navigationTitleText)
         .navigationSubtitle(deviceSubtitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isShowingSettings.toggle()
+                } label: {
+                    Label("Device Settings", systemImage: "slider.horizontal.3")
+                }
+                #if os(macOS)
+                .help("Show device settings for this night")
+                #endif
+            }
+        }
+        .inspector(isPresented: $isShowingSettings) {
+            DailySettingsInspector(settings: day.stats?.settings)
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+        }
         .task(id: day.id) {
             await loadAllSessions()
         }

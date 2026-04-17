@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2055C320287978F6AA410604"
-               BuildableName = "Snorecard.app"
-               BlueprintName = "Snorecard"
+               BlueprintIdentifier = "E3B1A0FB2C4A9DC11AD486A2"
+               BuildableName = "Snorecard-iOS.app"
+               BlueprintName = "Snorecard-iOS"
                ReferencedContainer = "container:Snorecard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2055C320287978F6AA410604"
-            BuildableName = "Snorecard.app"
-            BlueprintName = "Snorecard"
+            BlueprintIdentifier = "E3B1A0FB2C4A9DC11AD486A2"
+            BuildableName = "Snorecard-iOS.app"
+            BlueprintName = "Snorecard-iOS"
             ReferencedContainer = "container:Snorecard.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -55,9 +55,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2055C320287978F6AA410604"
-            BuildableName = "Snorecard.app"
-            BlueprintName = "Snorecard"
+            BlueprintIdentifier = "E3B1A0FB2C4A9DC11AD486A2"
+            BuildableName = "Snorecard-iOS.app"
+            BlueprintName = "Snorecard-iOS"
             ReferencedContainer = "container:Snorecard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -72,9 +72,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2055C320287978F6AA410604"
-            BuildableName = "Snorecard.app"
-            BlueprintName = "Snorecard"
+            BlueprintIdentifier = "E3B1A0FB2C4A9DC11AD486A2"
+            BuildableName = "Snorecard-iOS.app"
+            BlueprintName = "Snorecard-iOS"
             ReferencedContainer = "container:Snorecard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
