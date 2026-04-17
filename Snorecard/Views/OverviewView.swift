@@ -87,6 +87,9 @@ struct OverviewView: View {
         }
         .navigationTitle("Overview")
         .navigationSubtitle(library.displayName(for: card))
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     /// Segmented preset picker plus optional custom date-range pickers.

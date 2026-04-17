@@ -43,46 +43,41 @@ struct DayDetailView: View {
         }
         .navigationTitle(navigationTitleText)
         .navigationSubtitle(deviceSubtitle)
+        #if os(iOS)
+        // Force inline title mode so the date string sits in the
+        // nav bar consistently — UINavigationController otherwise
+        // flips between centered and leading-aligned depending on
+        // how long the weekday/month/day string is.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        #if os(macOS)
+        // macOS keeps these as discrete toolbar buttons because
+        // there's room. iOS routes the same actions through the
+        // shared Options menu (see ContentView.optionsMenu) so
+        // the nav bar stays a single ellipsis button.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    #if os(macOS)
-                    // Wrap every inspector state change in the
-                    // same smooth spring so opening, closing, and
-                    // swapping panes all ease in at the same rate.
-                    // `.smooth(duration:)` gives a shorter, less
-                    // bouncy curve than SwiftUI's default for
-                    // side-column transitions.
                     withAnimation(.smooth(duration: 0.32)) {
                         inspectorPane = (inspectorPane == .notes) ? nil : .notes
                     }
-                    #else
-                    isShowingNotes.toggle()
-                    #endif
                 } label: {
                     Label("Notes", systemImage: "note.text")
                 }
-                #if os(macOS)
                 .help("Add or edit a note for this night")
-                #endif
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    #if os(macOS)
                     withAnimation(.smooth(duration: 0.32)) {
                         inspectorPane = (inspectorPane == .settings) ? nil : .settings
                     }
-                    #else
-                    isShowingSettings.toggle()
-                    #endif
                 } label: {
                     Label("Device Settings", systemImage: "info.circle")
                 }
-                #if os(macOS)
                 .help("Show device settings for this night")
-                #endif
             }
         }
+        #endif
         #if os(macOS)
         .inspector(isPresented: Binding(
             get: { inspectorPane != nil },
@@ -150,6 +145,15 @@ struct DayDetailView: View {
             )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        // Bridges from the shared Options menu's daily entries —
+        // ContentView posts these whenever the user picks Notes
+        // or Device Settings out of the iOS ellipsis menu.
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
+            isShowingNotes = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
+            isShowingSettings = true
         }
         #endif
         .task(id: day.id) {

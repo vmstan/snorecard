@@ -1,6 +1,15 @@
 import SwiftUI
 import SnorecardKit
 
+// Notifications used by the iOS Options menu to drive the daily
+// view's per-night sheets. Defined in the shared codebase so both
+// ContentView (the menu owner) and DayDetailView (the sheet
+// owner) can reference them without a cross-target import.
+extension Notification.Name {
+    static let snorecardOpenDailyNotes = Notification.Name("Snorecard.OpenDailyNotes")
+    static let snorecardOpenDailySettings = Notification.Name("Snorecard.OpenDailySettings")
+}
+
 struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isRenamingDevice = false
@@ -174,15 +183,14 @@ struct ContentView: View {
         }
     }
 
-    /// Day-detail on iOS already carries two per-night actions
-    /// (Notes and Device Settings) in its own toolbar — dropping
-    /// the app-level Options menu there keeps the nav bar from
-    /// feeling crowded. The sidebar and Overview still show it.
+    /// iOS detail toolbar — always renders the Options menu, but
+    /// the menu's contents change with the active selection so a
+    /// day view can include Notes / Device Settings actions
+    /// alongside the library-level commands without growing
+    /// extra top-bar buttons.
     @ToolbarContentBuilder
     private var detailToolbarButtonsForiOS: some ToolbarContent {
-        if !isViewingDay {
-            toolbarButtons
-        }
+        toolbarButtons
     }
 
     private var isViewingDay: Bool {
@@ -193,6 +201,33 @@ struct ContentView: View {
     @ViewBuilder
     private var optionsMenu: some View {
         Menu {
+            #if os(iOS)
+            // Day-detail-specific actions piggyback on the
+            // shared Options menu when the user is viewing a
+            // day, so the nav bar only ever shows one button.
+            // macOS keeps these in the day-detail toolbar
+            // proper because there's room for the extra glyphs.
+            if isViewingDay {
+                Button {
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDailyNotes,
+                        object: nil
+                    )
+                } label: {
+                    Label("Notes", systemImage: "note.text")
+                }
+                Button {
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDailySettings,
+                        object: nil
+                    )
+                } label: {
+                    Label("Device Settings", systemImage: "info.circle")
+                }
+                Divider()
+            }
+            #endif
+
             if library.card?.identification?.serialNumber != nil {
                 Button {
                     library.reloadCurrent()
