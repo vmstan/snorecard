@@ -5,7 +5,7 @@ import SnorecardKit
 struct OverviewView: View {
     let card: ResMedSDCard
     @Environment(Library.self) private var library
-    @State private var rangeKind: RangeKind = .all
+    @State private var rangeKind: RangeKind = .last14
     @State private var customStart: Date = Calendar.current
         .date(byAdding: .day, value: -6, to: Calendar.current.startOfDay(for: Date()))!
     @State private var customEnd: Date = Calendar.current.startOfDay(for: Date())
@@ -455,7 +455,59 @@ struct OverviewView: View {
                         }
                     }
                 }
+                .chartOverlay { proxy in
+                    chartTapOverlay(proxy: proxy)
+                }
         }
+    }
+
+    /// Transparent tap-catcher layered over every chart — translates a
+    /// click/tap X position into the nearest day in `stats` and drills
+    /// the sidebar into that day's detail view. `contentShape` keeps
+    /// the rectangle invisible but hit-testable.
+    @ViewBuilder
+    private func chartTapOverlay(proxy: ChartProxy) -> some View {
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                #if os(macOS)
+                .onHover { inside in
+                    if inside {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                #endif
+                .onTapGesture { location in
+                    guard let plotFrame = proxy.plotFrame else { return }
+                    let frame = geometry[plotFrame]
+                    let xInPlot = location.x - frame.origin.x
+                    guard xInPlot >= 0, xInPlot <= frame.width else { return }
+                    if let date: Date = proxy.value(atX: xInPlot) {
+                        selectDay(nearest: date)
+                    }
+                }
+        }
+    }
+
+    /// Snap `date` to the closest day with recorded data inside the
+    /// current range and navigate the sidebar there. No-op when the
+    /// range is empty.
+    private func selectDay(nearest date: Date) {
+        guard !stats.isEmpty else { return }
+        let target = Calendar.current.startOfDay(for: date)
+        let closest = stats.min {
+            abs($0.date.timeIntervalSince(target))
+                < abs($1.date.timeIntervalSince(target))
+        }
+        guard let match = closest,
+              let day = card.days.first(where: {
+                  Calendar.current.isDate($0.date, inSameDayAs: match.date)
+              })
+        else { return }
+        library.selection = .day(day.id)
     }
 
     /// Choose how many X-axis ticks to emit based on the active range
