@@ -303,7 +303,8 @@ private func decodePLD(
 
     func points(
         prefix: String,
-        scale: Double = 1
+        scale: Double = 1,
+        targetPoints: Int = 400
     ) -> [TimePoint] {
         guard let idx = pld.signals.firstIndex(where: { $0.label.hasPrefix(prefix) }),
               let samples = try? pld.physicalSamples(ofSignal: idx) else {
@@ -317,7 +318,7 @@ private func decodePLD(
             samples: scaled,
             sampleRate: rate,
             startOffset: startOffset,
-            targetPoints: 400
+            targetPoints: targetPoints
         )
     }
 
@@ -325,7 +326,11 @@ private func decodePLD(
     out.leak = points(prefix: "Leak", scale: 60)
     out.respirationRate = points(prefix: "RespRate")
     // Exposed in mL to match the daily stats card and clinical convention.
-    out.tidalVolume = points(prefix: "TidVol", scale: 1000)
+    // Tidal volume is the signal users squint at for per-breath variation,
+    // so it gets a finer bucket (~2000 pts ≈ one point per ~15 seconds
+    // over an 8-hour session) than the other PLD tracks where 400 is
+    // plenty for the amplitude envelopes they carry.
+    out.tidalVolume = points(prefix: "TidVol", scale: 1000, targetPoints: 2000)
     out.minuteVentilation = points(prefix: "MinVent")
     out.snore = points(prefix: "Snore")
     out.flowLimitation = points(prefix: "FlowLim")
@@ -1237,10 +1242,12 @@ extension View {
                     .fill(Color.clear)
                     .contentShape(Rectangle())
                     .onTapGesture { location in
-                        if hoverBinding.wrappedValue != nil {
-                            hoverBinding.wrappedValue = nil
-                            return
-                        }
+                        // Every tap moves the probe to the new x. A
+                        // previous model cleared the readout on the
+                        // second tap, but that forced two clicks to
+                        // compare two neighbouring points — now the
+                        // readout just follows the cursor and the
+                        // existing 4s auto-dismiss cleans it up.
                         guard let plotFrame = proxy.plotFrame else { return }
                         let frame = geo[plotFrame]
                         let xInPlot = location.x - frame.origin.x

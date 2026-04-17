@@ -330,8 +330,9 @@ struct RenameDeviceSheet: View {
 
                 Section {
                     LabeledContent("Device", value: defaultName)
-                    LabeledContent("Serial", value: serial)
-                        .monospaced()
+                    LabeledContent("Serial") {
+                        Text(serial).monospaced()
+                    }
                 } header: {
                     Text("Device")
                 }

@@ -46,7 +46,13 @@ struct DayDetailView: View {
         }
         #if os(macOS)
         .inspector(isPresented: $isShowingSettings) {
-            DailySettingsInspector(settings: day.stats?.settings)
+            DailySettingsInspector(
+                settings: day.stats?.settings,
+                productName: day.stats?.productName
+                    ?? library.card?.identification?.productName,
+                serialNumber: library.card?.identification?.serialNumber,
+                deviceAlias: deviceAliasForInspector
+            )
                 .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
         }
         #else
@@ -54,7 +60,13 @@ struct DayDetailView: View {
         // stack and bleeds its title/toolbar into the day header.
         // A sheet presents a clean, scoped surface instead.
         .sheet(isPresented: $isShowingSettings) {
-            DailySettingsInspector(settings: day.stats?.settings)
+            DailySettingsInspector(
+                settings: day.stats?.settings,
+                productName: day.stats?.productName
+                    ?? library.card?.identification?.productName,
+                serialNumber: library.card?.identification?.serialNumber,
+                deviceAlias: deviceAliasForInspector
+            )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -69,6 +81,18 @@ struct DayDetailView: View {
     private var deviceSubtitle: String {
         guard let card = library.card else { return "" }
         return library.displayName(for: card)
+    }
+
+    /// User-set alias (set via Rename Device) for the current card,
+    /// or nil when the user hasn't picked one. The Device section of
+    /// the settings inspector skips the row when this is nil so the
+    /// default product name doesn't duplicate across rows.
+    private var deviceAliasForInspector: String? {
+        guard let serial = library.card?.identification?.serialNumber,
+              let alias = library.deviceNameOverrides[serial],
+              !alias.isEmpty
+        else { return nil }
+        return alias
     }
 
     /// Replaces the bare `ProgressView` placeholder with a centered
