@@ -45,9 +45,9 @@ struct DailySettingsInspector: View {
             settingsForm(for: settings)
         } else {
             ContentUnavailableView {
-                Label("Settings unavailable", systemImage: "info.circle")
+                Label("Settings Unavailable", systemImage: "info.circle")
             } description: {
-                Text("STR.edf didn't cover this day, so the therapy settings couldn't be read.")
+                Text("Your \(friendlyDeviceName) only keeps therapy settings for a rolling window of recent nights. This night sits outside that window.")
             }
         }
     }
@@ -349,6 +349,17 @@ struct DailySettingsInspector: View {
             || s.eprEnabled != nil
             || s.easyBreathe != nil
             || s.smartStart != nil
+    }
+
+    /// Best-effort human name for the current device — used in the
+    /// empty-state copy so a reader sees "Your Upstairs CPAP…" or
+    /// "Your AirSense 10 CPAP…" instead of a generic "Your CPAP…".
+    /// Prefers the user-set alias, falls back to the product name,
+    /// and lands on the generic "CPAP" when neither is available.
+    private var friendlyDeviceName: String {
+        if let alias = deviceAlias, !alias.isEmpty { return alias }
+        if let product = productName, !product.isEmpty { return product }
+        return "CPAP"
     }
 
     /// `true` when we have enough identity data to justify showing
