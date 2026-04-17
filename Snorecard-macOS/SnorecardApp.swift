@@ -10,6 +10,16 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// Notification bridges between the macOS File menu and the
+/// `ContentView` state that drives the confirm-dialog / rename
+/// sheet. Keeping them as notifications (instead of plumbing
+/// bindings through `@Environment`) keeps the menu declaration
+/// flat and avoids leaking UI state up into `SnorecardApp`.
+extension Notification.Name {
+    static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
+    static let snorecardRebuildStatistics = Notification.Name("Snorecard.RebuildStatistics")
+}
+
 @main
 struct SnorecardApp: App {
     @NSApplicationDelegateAdaptor(SnorecardAppDelegate.self) private var appDelegate
@@ -27,16 +37,83 @@ struct SnorecardApp: App {
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Import from SD Card…") {
-                    if let url = presentFolderPicker(
-                        prompt: "Open",
-                        message: "Select a ResMed SD card or DATALOG export folder"
-                    ) {
-                        library.load(url)
-                    }
-                }
-                .keyboardShortcut("o", modifiers: [.command])
+                fileCommands
             }
         }
+    }
+
+    /// Full File-menu command stack — mirrors the in-app Actions
+    /// menu so users who instinctively reach for the menu bar get
+    /// the same surface.
+    @ViewBuilder
+    private var fileCommands: some View {
+        let hasCard = library.card?.identification?.serialNumber != nil
+        let currentSerial = library.card?.identification?.serialNumber
+        let otherDevices = Library.iCloudDeviceFolders().filter { folder in
+            folder.serial != currentSerial
+        }
+
+        Button {
+            library.reloadCurrent()
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .keyboardShortcut("r", modifiers: [.command])
+        .disabled(!hasCard)
+
+        Button {
+            if let url = presentFolderPicker(
+                prompt: "Open",
+                message: "Select a CPAP SD card or DATALOG export folder"
+            ) {
+                library.load(url)
+            }
+        } label: {
+            Label("Import SD Card", systemImage: "sdcard")
+        }
+        .keyboardShortcut("o", modifiers: [.command])
+
+        Divider()
+
+        Button {
+            NotificationCenter.default.post(name: .snorecardRenameDevice, object: nil)
+        } label: {
+            Label("Rename Device", systemImage: "pencil")
+        }
+        .disabled(!hasCard)
+
+        if !otherDevices.isEmpty {
+            Menu {
+                ForEach(otherDevices) { folder in
+                    Button(menuLabel(for: folder)) {
+                        library.load(folder.url)
+                    }
+                }
+            } label: {
+                Label("Switch Device", systemImage: "rectangle.2.swap")
+            }
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            NotificationCenter.default.post(name: .snorecardRebuildStatistics, object: nil)
+        } label: {
+            Label("Rebuild Statistics", systemImage: "hammer")
+        }
+        .disabled(!hasCard)
+    }
+
+    /// Alias-aware label for the Switch Device submenu — mirrors
+    /// `ContentView.deviceMenuLabel(for:)` so the two menus read
+    /// identically.
+    private func menuLabel(for folder: Library.DeviceFolder) -> String {
+        if let override = library.deviceNameOverrides[folder.serial], !override.isEmpty {
+            return "\(override) (\(folder.serial))"
+        }
+        if let product = folder.productName, !product.isEmpty {
+            return "\(product) (\(folder.serial))"
+        }
+        return "Device \(folder.serial)"
     }
 }

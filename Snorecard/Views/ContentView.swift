@@ -66,22 +66,42 @@ struct ContentView: View {
                 )
             }
         }
-        .confirmationDialog(
+        .alert(
             "Rebuild Statistics?",
-            isPresented: $isConfirmingRebuild,
-            titleVisibility: .visible
+            isPresented: $isConfirmingRebuild
         ) {
+            // Order matters — on iOS alerts place Cancel leading
+            // and the default-action trailing when both are present;
+            // placing Cancel first keeps that layout consistent and
+            // guarantees the Cancel button is always rendered
+            // (which `.confirmationDialog` didn't on iOS when the
+            // message grew past a few lines).
+            Button("Cancel", role: .cancel) { }
+                .keyboardShortcut(.cancelAction)
             Button("Rebuild Statistics", role: .destructive) {
                 library.invalidateStatsCacheAndReload()
             }
-            Button("Cancel", role: .cancel) { }
-                .keyboardShortcut(.cancelAction)
         } message: {
             Text(rebuildStatisticsWarning)
         }
         .task(id: library.card?.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
         }
+        #if os(macOS)
+        // Bridges from the macOS File menu — keeps the menu
+        // declarations in `SnorecardApp` flat by letting this view
+        // own the sheet/dialog toggles.
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardRenameDevice)) { _ in
+            if library.card?.identification?.serialNumber != nil {
+                isRenamingDevice = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildStatistics)) { _ in
+            if library.card?.identification?.serialNumber != nil {
+                isConfirmingRebuild = true
+            }
+        }
+        #endif
     }
 
     private var isLoading: Bool {
@@ -105,12 +125,34 @@ struct ContentView: View {
         }
 
         return """
-        This deletes the cached summary for \(scope) and recomputes every metric — AHI, pressure percentiles, leak, event counts, and machine settings — directly from the raw EDF files.
+        This will recompute every metric for \(scope) from the raw EDF files and replace the current summary data in iCloud.
+        
+        Use this if your statistic numbers look wrong — if you're missing full nights because you just imported data on another device, use Refresh instead.
 
-        Your recordings are never touched, but the freshly-built summaries will replace what's currently in iCloud and sync to every device signed in to this account. Expect several minutes on devices with months of data.
-
-        Cancel if you only want to check for newly-synced nights — use Refresh for that.
+        While charting, AHI, computed percentiles and other scoring data will still be available, any therapy settings for nights your CPAP no longer keeps in its rolling summary may be lost.
+        
+        Based on your dataset this process may take \(estimatedRebuildDuration(dayCount: dayCount)).
         """
+    }
+
+    /// Rough "this-will-take-X" string based on the day count.
+    /// Deliberately conservative — under-promising beats having the
+    /// user staring at a progress footer wondering why the quoted
+    /// estimate already passed. Assumes ~0.75 s per day (roughly 5×
+    /// the ~150 ms measured on Apple silicon) and biases each
+    /// bucket toward the longer end of the likely range so older
+    /// iPhones, busy iCloud writes, and cold caches still fit.
+    private func estimatedRebuildDuration(dayCount: Int) -> String {
+        guard dayCount > 0 else { return "a few seconds" }
+        let seconds = Int((Double(dayCount) * 0.75).rounded(.up))
+        switch seconds {
+        case ..<10:   return "a few seconds"
+        case ..<45:   return "approximately a minute"
+        case ..<180:  return "a couple of minutes"
+        case ..<600:  return "several minutes"
+        case ..<1800: return "up to half an hour"
+        default:      return "over half an hour"
+        }
     }
 
     @ToolbarContentBuilder
@@ -131,6 +173,22 @@ struct ContentView: View {
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
+                #if os(macOS)
+                .keyboardShortcut("r", modifiers: [.command])
+                #endif
+            }
+
+            Button {
+                openSDCard()
+            } label: {
+                Label("Import SD Card", systemImage: "sdcard")
+            }
+            #if os(macOS)
+            .keyboardShortcut("o", modifiers: [.command])
+            #endif
+
+            if library.card?.identification?.serialNumber != nil {
+                Divider()
                 Button {
                     isRenamingDevice = true
                 } label: {
@@ -149,18 +207,6 @@ struct ContentView: View {
                 }
 
                 Divider()
-            }
-
-            Button {
-                openSDCard()
-            } label: {
-                Label("Import SD Card", systemImage: "sdcard")
-            }
-            #if os(macOS)
-            .keyboardShortcut("o", modifiers: [.command])
-            #endif
-
-            if library.card?.identification?.serialNumber != nil {
                 Button(role: .destructive) {
                     isConfirmingRebuild = true
                 } label: {
