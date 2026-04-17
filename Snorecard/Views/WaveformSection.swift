@@ -30,8 +30,31 @@ struct WaveformBundle: Sendable {
     let flatFlowLimitation: [FlatPoint]
     let flatIPAP: [FlatPoint]
     let flatEPAP: [FlatPoint]
+    /// Min / median / 95% / 99.5% summary table for the night,
+    /// computed from raw PLD samples (not the downsampled chart
+    /// arrays) so the percentiles are clinically accurate.
+    let signalSummary: [SignalSummaryRow]
 
     var isEmpty: Bool { sessions.isEmpty }
+
+    /// One row of the per-night signal-summary table — min /
+    /// median / 95% / 99.5% percentiles for a single PLD signal.
+    /// `format` returns the value already converted to the user-
+    /// facing display string (e.g. "16.24" or "600 mL"); the
+    /// table renderer reads `display*` directly.
+    ///
+    /// Hashable + Codable so the row can travel through SwiftUI's
+    /// `openWindow(value:)` API when the table opens in its own
+    /// macOS window.
+    struct SignalSummaryRow: Sendable, Identifiable, Hashable, Codable {
+        let id: String
+        let label: String
+        let unit: String
+        let displayMin: String
+        let displayMedian: String
+        let displayP95: String
+        let displayP99_5: String
+    }
 
     static func load(
         brpFiles: [URL],
@@ -65,7 +88,8 @@ struct WaveformBundle: Sendable {
                 flatSnore: [],
                 flatFlowLimitation: [],
                 flatIPAP: [],
-                flatEPAP: []
+                flatEPAP: [],
+                signalSummary: []
             )
         }
 
@@ -94,6 +118,9 @@ struct WaveformBundle: Sendable {
 
         var segments: [SessionSegment] = []
         var latestEnd: Date = dayStart
+        // Aggregate raw PLD samples across every session so the
+        // summary table's percentiles reflect the full night.
+        var rawAcrossSessions: [String: [Double]] = [:]
 
         for p in parsed {
             let file = p.file
@@ -159,6 +186,9 @@ struct WaveformBundle: Sendable {
                let pldFile = try? EDFFile(contentsOf: pldURL),
                pldFile.header.recordCount > 0 {
                 pld = decodePLD(pldFile, startOffset: startOffset)
+                for (key, samples) in pld.rawSamples {
+                    rawAcrossSessions[key, default: []].append(contentsOf: samples)
+                }
             }
 
             segments.append(
@@ -225,6 +255,8 @@ struct WaveformBundle: Sendable {
             return out
         }
 
+        let summary = Self.computeSignalSummary(rawByPrefix: rawAcrossSessions)
+
         return WaveformBundle(
             dayStart: dayStart,
             totalDuration: totalDuration,
@@ -241,8 +273,104 @@ struct WaveformBundle: Sendable {
             flatSnore: flatten(\.snore),
             flatFlowLimitation: flatten(\.flowLimitation),
             flatIPAP: flatten(\.ipap),
-            flatEPAP: flatten(\.epap)
+            flatEPAP: flatten(\.epap),
+            signalSummary: summary
         )
+    }
+
+    /// Build the per-night signal summary table. Each entry pairs
+    /// a PLD-signal prefix to a display label + unit + value
+    /// formatter, then computes min / median / 95% / 99.5% from
+    /// the aggregated raw samples. Signals missing from this
+    /// device are silently skipped.
+    private static func computeSignalSummary(
+        rawByPrefix: [String: [Double]]
+    ) -> [SignalSummaryRow] {
+        // Mask-pressure samples gate "on therapy" — anything below
+        // 1 cmH₂O is the user not wearing the mask, and including
+        // those in the percentile would skew the table toward 0.
+        let mask = rawByPrefix["MaskPress"] ?? []
+        let onTherapyMask: [Bool] = mask.map { $0 > 1.0 }
+        // If we never saw a mask-press signal, fall back to "all
+        // samples are on-therapy" so the table still renders.
+        let useMaskFilter = !onTherapyMask.isEmpty
+
+        struct SpecEntry {
+            let prefix: String
+            let label: String
+            let unit: String
+            let scale: Double
+            let format: (Double) -> String
+        }
+
+        let pressureFmt: (Double) -> String = { String(format: "%.2f", $0) }
+        let oneDecimalFmt: (Double) -> String = { String(format: "%.1f", $0) }
+        let twoDecimalFmt: (Double) -> String = { String(format: "%.2f", $0) }
+        let intFmt: (Double) -> String = { String(format: "%.0f", $0) }
+
+        // Order mirrors the waveform charts below the table:
+        // Pressure (IPAP+EPAP) → Leak → Flow Limit → Tidal Volume
+        // → Snore. Minute Vent and Resp Rate aren't charted so
+        // they tail the list.
+        let specs: [SpecEntry] = [
+            .init(prefix: "EprPress", label: "EPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
+            .init(prefix: "Press.", label: "IPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
+            .init(prefix: "Leak", label: "Leak Rate", unit: "L/min", scale: 60, format: oneDecimalFmt),
+            .init(prefix: "FlowLim", label: "Flow Limit", unit: "index 0–1", scale: 1, format: twoDecimalFmt),
+            // Tidal volume is stored in litres; multiply on the way
+            // into the table so the displayed units stay millilitres
+            // — matches the daily-stat card and clinical convention.
+            .init(prefix: "TidVol", label: "Tidal Volume", unit: "mL", scale: 1000, format: intFmt),
+            .init(prefix: "Snore", label: "Snore", unit: "index 0–5", scale: 1, format: oneDecimalFmt),
+            .init(prefix: "MinVent", label: "Minute Ventilation", unit: "L/min", scale: 1, format: twoDecimalFmt),
+            .init(prefix: "RespRate", label: "Respiration Rate", unit: "bpm", scale: 1, format: oneDecimalFmt),
+        ]
+
+        return specs.compactMap { spec -> SignalSummaryRow? in
+            guard let raw = rawByPrefix[spec.prefix], !raw.isEmpty else {
+                return nil
+            }
+            // Apply on-therapy filter when we have one and the
+            // sample arrays line up. Some signals (Tidal Volume
+            // for example) sample at the same rate as MaskPress
+            // so index alignment is safe.
+            var filtered: [Double] = []
+            filtered.reserveCapacity(raw.count)
+            if useMaskFilter, raw.count == onTherapyMask.count {
+                for (i, v) in raw.enumerated() where onTherapyMask[i] {
+                    filtered.append(v * spec.scale)
+                }
+            } else {
+                filtered = spec.scale == 1 ? raw : raw.map { $0 * spec.scale }
+            }
+            guard !filtered.isEmpty else { return nil }
+            filtered.sort()
+            let minV = filtered.first ?? 0
+            let median = percentileValue(filtered, 50)
+            let p95 = percentileValue(filtered, 95)
+            let p99_5 = percentileValue(filtered, 99.5)
+            return SignalSummaryRow(
+                id: spec.prefix,
+                label: spec.label,
+                unit: spec.unit,
+                displayMin: spec.format(minV),
+                displayMedian: spec.format(median),
+                displayP95: spec.format(p95),
+                displayP99_5: spec.format(p99_5)
+            )
+        }
+    }
+
+    /// Linear-interpolated percentile over a pre-sorted array.
+    /// Mirrors the helper in `DailyStatistics` so the summary
+    /// table's numbers line up with the daily-stat card values.
+    private static func percentileValue(_ sorted: [Double], _ p: Double) -> Double {
+        guard !sorted.isEmpty else { return 0 }
+        let rank = (p / 100) * Double(sorted.count - 1)
+        let low = Int(rank.rounded(.down))
+        let high = min(low + 1, sorted.count - 1)
+        let frac = rank - Double(low)
+        return sorted[low] * (1 - frac) + sorted[high] * frac
     }
 
     private struct ParsedBRP {
@@ -293,6 +421,10 @@ private struct PLDDecoded {
     /// envelope of the pressure chart. From the PLD "EprPress" signal
     /// (empty on CPAP machines without EPR).
     var epap: [TimePoint] = []
+    /// Raw (un-downsampled) samples per signal label, used by the
+    /// per-night signal summary table to compute clinically
+    /// accurate percentiles. Keyed by the signal's PLD prefix.
+    var rawSamples: [String: [Double]] = [:]
 }
 
 private func decodePLD(
@@ -304,7 +436,8 @@ private func decodePLD(
     func points(
         prefix: String,
         scale: Double = 1,
-        targetPoints: Int = 400
+        targetPoints: Int = 400,
+        captureRaw: Bool = true
     ) -> [TimePoint] {
         guard let idx = pld.signals.firstIndex(where: { $0.label.hasPrefix(prefix) }),
               let samples = try? pld.physicalSamples(ofSignal: idx) else {
@@ -314,12 +447,27 @@ private func decodePLD(
         let rate = Double(signal.samplesPerRecord) / pld.header.recordDuration
         guard rate > 0 else { return [] }
         let scaled = scale == 1 ? samples : samples.map { $0 * scale }
+        // Stash the *raw* (un-scaled) samples for the summary
+        // table — the spec there owns the unit conversion, so
+        // we'd double-scale Leak (×60) and Tidal Volume (×1000)
+        // if we cached the already-scaled values.
+        if captureRaw {
+            out.rawSamples[prefix, default: []].append(contentsOf: samples)
+        }
         return DownsampledSignal.points(
             samples: scaled,
             sampleRate: rate,
             startOffset: startOffset,
             targetPoints: targetPoints
         )
+    }
+
+    // Mask-pressure samples gate the on-therapy filter for every
+    // other signal — we capture them even though there's no
+    // chart for the raw mask-pressure track.
+    if let maskIdx = pld.signals.firstIndex(where: { $0.label.hasPrefix("MaskPress") }),
+       let mp = try? pld.physicalSamples(ofSignal: maskIdx) {
+        out.rawSamples["MaskPress", default: []].append(contentsOf: mp)
     }
 
     // Leak is stored in L/s; every viewer shows L/min so we scale on decode.
@@ -817,7 +965,6 @@ struct WaveformSection: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(.leading, Self.plotAreaLeadingInset)
         }
     }
 
@@ -1562,7 +1709,6 @@ struct ChartSubviewTitle: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(.leading, WaveformSection.plotAreaLeadingInset)
     }
 }
 
@@ -1601,14 +1747,19 @@ private struct SharedAxesModifier: ViewModifier {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                // Y-axis labels move to the trailing edge to
+                // match the Overview style. The plot area now
+                // starts at the chart's leading edge, so chart
+                // titles can sit flush with the data instead of
+                // being padded past a left-side axis column.
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel(anchor: .trailing) {
+                    AxisValueLabel(anchor: .leading) {
                         if let v = value.as(Double.self) {
                             Text(Self.format(v))
                                 .font(.caption2.monospacedDigit())
-                                .frame(width: 32, alignment: .trailing)
+                                .frame(width: 32, alignment: .leading)
                         }
                     }
                 }

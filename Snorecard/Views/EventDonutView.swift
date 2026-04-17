@@ -8,8 +8,6 @@ import SnorecardKit
 /// proportions, with the by-hour events chart below when available.
 struct EventDonutView: View {
     let stats: DailyStatistics
-    var hourlyEvents: [TimedEvent] = []
-    var hourlyDayStart: Date? = nil
 
     private var hasData: Bool {
         stats.obstructiveApneaIndex
@@ -17,85 +15,93 @@ struct EventDonutView: View {
             + stats.hypopneaIndex > 0
     }
 
-    private var hasHourlyChart: Bool {
-        hourlyDayStart != nil && !hourlyEvents.isEmpty
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.2f", stats.ahi))
+                Text(String(format: "%.1f", stats.ahi))
                     .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
-                Text("AHI")
+                Text("APNEA HYPOPNEA INDEX")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
 
             stackedBar
-
-            if hasHourlyChart, let hourlyDayStart {
-                AHIHourlyChart(events: hourlyEvents, dayStart: hourlyDayStart)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Fully custom stacked bar — replaces a SwiftUI Chart so we
+    /// can clip the outer rounded corners without fighting the
+    /// chart's internal padding. Each segment takes a width
+    /// proportional to its share of the total, with the segment
+    /// label overlaid when there's enough room.
     @ViewBuilder
     private var stackedBar: some View {
-        Chart {
-            if hasData {
-                barSegment("Obstructive", value: stats.obstructiveApneaIndex, color: .eventObstructive)
-                barSegment("Hypopnea", value: stats.hypopneaIndex, color: .eventHypopnea)
-                barSegment("Central", value: stats.centralApneaIndex, color: .eventCentral)
-            } else {
-                BarMark(
-                    x: .value("Index", 1),
-                    y: .value("", "ahi")
-                )
-                .foregroundStyle(Color.secondary.opacity(0.18))
-                .annotation(position: .overlay) {
-                    Text("No events")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                if hasData {
+                    segment(
+                        "OA",
+                        value: stats.obstructiveApneaIndex,
+                        color: .eventObstructive,
+                        availableWidth: geo.size.width
+                    )
+                    segment(
+                        "H",
+                        value: stats.hypopneaIndex,
+                        color: .eventHypopnea,
+                        availableWidth: geo.size.width
+                    )
+                    segment(
+                        "CA",
+                        value: stats.centralApneaIndex,
+                        color: .eventCentral,
+                        availableWidth: geo.size.width
+                    )
+                } else {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.18))
+                        .overlay {
+                            Text("No events")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                 }
             }
         }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .chartLegend(.hidden)
-        .chartForegroundStyleScale([
-            "Obstructive": Color.eventObstructive,
-            "Central": Color.eventCentral,
-            "Hypopnea": Color.eventHypopnea
-        ])
         .frame(height: 36)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    private func barSegment(_ name: String, value: Double, color: Color) -> some ChartContent {
-        BarMark(
-            x: .value("Index", value),
-            y: .value("", "ahi")
-        )
-        .foregroundStyle(by: .value("Type", name))
-        .annotation(position: .overlay) {
-            if shouldLabel(value) {
-                Text(String(format: "%@ %.1f", shortLabel(for: name), value))
-                    .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+    /// One coloured segment of the stacked bar. Width is computed
+    /// from the segment's share of the day's total events; the
+    /// caller supplies the bar's full width via the GeometryReader
+    /// so the segments add up to the bar's actual size.
+    @ViewBuilder
+    private func segment(
+        _ shortName: String,
+        value: Double,
+        color: Color,
+        availableWidth: CGFloat
+    ) -> some View {
+        let total = stats.obstructiveApneaIndex
+            + stats.centralApneaIndex
+            + stats.hypopneaIndex
+        let share = total > 0 ? value / total : 0
+        let width = max(0, availableWidth * CGFloat(share))
+        Rectangle()
+            .fill(color)
+            .frame(width: width)
+            .overlay {
+                if shouldLabel(value) {
+                    Text(String(format: "%@ %.1f", shortName, value))
+                        .font(.caption2.weight(.medium).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
-        }
-    }
-
-    private func shortLabel(for name: String) -> String {
-        switch name {
-        case "Obstructive": "OA"
-        case "Central": "CA"
-        case "Hypopnea": "H"
-        default: name
-        }
     }
 
     /// Only label segments that take up at least ~8 % of the bar so the

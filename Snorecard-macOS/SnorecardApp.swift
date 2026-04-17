@@ -41,6 +41,20 @@ struct SnorecardApp: App {
                 fileCommands
             }
         }
+
+        // Standalone window opened from the Daily view's
+        // "Detailed Statistics" button. Each invocation creates
+        // a window keyed on the payload's day date so opening
+        // the same night twice reuses the existing window
+        // instead of stacking duplicates.
+        WindowGroup(for: DetailedStatisticsPayload.self) { $payload in
+            if let payload {
+                DetailedStatisticsView(payload: payload)
+                    .padding(20)
+                    .frame(minWidth: 460, minHeight: 360)
+            }
+        }
+        .windowResizability(.contentSize)
     }
 
     /// Full File-menu command stack — mirrors the in-app Actions

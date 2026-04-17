@@ -70,13 +70,13 @@ struct SessionTimelineView: View {
             }
             .chartYScale(domain: 0 ... 1)
             .chartYAxis {
-                // Match the data-chart Y-axis width exactly so the plot areas
-                // align vertically.
-                AxisMarks(position: .leading, values: [0.5]) { _ in
+                // Match the data-chart Y-axis position (trailing)
+                // so the plot areas line up vertically.
+                AxisMarks(position: .trailing, values: [0.5]) { _ in
                     AxisValueLabel {
                         Text(" ")
                             .font(.caption2.monospacedDigit())
-                            .frame(width: 32, alignment: .trailing)
+                            .frame(width: 32, alignment: .leading)
                     }
                 }
             }

@@ -168,7 +168,7 @@ struct OverviewView: View {
             }
             card(
                 "Avg AHI",
-                value: String(format: "%.2f", avgAHI),
+                value: String(format: "%.1f", avgAHI),
                 tint: ahiColor(avgAHI)
             )
             if let gi = avgGI {

@@ -60,11 +60,8 @@ struct AHIHourlyChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Events by hour")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .padding(.top, 8)
+            Text("Events by Hour")
+                .font(.headline)
 
             Chart {
                 ForEach(buckets) { bucket in
@@ -92,7 +89,9 @@ struct AHIHourlyChart: View {
                 "Central": Color.eventCentral,
                 "Hypopnea": Color.eventHypopnea
             ])
-            .chartLegend(.hidden)
+            // Show the legend at the bottom so the colour-coded
+            // event types are explained inline with the chart.
+            .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
             .chartYScale(domain: 0 ... max(peakEventCount, 1))
             .chartYAxis {
                 AxisMarks(
@@ -113,6 +112,14 @@ struct AHIHourlyChart: View {
             }
             .frame(minHeight: 140)
         }
+        // Card chrome — matches the StatCard treatment so the
+        // events-by-hour panel reads as part of the same set as
+        // the metrics grid above it instead of a loose chart.
+        .padding(14)
+        .background(
+            Color.primary.opacity(0.05),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
     }
 
     private static func shortClockLabel(for date: Date) -> String {

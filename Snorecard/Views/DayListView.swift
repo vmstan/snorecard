@@ -142,7 +142,7 @@ struct DayListView: View {
                     // reads as a glanceable severity indicator
                     // without dragging the number into the
                     // green/amber/red palette.
-                    Text(String(format: "%.2f", avg))
+                    Text(String(format: "%.1f", avg))
                         .font(.body.monospacedDigit())
                     Text("AHI")
                         .font(.caption2)
@@ -194,7 +194,7 @@ struct DayListView: View {
                     // Colour lives on the calendar glyph to the
                     // left now; the number stays in the row's
                     // default foreground so it reads cleanly.
-                    Text(String(format: "%.2f", stats.ahi))
+                    Text(String(format: "%.1f", stats.ahi))
                         .font(.body.monospacedDigit())
                     Text("AHI")
                         .font(.caption2)

@@ -228,11 +228,7 @@ struct DayDetailView: View {
     private var header: some View {
         if let stats = day.stats, stats.hasUsage {
             VStack(alignment: .leading, spacing: 12) {
-                EventDonutView(
-                    stats: stats,
-                    hourlyEvents: loadedWaveform?.events ?? [],
-                    hourlyDayStart: loadedWaveform?.dayStart
-                )
+                EventDonutView(stats: stats)
 
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 170), spacing: 12)],
@@ -302,6 +298,25 @@ struct DayDetailView: View {
                             tint: percent < 0.5 ? .severityGood : .severityHigh
                         )
                     }
+                }
+
+                // Per-hour event chart sits below the stat grid
+                // now so the cards aren't pushed offscreen by it.
+                if let bundle = loadedWaveform, !bundle.events.isEmpty {
+                    AHIHourlyChart(
+                        events: bundle.events,
+                        dayStart: bundle.dayStart
+                    )
+                }
+
+                if let bundle = loadedWaveform, !bundle.signalSummary.isEmpty {
+                    DailySignalSummaryTable(
+                        payload: DetailedStatisticsPayload(
+                            dayDate: day.date,
+                            deviceName: library.card.map { library.displayName(for: $0) },
+                            rows: bundle.signalSummary
+                        )
+                    )
                 }
             }
         } else if !day.files.isEmpty {
