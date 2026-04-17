@@ -10,21 +10,33 @@ struct DailySettingsInspector: View {
     let settings: DeviceSettings?
 
     var body: some View {
-        Group {
-            if let settings, settings.hasAnyValue {
-                settingsForm(for: settings)
-            } else {
-                ContentUnavailableView {
-                    Label("Settings unavailable", systemImage: "info.circle")
-                } description: {
-                    Text("STR.edf didn't cover this day, so the therapy settings couldn't be read.")
-                }
+        #if os(iOS)
+        // On iPhone the inspector collapses into the parent navigation
+        // stack, which caused its `navigationTitle("Settings")` to
+        // bleed out and replace the day's date in the header. Wrap in
+        // a fresh `NavigationStack` so the title stays scoped here.
+        NavigationStack {
+            content
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        #else
+        content
+            .navigationTitle("Settings")
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let settings, settings.hasAnyValue {
+            settingsForm(for: settings)
+        } else {
+            ContentUnavailableView {
+                Label("Settings unavailable", systemImage: "info.circle")
+            } description: {
+                Text("STR.edf didn't cover this day, so the therapy settings couldn't be read.")
             }
         }
-        .navigationTitle("Settings")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     // MARK: - Form

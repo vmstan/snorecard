@@ -77,9 +77,9 @@ struct OverviewView: View {
                         timeInApneaChart
                         pressureChart
                         flowLimitChart
+                        tidalVolumeChart
                         leakChart
                         largeLeakChart
-                        tidalVolumeChart
                     }
                 }
             }
@@ -194,6 +194,14 @@ struct OverviewView: View {
                     tint: flowLimitColor(flow)
                 )
             }
+            if let tidal = avgTidal {
+                let mL = tidal * 1000
+                card(
+                    "Avg tidal volume",
+                    value: String(format: "%.0f mL", mL),
+                    tint: tidalVolumeColor(mL)
+                )
+            }
             if let leak = avgLeak {
                 card(
                     "Avg leak 95th",
@@ -207,14 +215,6 @@ struct OverviewView: View {
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
                     tint: largeLeak < 0.5 ? .severityGood : .severityHigh
-                )
-            }
-            if let tidal = avgTidal {
-                let mL = tidal * 1000
-                card(
-                    "Avg tidal volume",
-                    value: String(format: "%.0f mL", mL),
-                    tint: tidalVolumeColor(mL)
                 )
             }
         }

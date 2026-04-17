@@ -44,10 +44,21 @@ struct DayDetailView: View {
                 #endif
             }
         }
+        #if os(macOS)
         .inspector(isPresented: $isShowingSettings) {
             DailySettingsInspector(settings: day.stats?.settings)
                 .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
         }
+        #else
+        // On iOS `.inspector` collapses into the parent navigation
+        // stack and bleeds its title/toolbar into the day header.
+        // A sheet presents a clean, scoped surface instead.
+        .sheet(isPresented: $isShowingSettings) {
+            DailySettingsInspector(settings: day.stats?.settings)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        #endif
         .task(id: day.id) {
             await loadAllSessions()
         }
@@ -145,6 +156,14 @@ struct DayDetailView: View {
                             tint: flowLimitColor(fl)
                         )
                     }
+                    if let tv = stats.tidalVolume50 {
+                        let mL = tv * 1000
+                        StatCard(
+                            label: "Tidal Volume (Median)",
+                            value: String(format: "%.0f mL", mL),
+                            tint: tidalVolumeColor(mL)
+                        )
+                    }
                     if let leak = stats.leak95LPerMin {
                         StatCard(
                             label: "Leak (95%)",
@@ -160,14 +179,6 @@ struct DayDetailView: View {
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
                             tint: percent < 0.5 ? .severityGood : .severityHigh
-                        )
-                    }
-                    if let tv = stats.tidalVolume50 {
-                        let mL = tv * 1000
-                        StatCard(
-                            label: "Tidal Volume (Median)",
-                            value: String(format: "%.0f mL", mL),
-                            tint: tidalVolumeColor(mL)
                         )
                     }
                 }
