@@ -87,14 +87,7 @@ struct BackupsView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let busyMessage {
-            ContentUnavailableView {
-                Label(busyMessage, systemImage: "clock.arrow.circlepath")
-                    .symbolEffect(.pulse, options: .repeating)
-            } description: {
-                Text("Keep the app open while this finishes.")
-            }
-        } else if backups.isEmpty {
+        if backups.isEmpty && busyMessage == nil {
             ContentUnavailableView {
                 Label("No Backups Yet", systemImage: "externaldrive.badge.plus")
             } description: {
@@ -110,6 +103,9 @@ struct BackupsView: View {
             }
         } else {
             VStack(spacing: 0) {
+                if let busyMessage {
+                    busyChip(message: busyMessage)
+                }
                 List {
                     ForEach(backups) { backup in
                         row(for: backup)
@@ -222,27 +218,52 @@ struct BackupsView: View {
         }
     }
 
+    /// Inline progress chip that lives at the top of the list
+    /// while a backup or restore is in flight. Stays out of the
+    /// way of the existing rows so the user can see the
+    /// new entry land the moment the chip disappears — that
+    /// transition is the "done" signal.
+    @ViewBuilder
+    private func busyChip(message: String) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.primary)
+            Spacer()
+            Text("Keep the app open")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.12))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+
     // MARK: - Actions
 
     private func runBackup() {
-        let serial = library.card?.identification?.serialNumber
-        Task {
-            busyMessage = "Creating backup"
-            defer { busyMessage = nil }
+        Task { @MainActor in
+            withAnimation { busyMessage = "Creating backup…" }
+            defer { withAnimation { busyMessage = nil } }
             do {
                 _ = try await library.createBackup()
                 reloadList()
             } catch {
                 errorMessage = String(describing: error)
             }
-            _ = serial // retained for future "backup this serial" filtering
         }
     }
 
     private func runRestore(_ backup: Library.BackupFile) {
-        Task {
-            busyMessage = "Restoring backup"
-            defer { busyMessage = nil }
+        Task { @MainActor in
+            withAnimation { busyMessage = "Restoring backup…" }
+            defer { withAnimation { busyMessage = nil } }
             do {
                 try await library.restoreBackup(backup)
                 dismiss()

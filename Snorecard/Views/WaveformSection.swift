@@ -735,6 +735,24 @@ struct WaveformSection: View {
             }
     }
 
+    /// Inline tip below the timeline strip explaining the two
+    /// gestures it carries: scrub the shaded viewport to focus
+    /// the data charts, or tap a chart to drop a probe with
+    /// numeric readouts. Subtle so it doesn't compete with the
+    /// data, but visible enough to teach a new user without a
+    /// help screen.
+    @ViewBuilder
+    private var timelineHelpText: some View {
+        Label {
+            Text("Drag the timeline to focus the charts below. Tap a chart to inspect values at a moment.")
+        } icon: {
+            Image(systemName: "hand.tap")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .labelStyle(.titleAndIcon)
+    }
+
     @ViewBuilder
     private var keyboardShortcuts: some View {
         Group {
@@ -793,6 +811,7 @@ struct WaveformSection: View {
                     viewportStart: scrollPosition,
                     viewportLength: isZoomed ? visibleDomainLength : 0
                 )
+                timelineHelpText
 
                 chartStack
             }
@@ -955,9 +974,9 @@ struct WaveformSection: View {
     @ViewBuilder
     private var zoomControls: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ChartSubviewTitle(title: "Timeline", subtitle: zoomRangeLabel)
-            // Segmented picker matches the Overview's range picker
-            // look-and-feel for consistency.
+            // Picker on top so the user reaches for the zoom
+            // control first, then the Timeline heading reads as
+            // a label for the chart that follows below.
             Picker("Zoom", selection: zoomSelection) {
                 ForEach(Self.zoomPresets, id: \.label) { preset in
                     Text(preset.label).tag(preset.seconds)
@@ -965,6 +984,7 @@ struct WaveformSection: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            ChartSubviewTitle(title: "Timeline", subtitle: zoomRangeLabel)
         }
     }
 
