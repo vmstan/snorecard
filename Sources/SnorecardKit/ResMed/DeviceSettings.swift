@@ -52,6 +52,24 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     public var easyBreathe: Bool?
     public var smartStart: Bool?
 
+    /// `S.RiseEnable` — whether the clinician enabled a manual
+    /// Rise Time override for bilevel/VAuto modes.
+    public var riseTimeEnabled: Bool?
+    /// `S.RiseTime` — ms it takes to transition from EPAP to IPAP.
+    public var riseTimeMs: Int?
+
+    // MARK: - Bilevel / VAuto timing
+
+    /// `S.Trigger` — inspiration-trigger sensitivity on a 0–4
+    /// (Very Low / Low / Medium / High / Very High) scale.
+    public var triggerSensitivityCode: Int?
+    /// `S.Cycle` — expiration-cycle sensitivity, same 0–4 scale.
+    public var cycleSensitivityCode: Int?
+    /// `S.TiMax` — maximum inspiratory time in seconds.
+    public var tiMaxSeconds: Double?
+    /// `S.TiMin` — minimum inspiratory time in seconds.
+    public var tiMinSeconds: Double?
+
     // MARK: - Humidifier
 
     public var climateControlCode: Int?   // 0 manual / 1 auto / (2 off seen on some firmware)
@@ -65,6 +83,8 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
 
     public var maskCode: Int?
     public var tubeCode: Int?
+    /// `S.ABFilter` — is the antibacterial filter fitted?
+    public var antibacterialFilter: Bool?
 
     public init() {}
 
@@ -76,6 +96,9 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
             || bilevelIPAP != nil || vautoMaxIPAP != nil
             || eprEnabled != nil || rampEnableCode != nil
             || humidityLevel != nil || maskCode != nil
+            || tiMaxSeconds != nil || tiMinSeconds != nil
+            || triggerSensitivityCode != nil || cycleSensitivityCode != nil
+            || antibacterialFilter != nil || riseTimeEnabled != nil
     }
 
     // MARK: - Decoded names (best-effort)
@@ -159,6 +182,29 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         }
     }
 
+    /// Human label for the 0–4 trigger/cycle sensitivity scale
+    /// ResMed exposes — matches the words the device itself shows
+    /// (Very Low / Low / Medium / High / Very High).
+    private static func sensitivityName(_ code: Int?) -> String? {
+        guard let code else { return nil }
+        switch code {
+        case 0: return "Very Low"
+        case 1: return "Low"
+        case 2: return "Medium"
+        case 3: return "High"
+        case 4: return "Very High"
+        default: return "Code \(code)"
+        }
+    }
+
+    public var triggerSensitivityName: String? {
+        Self.sensitivityName(triggerSensitivityCode)
+    }
+
+    public var cycleSensitivityName: String? {
+        Self.sensitivityName(cycleSensitivityCode)
+    }
+
     // MARK: - Decoding from STR.edf
 
     /// Decode a `DeviceSettings` from a single STR.edf record by
@@ -167,13 +213,24 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     /// machinery to read one sample per signal per record — this
     /// just names the specific signals we care about. Returns `nil`
     /// when none of the signals yielded a value.
+    ///
+    /// `isAirSense11` switches the numeric remap used for therapy
+    /// modes and a few related enum fields. AirSense/AirCurve 11
+    /// firmware writes the STR.edf `Mode` signal in its own
+    /// compact enum (1 = CPAP, 2 = AutoSet, 3 = AutoSet for Her);
+    /// we translate those into the S9/AS10 codes the UI layer
+    /// already knows how to render so the rest of the app doesn't
+    /// need to grow a second mode vocabulary.
     public static func decode(
+        isAirSense11: Bool = false,
         scalar: (String) -> Double?
     ) -> DeviceSettings? {
         var s = DeviceSettings()
 
         // Therapy
-        s.modeCode = scalar("Mode").map { Int($0) }
+        s.modeCode = scalar("Mode").map { rawMode in
+            isAirSense11 ? remapAS11Mode(Int(rawMode)) : Int(rawMode)
+        }
         s.cpapPressure = scalar("S.C.Press")
         s.cpapStartPressure = scalar("S.C.StartPress")
         s.autoMinPressure = scalar("S.A.MinPress")
@@ -198,6 +255,14 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         s.rampTimeMinutes = scalar("S.RampTime").map { Int($0) }
         s.easyBreathe = scalar("S.EasyBreathe").map { $0 > 0 }
         s.smartStart = scalar("S.SmartStart").map { $0 > 0 }
+        s.riseTimeEnabled = scalar("S.RiseEnable").map { $0 > 0 }
+        s.riseTimeMs = scalar("S.RiseTime").map { Int($0) }
+
+        // Bilevel / VAuto timing — same signals feed both modes.
+        s.triggerSensitivityCode = scalar("S.Trigger").map { Int($0) }
+        s.cycleSensitivityCode = scalar("S.Cycle").map { Int($0) }
+        s.tiMaxSeconds = scalar("S.TiMax")
+        s.tiMinSeconds = scalar("S.TiMin")
 
         // Humidifier
         s.climateControlCode = scalar("S.ClimateControl").map { Int($0) }
@@ -210,7 +275,98 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         // Accessories
         s.maskCode = scalar("S.Mask").map { Int($0) }
         s.tubeCode = scalar("S.Tube").map { Int($0) }
+        s.antibacterialFilter = scalar("S.ABFilter").map { $0 > 0 }
 
         return s.hasAnyValue ? s : nil
     }
+
+    /// Translate an AirSense 11 raw mode integer into the S9/AS10
+    /// enum used everywhere else in the app. Values outside the
+    /// known AS11 range pass through untouched so an unknown mode
+    /// still surfaces under its original code (via the "Mode N"
+    /// fallback in `modeName`) rather than silently misreporting.
+    ///
+    /// Known mapping, cross-referenced with OSCAR's
+    /// `ResmedAS11ModeToS9Mode` table:
+    ///
+    ///   AS11  →  AS10
+    ///   1     →  1   CPAP
+    ///   2     →  3   AutoSet (APAP)
+    ///   3     →  7   AutoSet for Her
+    ///
+    /// AirSense 11 currently ships only in CPAP / AutoSet / AutoSet
+    /// for Her configurations, so higher codes are speculative; if
+    /// ResMed adds a bilevel 11 variant later we'll need to expand
+    /// the table.
+    private static func remapAS11Mode(_ raw: Int) -> Int {
+        switch raw {
+        case 1: return 1 // CPAP
+        case 2: return 3 // AutoSet
+        case 3: return 7 // AutoSet for Her
+        default: return raw
+        }
+    }
+
+    /// Return a copy of `self` where any field that's currently `nil`
+    /// inherits its value from `other`. Non-nil fields in `self` win,
+    /// so "newer" settings stay authoritative while "older" cached
+    /// settings only backfill the gaps.
+    ///
+    /// This matters when STR.edf is partially rewritten on the
+    /// device: a later import may have a record for a given night
+    /// that's missing a few S.* signals (they weren't emitted, not
+    /// explicitly cleared). Without this merge we'd null those
+    /// fields out on the next backfill even though we previously
+    /// decoded them fine.
+    public func completingNils(from other: DeviceSettings) -> DeviceSettings {
+        var s = self
+        s.modeCode ??= other.modeCode
+        s.cpapPressure ??= other.cpapPressure
+        s.cpapStartPressure ??= other.cpapStartPressure
+        s.autoMinPressure ??= other.autoMinPressure
+        s.autoMaxPressure ??= other.autoMaxPressure
+        s.autoStartPressure ??= other.autoStartPressure
+        s.autoForHerMinPressure ??= other.autoForHerMinPressure
+        s.autoForHerMaxPressure ??= other.autoForHerMaxPressure
+        s.autoForHerStartPressure ??= other.autoForHerStartPressure
+        s.bilevelIPAP ??= other.bilevelIPAP
+        s.bilevelEPAP ??= other.bilevelEPAP
+        s.bilevelStartPressure ??= other.bilevelStartPressure
+        s.vautoMaxIPAP ??= other.vautoMaxIPAP
+        s.vautoMinEPAP ??= other.vautoMinEPAP
+        s.vautoPressureSupport ??= other.vautoPressureSupport
+        s.vautoStartPressure ??= other.vautoStartPressure
+        s.eprEnabled ??= other.eprEnabled
+        s.eprLevel ??= other.eprLevel
+        s.eprTypeCode ??= other.eprTypeCode
+        s.rampEnableCode ??= other.rampEnableCode
+        s.rampTimeMinutes ??= other.rampTimeMinutes
+        s.easyBreathe ??= other.easyBreathe
+        s.smartStart ??= other.smartStart
+        s.riseTimeEnabled ??= other.riseTimeEnabled
+        s.riseTimeMs ??= other.riseTimeMs
+        s.triggerSensitivityCode ??= other.triggerSensitivityCode
+        s.cycleSensitivityCode ??= other.cycleSensitivityCode
+        s.tiMaxSeconds ??= other.tiMaxSeconds
+        s.tiMinSeconds ??= other.tiMinSeconds
+        s.climateControlCode ??= other.climateControlCode
+        s.humidityEnabled ??= other.humidityEnabled
+        s.humidityLevel ??= other.humidityLevel
+        s.tubeTempEnableCode ??= other.tubeTempEnableCode
+        s.tubeTempCelsius ??= other.tubeTempCelsius
+        s.heatedTube ??= other.heatedTube
+        s.maskCode ??= other.maskCode
+        s.tubeCode ??= other.tubeCode
+        s.antibacterialFilter ??= other.antibacterialFilter
+        return s
+    }
+}
+
+/// Fill-in-if-nil operator used by `DeviceSettings.completingNils`.
+/// `lhs ??= rhs` is `lhs = lhs ?? rhs` — only overwrites when `lhs`
+/// was nil to begin with, which is exactly the "prefer newer,
+/// backfill from older" semantics we want for the settings merge.
+infix operator ??=: AssignmentPrecedence
+private func ??= <T>(lhs: inout T?, rhs: T?) {
+    if lhs == nil { lhs = rhs }
 }

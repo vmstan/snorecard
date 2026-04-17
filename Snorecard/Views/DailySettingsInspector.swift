@@ -49,6 +49,7 @@ struct DailySettingsInspector: View {
                     LabeledContent("Mode", value: mode)
                 }
                 therapyPressureRows(for: s)
+                bilevelTimingRows(for: s)
             }
 
             if hasComfort(s) {
@@ -102,13 +103,16 @@ struct DailySettingsInspector: View {
                 }
             }
 
-            if s.maskName != nil || s.tubeName != nil {
+            if s.maskName != nil || s.tubeName != nil || s.antibacterialFilter != nil {
                 Section("Accessories") {
                     if let mask = s.maskName {
                         LabeledContent("Mask", value: mask)
                     }
                     if let tube = s.tubeName {
                         LabeledContent("Tube", value: tube)
+                    }
+                    if let ab = s.antibacterialFilter {
+                        LabeledContent("Antibacterial Filter", value: ab ? "Yes" : "No")
                     }
                 }
             }
@@ -180,6 +184,33 @@ struct DailySettingsInspector: View {
         }
     }
 
+    /// Bilevel/VAuto-only timing + sensitivity rows (TiMin/TiMax,
+    /// Trigger, Cycle, Rise Time). Split out so both pressure-mode
+    /// branches can include them without duplicating the gated
+    /// `if let` structure.
+    @ViewBuilder
+    private func bilevelTimingRows(for s: DeviceSettings) -> some View {
+        if let trigger = s.triggerSensitivityName {
+            LabeledContent("Trigger", value: trigger)
+        }
+        if let cycle = s.cycleSensitivityName {
+            LabeledContent("Cycle", value: cycle)
+        }
+        if let ti = s.tiMinSeconds {
+            LabeledContent("TiMin", value: formatSeconds(ti))
+        }
+        if let ti = s.tiMaxSeconds {
+            LabeledContent("TiMax", value: formatSeconds(ti))
+        }
+        if let enabled = s.riseTimeEnabled {
+            if enabled, let ms = s.riseTimeMs {
+                LabeledContent("Rise Time", value: "\(ms) ms")
+            } else {
+                LabeledContent("Rise Time", value: enabled ? "On" : "Off")
+            }
+        }
+    }
+
     @ViewBuilder
     private func pressureRange(label: String, min: Double?, max: Double?) -> some View {
         if let min, let max {
@@ -200,6 +231,16 @@ struct DailySettingsInspector: View {
 
     private func formatCelsius(_ value: Double) -> String {
         String(format: "%.0f°C", value)
+    }
+
+    /// Render Ti / rise-time seconds as "2 s", "0.3 s", etc. — the
+    /// device shows whole-second values with no decimal and
+    /// sub-second values to one decimal.
+    private func formatSeconds(_ value: Double) -> String {
+        if value == value.rounded() {
+            return String(format: "%.0f s", value)
+        }
+        return String(format: "%.1f s", value)
     }
 
     private func formatEPR(_ s: DeviceSettings) -> String {

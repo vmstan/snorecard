@@ -483,7 +483,8 @@ extension DailyStatistics {
     /// `modeName` can pick a device-specific label.
     public static func decode(
         from file: EDFFile,
-        productName: String? = nil
+        productName: String? = nil,
+        isAirSense11: Bool = false
     ) throws -> [DailyStatistics] {
         var indexByLabel: [String: Int] = [:]
         for (i, signal) in file.signals.enumerated() {
@@ -549,13 +550,27 @@ extension DailyStatistics {
                     minuteVentilation50: scalar("MinVent.50", record: record),
                     respirationRate50: scalar("RespRate.50", record: record),
                     tidalVolume50: scalar("TidVol.50", record: record),
-                    modeCode: scalar("Mode", record: record).map { Int($0) },
+                    modeCode: scalar("Mode", record: record).map { rawMode in
+                        // AirSense 11 emits its own mode enum —
+                        // route through `DeviceSettings.decode`
+                        // below to stay in AS10 codes for the UI.
+                        let raw = Int(rawMode)
+                        guard isAirSense11 else { return raw }
+                        switch raw {
+                        case 1: return 1
+                        case 2: return 3
+                        case 3: return 7
+                        default: return raw
+                        }
+                    },
                     productName: productName
                 )
             )
             // Settings live on the per-record scalars alongside the
             // aggregate signals — pull them in via the same reader.
-            out[out.count - 1].settings = DeviceSettings.decode { label in
+            out[out.count - 1].settings = DeviceSettings.decode(
+                isAirSense11: isAirSense11
+            ) { label in
                 scalar(label, record: record)
             }
         }

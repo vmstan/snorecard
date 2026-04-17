@@ -66,6 +66,21 @@ public enum DailyStatsCache {
         return payload.stats
     }
 
+    /// Read whatever sidecar is on disk for `dayFolder`, regardless
+    /// of whether its fingerprint matches today's files. Returns the
+    /// previously-decoded stats so a new aggregate pass can merge
+    /// forward the bits the fresh STR.edf no longer surfaces (most
+    /// notably the `settings` block).
+    public static func loadAnyStats(
+        for dayFolder: URL
+    ) -> DailyStatistics? {
+        let url = dayFolder.appendingPathComponent(filename)
+        guard let data = try? Data(contentsOf: url),
+              let payload = try? decoder.decode(Payload.self, from: data)
+        else { return nil }
+        return payload.stats
+    }
+
     /// Write the sidecar atomically so partial writes never pollute the
     /// day folder. Silent on failure — the cache is best-effort.
     public static func save(

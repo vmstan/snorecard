@@ -38,6 +38,27 @@ public struct ResMedIdentification: Sendable, Equatable, Codable {
         }
     }
 
+    /// `true` when this identification came from an AirSense/AirCurve
+    /// 11-family device. AS11 firmware uses different numeric encodings
+    /// for several STR.edf enums (mode in particular), so decoders
+    /// need to know to remap them back to the S9/AS10 enum the rest
+    /// of the app speaks.
+    public var isAirSense11: Bool {
+        if let name = productName?.lowercased() {
+            if name.contains("airsense 11") { return true }
+            if name.contains("aircurve 11") { return true }
+        }
+        // The `.json` identification format is exclusive to 11-series
+        // machines; `parseJSON` leaves `modelID` nil even when the
+        // parse otherwise succeeded, which is a reliable secondary
+        // signal when the product name is missing or ambiguous.
+        if modelID == nil, productName != nil,
+           rawFields["ProductCode"] != nil {
+            return true
+        }
+        return false
+    }
+
     /// Locate a supported identification file at the SD root. AirSense
     /// 10-family machines write `Identification.tgt`; AirSense 11 uses
     /// `Identification.json` with a different schema.

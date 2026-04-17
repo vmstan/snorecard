@@ -147,7 +147,8 @@ public enum SDCardImporter {
            let strFile = try? EDFFile(contentsOf: summaryURL),
            let decoded = try? DailyStatistics.decode(
                from: strFile,
-               productName: identification?.productName
+               productName: identification?.productName,
+               isAirSense11: identification?.isAirSense11 ?? false
            ) {
             for stats in decoded {
                 statsByDate[stats.date] = stats
@@ -192,7 +193,8 @@ public enum SDCardImporter {
         // Cheap — a single EDF header + signal decode.
         let statsByDate = decodeSTR(
             summaryURL: card.summaryFileURL,
-            productName: productName
+            productName: productName,
+            isAirSense11: card.identification?.isAirSense11 ?? false
         )
 
         let candidates = card.days.filter { needsBackfill($0) }
@@ -231,7 +233,8 @@ public enum SDCardImporter {
     ) -> [ResMedDay] {
         let statsByDate = decodeSTR(
             summaryURL: card.summaryFileURL,
-            productName: productName
+            productName: productName,
+            isAirSense11: card.identification?.isAirSense11 ?? false
         )
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var collected: [ResMedDay] = []
@@ -267,13 +270,15 @@ public enum SDCardImporter {
     /// disk on launch).
     private static func decodeSTR(
         summaryURL: URL?,
-        productName: String?
+        productName: String?,
+        isAirSense11: Bool = false
     ) -> [Date: DailyStatistics] {
         guard let summaryURL,
               let strFile = try? EDFFile(contentsOf: summaryURL),
               let decoded = try? DailyStatistics.decode(
                   from: strFile,
-                  productName: productName
+                  productName: productName,
+                  isAirSense11: isAirSense11
               )
         else { return [:] }
         var map: [Date: DailyStatistics] = [:]
@@ -335,12 +340,22 @@ public enum SDCardImporter {
             stats = mergeSTRWithAggregate(str: direct, aggregate: stats!)
         }
 
-        if let finalStats = stats {
+        // Carry forward any settings we decoded on a previous import
+        // but the current STR.edf no longer covers (or emits with a
+        // subset of signals). The `completingNils` merge preserves
+        // newer non-nil fields and only backfills the gaps.
+        let dir = day.files.first?.url.deletingLastPathComponent()
+        if let dir,
+           let previous = DailyStatsCache.loadAnyStats(for: dir)?.settings,
+           stats != nil {
+            let combined = (stats?.settings ?? DeviceSettings())
+                .completingNils(from: previous)
+            stats?.settings = combined.hasAnyValue ? combined : nil
+        }
+
+        if let finalStats = stats, let dir {
             let fingerprint = DailyStatsCache.Fingerprint.build(for: day.files)
-            let dir = day.files.first?.url.deletingLastPathComponent()
-            if let dir {
-                DailyStatsCache.save(finalStats, to: dir, fingerprint: fingerprint)
-            }
+            DailyStatsCache.save(finalStats, to: dir, fingerprint: fingerprint)
         }
         return ResMedDay(date: day.date, files: day.files, stats: stats)
     }
@@ -410,10 +425,20 @@ public enum SDCardImporter {
                 productName: merged.productName
             )
         }
-        // Always carry the STR-derived settings block through — the
-        // aggregate pass can't produce it, and merged.settings is
-        // either nil (pre-settings code path) or already equal.
-        merged.settings = str.settings ?? merged.settings
+        // Carry the STR-derived settings block through. Field-level
+        // merge (rather than wholesale swap) so a newer STR record
+        // that's missing a signal doesn't null out a field we
+        // already had from an older record — the aggregate pass
+        // can't re-derive the `S.*` block, so whatever we lose we
+        // lose for good.
+        switch (str.settings, merged.settings) {
+        case (let new?, let old?):
+            merged.settings = new.completingNils(from: old)
+        case (let new?, nil):
+            merged.settings = new
+        case (nil, _):
+            break // keep merged.settings as-is
+        }
         return merged
     }
 
