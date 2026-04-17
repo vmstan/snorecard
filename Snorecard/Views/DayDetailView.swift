@@ -62,9 +62,9 @@ struct DayDetailView: View {
                         inspectorPane = (inspectorPane == .notes) ? nil : .notes
                     }
                 } label: {
-                    Label("Notes", systemImage: "note.text")
+                    Label("Sleep Journal", systemImage: "note.text")
                 }
-                .help("Add or edit a note for this night")
+                .help("Add or edit your sleep journal for this night")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -72,9 +72,9 @@ struct DayDetailView: View {
                         inspectorPane = (inspectorPane == .settings) ? nil : .settings
                     }
                 } label: {
-                    Label("Device Settings", systemImage: "info.circle")
+                    Label("Therapy Details", systemImage: "gauge.with.needle")
                 }
-                .help("Show device settings for this night")
+                .help("Show therapy details for this night")
             }
         }
         #endif
@@ -121,7 +121,7 @@ struct DayDetailView: View {
             NavigationStack {
                 NotesCard(day: day)
                     .padding(20)
-                    .navigationTitle("Notes")
+                    .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
@@ -169,7 +169,7 @@ struct DayDetailView: View {
         NotesCard(day: day)
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .navigationTitle("Notes")
+            .navigationTitle("Sleep Journal")
     }
     #endif
 

@@ -214,7 +214,7 @@ struct ContentView: View {
                         object: nil
                     )
                 } label: {
-                    Label("Notes", systemImage: "note.text")
+                    Label("Sleep Journal", systemImage: "note.text")
                 }
                 Button {
                     NotificationCenter.default.post(
@@ -222,7 +222,7 @@ struct ContentView: View {
                         object: nil
                     )
                 } label: {
-                    Label("Device Settings", systemImage: "info.circle")
+                    Label("Therapy Details", systemImage: "gauge.with.needle")
                 }
                 Divider()
             }

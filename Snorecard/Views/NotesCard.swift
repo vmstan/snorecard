@@ -23,7 +23,13 @@ struct NotesCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Notes")
+                    // Title bakes in the night being edited so a
+                    // user looking at the popover/sheet on its own
+                    // (without the surrounding date in the nav
+                    // bar) still knows which night they're
+                    // annotating — e.g. "Sleep Journal for
+                    // Wednesday, April 17".
+                    Text("Sleep Journal for \(day.date, format: .dateTime.weekday(.wide).month(.wide).day())")
                         .font(.headline)
                     #if os(macOS)
                     // AppKit's NSTextField submits on a plain
@@ -47,7 +53,7 @@ struct NotesCard: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Clear this night's note")
+                    .help("Clear this night's journal entry")
                 }
             }
 

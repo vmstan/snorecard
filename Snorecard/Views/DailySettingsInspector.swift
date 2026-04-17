@@ -30,12 +30,12 @@ struct DailySettingsInspector: View {
         // a fresh `NavigationStack` so the title stays scoped here.
         NavigationStack {
             content
-                .navigationTitle("Settings")
+                .navigationTitle("Therapy Details")
                 .navigationBarTitleDisplayMode(.inline)
         }
         #else
         content
-            .navigationTitle("Settings")
+            .navigationTitle("Therapy Details")
         #endif
     }
 
@@ -45,7 +45,7 @@ struct DailySettingsInspector: View {
             settingsForm(for: settings)
         } else {
             ContentUnavailableView {
-                Label("Settings Unavailable", systemImage: "info.circle")
+                Label("Therapy Details Unavailable", systemImage: "gauge.with.needle")
             } description: {
                 Text("Your \(friendlyDeviceName) only keeps therapy settings for a rolling window of recent nights. This night sits outside that window.")
             }
