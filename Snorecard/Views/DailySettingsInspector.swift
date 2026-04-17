@@ -15,7 +15,7 @@ struct DailySettingsInspector: View {
                 settingsForm(for: settings)
             } else {
                 ContentUnavailableView {
-                    Label("Settings unavailable", systemImage: "slider.horizontal.3")
+                    Label("Settings unavailable", systemImage: "info.circle")
                 } description: {
                     Text("STR.edf didn't cover this day, so the therapy settings couldn't be read.")
                 }

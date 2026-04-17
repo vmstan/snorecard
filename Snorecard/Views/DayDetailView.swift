@@ -37,7 +37,7 @@ struct DayDetailView: View {
                 Button {
                     isShowingSettings.toggle()
                 } label: {
-                    Label("Device Settings", systemImage: "slider.horizontal.3")
+                    Label("Device Settings", systemImage: "info.circle")
                 }
                 #if os(macOS)
                 .help("Show device settings for this night")
