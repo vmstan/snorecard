@@ -122,6 +122,28 @@ final class Library {
         load(url)
     }
 
+    /// Async variant of `reloadCurrent` that returns only once the
+    /// load pipeline has settled (prefetch + scan + backfill all
+    /// finished). Pull-to-refresh needs this shape so the spinner
+    /// stays up through the refresh rather than dismissing the
+    /// instant the detached task kicks off.
+    func reloadCurrentAndWait() async {
+        guard let url = card?.rootURL else { return }
+        load(url)
+        // Poll the `@Observable` state until it leaves the in-flight
+        // cases. 150 ms is a comfortable balance between snappy
+        // dismissal on fast refreshes and not churning the main run
+        // loop on slow ones.
+        while true {
+            switch state {
+            case .loaded, .failed, .empty:
+                return
+            case .loading, .hydrating:
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+    }
+
 
     /// Remove every `.snorecard-stats.json` sidecar inside the currently
     /// loaded card's DATALOG tree and trigger a full re-import. Forces

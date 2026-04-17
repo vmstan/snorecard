@@ -46,6 +46,15 @@ struct DayListView: View {
         #if os(iOS)
         .navigationTitle(library.displayName(for: card))
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            // Pull-to-refresh mirrors the Refresh menu item. The
+            // async variant holds the spinner open until prefetch +
+            // scan + backfill have all settled, which now completes
+            // in well under a second on warm caches — previously
+            // this gesture felt pointless because the work was
+            // invisible and took minutes on cold loads.
+            await library.reloadCurrentAndWait()
+        }
         #endif
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let progress = hydrationProgress {

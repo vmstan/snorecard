@@ -71,12 +71,13 @@ struct ContentView: View {
             isPresented: $isConfirmingRebuild,
             titleVisibility: .visible
         ) {
-            Button("Rebuild", role: .destructive) {
+            Button("Rebuild Statistics", role: .destructive) {
                 library.invalidateStatsCacheAndReload()
             }
             Button("Cancel", role: .cancel) { }
+                .keyboardShortcut(.cancelAction)
         } message: {
-            Text("This discards the cached per-day statistics and recomputes every day's summary from scratch. It can take a while for devices with months of data.")
+            Text(rebuildStatisticsWarning)
         }
         .task(id: library.card?.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
@@ -86,6 +87,30 @@ struct ContentView: View {
     private var isLoading: Bool {
         if case .loading = library.state { return true }
         return false
+    }
+
+    /// Long-form explanation for the Rebuild Statistics confirmation
+    /// dialog. Mentions the concrete consequences (cache wiped, iCloud
+    /// re-sync, time cost) so the user can make an informed call
+    /// rather than treating it as a trivial refresh button.
+    private var rebuildStatisticsWarning: String {
+        let dayCount = library.card?.days.count ?? 0
+        let scope: String
+        if dayCount == 0 {
+            scope = "every day of data on this device"
+        } else if dayCount == 1 {
+            scope = "the one day of data on this device"
+        } else {
+            scope = "all \(dayCount) days of data on this device"
+        }
+
+        return """
+        This deletes the cached summary for \(scope) and recomputes every metric — AHI, pressure percentiles, leak, event counts, and machine settings — directly from the raw EDF files.
+
+        Your recordings are never touched, but the freshly-built summaries will replace what's currently in iCloud and sync to every device signed in to this account. Expect several minutes on devices with months of data.
+
+        Cancel if you only want to check for newly-synced nights — use Refresh for that.
+        """
     }
 
     @ToolbarContentBuilder
@@ -100,35 +125,18 @@ struct ContentView: View {
     @ViewBuilder
     private var optionsMenu: some View {
         Menu {
-            Button {
-                openSDCard()
-            } label: {
-                Label("Import from SD Card", systemImage: "sdcard")
-            }
-            #if os(macOS)
-            .keyboardShortcut("o", modifiers: [.command])
-            #endif
-
-            if let card = library.card,
-               card.identification?.serialNumber != nil {
-                Divider()
+            if library.card?.identification?.serialNumber != nil {
                 Button {
                     library.reloadCurrent()
                 } label: {
-                    Label("Reload from iCloud", systemImage: "icloud.and.arrow.down")
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 Button {
                     isRenamingDevice = true
                 } label: {
-                    Label("Rename Device…", systemImage: "square.and.pencil")
-                }
-                Button {
-                    isConfirmingRebuild = true
-                } label: {
-                    Label("Rebuild Statistics", systemImage: "arrow.clockwise")
+                    Label("Rename Device", systemImage: "pencil")
                 }
                 if !otherDevices.isEmpty {
-                    Divider()
                     Menu {
                         ForEach(otherDevices) { folder in
                             Button(deviceMenuLabel(for: folder)) {
@@ -136,16 +144,32 @@ struct ContentView: View {
                             }
                         }
                     } label: {
-                        Label("Switch Device", systemImage: "arrow.triangle.2.circlepath")
+                        Label("Switch Device", systemImage: "rectangle.2.swap")
                     }
+                }
+
+                Divider()
+            }
+
+            Button {
+                openSDCard()
+            } label: {
+                Label("Import SD Card", systemImage: "sdcard")
+            }
+            #if os(macOS)
+            .keyboardShortcut("o", modifiers: [.command])
+            #endif
+
+            if library.card?.identification?.serialNumber != nil {
+                Button(role: .destructive) {
+                    isConfirmingRebuild = true
+                } label: {
+                    Label("Rebuild Statistics", systemImage: "hammer")
                 }
             }
         } label: {
             Label("Actions", systemImage: "ellipsis.circle")
         }
-        #if os(macOS)
-        .help("Import data or rename the current device")
-        #endif
     }
 
     // MARK: - Actions

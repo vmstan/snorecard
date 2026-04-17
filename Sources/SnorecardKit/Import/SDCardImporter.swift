@@ -315,9 +315,25 @@ public enum SDCardImporter {
         let files = enumerateFiles(in: dir)
         let fingerprint = DailyStatsCache.Fingerprint.build(for: files)
 
-        // Sidecar cache hit → use the cached aggregate directly.
+        // Sidecar cache hit → use the cached aggregate, but top up
+        // the settings block from the current STR.edf so fields we
+        // added after the sidecar was written (e.g. Trigger, Cycle,
+        // TiMin/TiMax, Rise Time, Antibacterial Filter) get filled
+        // in instead of silently decoding as nil.
         if let cached = DailyStatsCache.load(for: dir, fingerprint: fingerprint) {
-            return ResMedDay(date: date, files: files, stats: cached)
+            var stats = cached
+            if let strSettings = statsByDate[date]?.settings {
+                let existing = cached.settings ?? DeviceSettings()
+                let combined = existing.completingNils(from: strSettings)
+                if combined != cached.settings {
+                    stats.settings = combined
+                    // Persist the topped-up sidecar so the next
+                    // launch hits the cache cleanly instead of
+                    // re-doing this merge every time.
+                    DailyStatsCache.save(stats, to: dir, fingerprint: fingerprint)
+                }
+            }
+            return ResMedDay(date: date, files: files, stats: stats)
         }
         // Otherwise fall back to whatever STR.edf already knows. The
         // backfill pass will replace this with a full aggregate later.
