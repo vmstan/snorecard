@@ -245,8 +245,9 @@ struct ContentView: View {
                 }
             }
         } label: {
-            Label("Actions", systemImage: "ellipsis.circle")
+            Label("Actions", systemImage: "ellipsis")
         }
+        .menuIndicator(.hidden)
     }
 
     // MARK: - Actions
