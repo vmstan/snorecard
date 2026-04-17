@@ -3,6 +3,12 @@ import SwiftUI
 /// A single-metric summary card used in the day-detail header grid.
 /// Label / primary value / optional subtitle, wrapped in a Liquid Glass
 /// material background that adapts to both macOS 26 and iOS 26.
+///
+/// Severity is conveyed through a subtle tint on the card's background
+/// rather than by colouring the value text — big monochrome numbers
+/// read faster at a glance and stay legible in both light and dark
+/// modes, while the tinted plate gives peripheral-vision feedback on
+/// which cards are in a concerning range.
 struct StatCard: View {
     let label: String
     let value: String
@@ -17,7 +23,7 @@ struct StatCard: View {
                 .textCase(.uppercase)
             Text(value)
                 .font(.title2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(tint)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
             if let subtitle {
@@ -31,9 +37,24 @@ struct StatCard: View {
         .frame(minHeight: StatCard.cardHeight, alignment: .topLeading)
         .padding(12)
         .background(
-            Color.primary.opacity(0.05),
+            backgroundFill,
             in: RoundedRectangle(cornerRadius: 12)
         )
+    }
+
+    /// Neutral cards (no meaningful severity) get the same translucent
+    /// plate as before. Tinted cards wash the plate with the severity
+    /// colour — kept low-opacity so a wall of green/amber/red cards
+    /// still feels calm rather than alarming.
+    private var backgroundFill: Color {
+        if isNeutralTint {
+            return Color.primary.opacity(0.05)
+        }
+        return tint.opacity(0.18)
+    }
+
+    private var isNeutralTint: Bool {
+        tint == .primary
     }
 
     /// Shared minimum card height so rows in the grid line up regardless of
