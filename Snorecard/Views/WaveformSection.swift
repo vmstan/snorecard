@@ -1228,11 +1228,16 @@ extension View {
         }
     }
 
-    /// Overlay an invisible tap-catcher on a SwiftUI Chart that sets
-    /// `hoverBinding` to the x-data-offset under the tap point, and
-    /// clears it on a second tap. Replaces `.chartXSelection` so the
-    /// readout only appears on an explicit click — hover / drag on
-    /// macOS no longer triggers per-frame chart re-renders.
+    /// Overlay an invisible tap-and-drag catcher on a SwiftUI Chart
+    /// that sets `hoverBinding` to the x-data-offset under the
+    /// cursor / finger. A plain tap drops the probe at that spot; a
+    /// drag scrubs the probe in real time. `minimumDistance: 0` on
+    /// the drag means the touch-down already places the probe, so
+    /// the first frame of movement doesn't feel disconnected.
+    ///
+    /// Replaces `.chartXSelection` so the readout only appears on
+    /// explicit user intent — hover / drag on macOS no longer
+    /// triggers per-frame chart re-renders.
     fileprivate func chartTapProbe(
         hoverBinding: Binding<TimeInterval?>
     ) -> some View {
@@ -1241,21 +1246,58 @@ extension View {
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
+                    // Plain tap drops the probe at the tap point —
+                    // cheap, doesn't capture the touch long enough
+                    // for the system to interpret it as a nav swipe.
                     .onTapGesture { location in
-                        // Every tap moves the probe to the new x. A
-                        // previous model cleared the readout on the
-                        // second tap, but that forced two clicks to
-                        // compare two neighbouring points — now the
-                        // readout just follows the cursor and the
-                        // existing 4s auto-dismiss cleans it up.
-                        guard let plotFrame = proxy.plotFrame else { return }
-                        let frame = geo[plotFrame]
-                        let xInPlot = location.x - frame.origin.x
-                        if let offset: TimeInterval = proxy.value(atX: xInPlot) {
-                            hoverBinding.wrappedValue = offset
-                        }
+                        updateProbe(
+                            atScreenX: location.x,
+                            proxy: proxy,
+                            geo: geo,
+                            binding: hoverBinding
+                        )
                     }
+                    // Horizontal drag scrubs the probe in real time.
+                    // `.simultaneousGesture` runs alongside the
+                    // enclosing ScrollView and NavigationStack
+                    // gestures so vertical scroll and edge-swipe
+                    // back still work. The gesture only updates
+                    // when the drag is more horizontal than
+                    // vertical — otherwise we bail out and let the
+                    // ScrollView handle the vertical pan.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 6)
+                            .onChanged { value in
+                                let dx = abs(value.translation.width)
+                                let dy = abs(value.translation.height)
+                                guard dx > dy else { return }
+                                updateProbe(
+                                    atScreenX: value.location.x,
+                                    proxy: proxy,
+                                    geo: geo,
+                                    binding: hoverBinding
+                                )
+                            }
+                    )
             }
+        }
+    }
+
+    /// Shared tap / drag → hoverBinding update. Clamps the x
+    /// coordinate to the plot area so overshoot past the axes
+    /// doesn't drop the probe.
+    private func updateProbe(
+        atScreenX screenX: CGFloat,
+        proxy: ChartProxy,
+        geo: GeometryProxy,
+        binding: Binding<TimeInterval?>
+    ) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geo[plotFrame]
+        let xInPlot = screenX - frame.origin.x
+        let clamped = min(max(xInPlot, 0), frame.width)
+        if let offset: TimeInterval = proxy.value(atX: clamped) {
+            binding.wrappedValue = offset
         }
     }
 }
