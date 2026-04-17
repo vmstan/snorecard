@@ -131,6 +131,7 @@ struct DayListView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            disclosureChevron
         }
         .padding(.vertical, 4)
     }
@@ -174,9 +175,25 @@ struct DayListView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            disclosureChevron
         }
         .padding(.vertical, 4)
         .foregroundStyle(hasData ? .primary : .tertiary)
+    }
+
+    /// Trailing tap-affordance shown on iOS only — pairs with the
+    /// system selection treatment to make each row read as a
+    /// navigable entry. macOS uses the sidebar's hover/select
+    /// styling and doesn't need it.
+    @ViewBuilder
+    private var disclosureChevron: some View {
+        #if os(iOS)
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+        #else
+        EmptyView()
+        #endif
     }
 
     /// Groups card days by calendar month+year, sorted newest-first, with
@@ -210,19 +227,11 @@ struct DayListView: View {
     }
 }
 
-/// Glyph placed next to the Overview label in the sidebar. Matches the
-/// calendar tile's footprint so the label text aligns with day-row
-/// labels below.
+/// Glyph placed next to the Overview label in the sidebar. Bare
+/// SF Symbol — same treatment as the day rows' calendar icons,
+/// so the column of glyphs reads as one consistent set.
 private struct OverviewGlyph: View {
     var isSelected: Bool = false
-
-    private var strokeColor: Color {
-        isSelected ? Color.white.opacity(0.65) : Color.secondary.opacity(0.45)
-    }
-
-    private var fillColor: Color {
-        isSelected ? Color.white.opacity(0.18) : Color.platformControlBackground
-    }
 
     private var iconColor: Color {
         isSelected ? .white : .primary
@@ -230,65 +239,35 @@ private struct OverviewGlyph: View {
 
     var body: some View {
         Image(systemName: "chart.bar.xaxis")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 18, weight: .regular))
             .foregroundStyle(iconColor)
             .frame(width: 21, height: 22)
-            .background(fillColor)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(strokeColor, lineWidth: 0.6)
-            )
     }
 }
 
-/// Tiny calendar-tile glyph — a rounded square with a subtle header
-/// strip and the day-of-month number below. Used in the sidebar rows
-/// so the eye lands on the date before the weekday text. Monochrome,
-/// with a selected state that keeps the digit legible on the
-/// accent-tinted row background.
+/// Tiny calendar glyph — uses the SF Symbols `<day>.calendar`
+/// family (added in SF Symbols 6) so the day number is baked
+/// into the icon instead of composited via Text + a custom
+/// rounded-rectangle. Sidebar rows show the day-of-month
+/// inline with the weekday so the eye lands on the date first.
 private struct CalendarDayTile: View {
     let date: Date
     var isSelected: Bool = false
 
-    private var dayNumber: String {
-        String(Calendar.current.component(.day, from: date))
+    private var symbolName: String {
+        let day = Calendar.current.component(.day, from: date)
+        return "\(day).calendar"
     }
 
-    private var strokeColor: Color {
-        isSelected ? Color.white.opacity(0.65) : Color.secondary.opacity(0.45)
-    }
-
-    private var fillColor: Color {
-        isSelected ? Color.white.opacity(0.18) : Color.platformControlBackground
-    }
-
-    private var stripColor: Color {
-        isSelected ? Color.white.opacity(0.45) : Color.secondary.opacity(0.45)
-    }
-
-    private var numberColor: Color {
+    private var iconColor: Color {
         isSelected ? .white : .primary
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(stripColor)
-                .frame(height: 3)
-            Text(dayNumber)
-                .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 1)
-                .foregroundStyle(numberColor)
-        }
-        .frame(width: 21, height: 22)
-        .background(fillColor)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(strokeColor, lineWidth: 0.6)
-        )
+        Image(systemName: symbolName)
+            .font(.system(size: 18, weight: .regular))
+            .foregroundStyle(iconColor)
+            .frame(width: 21, height: 22)
     }
 }
 
