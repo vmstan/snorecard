@@ -8,9 +8,15 @@ import SnorecardKit
 /// therefore the gaps between sessions — line up pixel-perfect.
 struct SessionTimelineView: View {
     let bundle: WaveformBundle
-    /// Callback fired when the user taps a point on the timeline strip.
-    /// Passes the tapped offset in seconds from `bundle.dayStart`.
+    /// Callback fired when the user taps a point on the timeline
+    /// strip. Passes the tapped offset in seconds from
+    /// `bundle.dayStart`. Caller typically animates the viewport.
     var onJumpToTime: ((TimeInterval) -> Void)? = nil
+    /// Callback fired continuously while the user is dragging the
+    /// viewport. Passes the live time offset under the finger.
+    /// Caller should update the viewport *without* animating so
+    /// the shaded band tracks the pointer smoothly.
+    var onDragToTime: ((TimeInterval) -> Void)? = nil
     /// When the waveform section is zoomed in, these describe the visible
     /// window so the timeline can shade a viewport indicator over that
     /// portion of the night.
@@ -91,22 +97,79 @@ struct SessionTimelineView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .contentShape(Rectangle())
-                        .gesture(
-                            SpatialTapGesture()
-                                .onEnded { event in
-                                    guard let plotFrame = proxy.plotFrame else { return }
-                                    let frame = geo[plotFrame]
-                                    let xInPlot = event.location.x - frame.origin.x
-                                    guard xInPlot >= 0, xInPlot <= frame.width else { return }
-                                    if let offset: Double = proxy.value(atX: xInPlot) {
-                                        onJumpToTime?(offset)
-                                    }
+                        // Tap anywhere on the timeline jumps the
+                        // viewport so the tapped time is centered.
+                        .onTapGesture { location in
+                            notifyJump(
+                                atScreenX: location.x,
+                                proxy: proxy,
+                                geo: geo
+                            )
+                        }
+                        // Drag pans the viewport in real time — the
+                        // shaded band follows the finger / pointer.
+                        // `simultaneousGesture` + horizontal-
+                        // dominance bail so vertical scroll on the
+                        // enclosing ScrollView still works when you
+                        // try to scroll the page past the timeline.
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 6)
+                                .onChanged { value in
+                                    let dx = abs(value.translation.width)
+                                    let dy = abs(value.translation.height)
+                                    guard dx > dy else { return }
+                                    notifyDrag(
+                                        atScreenX: value.location.x,
+                                        proxy: proxy,
+                                        geo: geo
+                                    )
                                 }
                         )
                 }
             }
             .frame(height: 57)
         }
+    }
+
+    /// Translate a screen-space x coordinate (within the chart
+    /// overlay) to a time offset in seconds and fire the
+    /// `onJumpToTime` callback. Clamps to the plot width so the
+    /// caller's viewport-centering logic always receives an offset
+    /// that lies on the timeline.
+    private func notifyJump(
+        atScreenX screenX: CGFloat,
+        proxy: ChartProxy,
+        geo: GeometryProxy
+    ) {
+        if let offset = offsetInPlot(screenX, proxy: proxy, geo: geo) {
+            onJumpToTime?(offset)
+        }
+    }
+
+    /// Same translation as `notifyJump` but routes to the drag
+    /// callback, which the caller wires up with no animation so the
+    /// shaded band tracks the pointer at 60 fps without queueing
+    /// overlapping easings.
+    private func notifyDrag(
+        atScreenX screenX: CGFloat,
+        proxy: ChartProxy,
+        geo: GeometryProxy
+    ) {
+        if let offset = offsetInPlot(screenX, proxy: proxy, geo: geo) {
+            onDragToTime?(offset)
+        }
+    }
+
+    private func offsetInPlot(
+        _ screenX: CGFloat,
+        proxy: ChartProxy,
+        geo: GeometryProxy
+    ) -> Double? {
+        guard let plotFrame = proxy.plotFrame else { return nil }
+        let frame = geo[plotFrame]
+        let xInPlot = screenX - frame.origin.x
+        let clamped = min(max(xInPlot, 0), frame.width)
+        return proxy.value(atX: clamped)
     }
 
     private var showsViewportIndicator: Bool {

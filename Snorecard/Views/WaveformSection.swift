@@ -641,6 +641,7 @@ struct WaveformSection: View {
                 SessionTimelineView(
                     bundle: bundle,
                     onJumpToTime: { time in jumpTo(time: time) },
+                    onDragToTime: { time in panViewport(center: time) },
                     viewportStart: scrollPosition,
                     viewportLength: isZoomed ? visibleDomainLength : 0
                 )
@@ -887,6 +888,27 @@ struct WaveformSection: View {
             zoomWindow = clamped
             scrollPosition = newStart
         }
+    }
+
+    /// Pan the viewport so the given time sits at the centre of
+    /// the currently-zoomed window. Called on every drag frame from
+    /// `SessionTimelineView` — deliberately *not* wrapped in
+    /// `withAnimation` so the shaded band tracks the pointer at
+    /// 60 fps without queueing overlapping easings.
+    private func panViewport(center time: TimeInterval) {
+        let window: TimeInterval = zoomWindow > 0
+            ? zoomWindow
+            : min(600, max(bundle.totalDuration, 1))
+        let clamped = min(window, max(bundle.totalDuration, 1))
+        var newStart = time - clamped / 2
+        newStart = max(0, min(newStart, max(0, bundle.totalDuration - clamped)))
+        // If the user scrubs the timeline from fit-zoom we snap
+        // into the default 10-minute window on the first drag and
+        // then follow the finger — matches how tap behaves.
+        if zoomWindow == 0 {
+            zoomWindow = clamped
+        }
+        scrollPosition = newStart
     }
 
     private func applyZoom(seconds: TimeInterval) {
