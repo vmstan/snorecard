@@ -36,15 +36,23 @@ struct DailySignalSummaryTable: View {
             #if os(iOS)
             .sheet(isPresented: $isShowingSheet) {
                 NavigationStack {
-                    DetailedStatisticsView(payload: payload)
-                        .padding(20)
-                        .navigationTitle("Detailed Statistics")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { isShowingSheet = false }
-                            }
+                    // ScrollView keeps the content from sliding
+                    // up under the inline nav bar at the medium
+                    // detent — without it the table renders as
+                    // a fixed-height view and the date / device
+                    // rows poke into the title area until the
+                    // user drags up to the large detent.
+                    ScrollView {
+                        DetailedStatisticsView(payload: payload)
+                            .padding(20)
+                    }
+                    .navigationTitle("Detailed Statistics")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isShowingSheet = false }
                         }
+                    }
                 }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -111,6 +119,6 @@ struct DetailedStatisticsView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }

@@ -60,8 +60,14 @@ struct AHIHourlyChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Now that the panel is wrapped in a StatCard-style
+            // plate, match the card label treatment — small
+            // uppercase caption — instead of the in-place chart
+            // headline used for free-floating charts.
             Text("Events by Hour")
-                .font(.headline)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
             Chart {
                 ForEach(buckets) { bucket in
@@ -89,9 +95,7 @@ struct AHIHourlyChart: View {
                 "Central": Color.eventCentral,
                 "Hypopnea": Color.eventHypopnea
             ])
-            // Show the legend at the bottom so the colour-coded
-            // event types are explained inline with the chart.
-            .chartLegend(position: .bottom, alignment: .leading, spacing: 8)
+            .chartLegend(.hidden)
             .chartYScale(domain: 0 ... max(peakEventCount, 1))
             .chartYAxis {
                 AxisMarks(

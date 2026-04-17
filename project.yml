@@ -59,7 +59,7 @@ targets:
         DEVELOPMENT_TEAM: CVZLL7XC62
         CODE_SIGN_ENTITLEMENTS: Snorecard/Snorecard.entitlements
         DEAD_CODE_STRIPPING: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Snorecard
 
   Snorecard-iOS:
     type: application
@@ -105,4 +105,4 @@ targets:
         DEVELOPMENT_TEAM: CVZLL7XC62
         CODE_SIGN_ENTITLEMENTS: Snorecard-iOS/Snorecard-iOS.entitlements
         DEAD_CODE_STRIPPING: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: Snorecard

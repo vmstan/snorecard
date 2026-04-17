@@ -18,6 +18,7 @@
 		2EAAE8503F4E3A1DC7AA1C2D /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722D23C564C439409491B429 /* SnorecardApp.swift */; };
 		3014163F65DDE7F94A111788 /* EventDonutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B7B53E724F0E12B081B827 /* EventDonutView.swift */; };
 		33CC3C1C20A116939A60A0C7 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC9B5715C49902A1BC2AC38 /* OverviewView.swift */; };
+		3B2BC9F64A3B10FB028B88D4 /* Snorecard.icon in Resources */ = {isa = PBXBuildFile; fileRef = B7D3A08725D70B6A35104190 /* Snorecard.icon */; };
 		59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
 		5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
 		5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
@@ -31,6 +32,7 @@
 		7D4E5B2C18A7D12FA47DF39E /* EventDonutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B7B53E724F0E12B081B827 /* EventDonutView.swift */; };
 		8047240FC6B1B672F0F3888E /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F85425A6C4E977C75813A1E /* LoadingView.swift */; };
 		8088C122E1E00BB6138F5C98 /* StatCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86917F47386EB72167DE2A0F /* StatCard.swift */; };
+		852AD2F79A37CA1FA67A8B25 /* Snorecard.icon in Resources */ = {isa = PBXBuildFile; fileRef = B7D3A08725D70B6A35104190 /* Snorecard.icon */; };
 		91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
 		A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */; };
@@ -77,6 +79,7 @@
 		8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayDetailView.swift; sourceTree = "<group>"; };
 		ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		B7D3A08725D70B6A35104190 /* Snorecard.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Snorecard.icon; sourceTree = "<group>"; };
 		D2AF636BF6337EA599258DBC /* Snorecard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Snorecard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
 		E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineView.swift; sourceTree = "<group>"; };
@@ -109,6 +112,7 @@
 			isa = PBXGroup;
 			children = (
 				8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */,
+				B7D3A08725D70B6A35104190 /* Snorecard.icon */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -287,6 +291,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				689EA6C18BFCE2D56EF9B7D4 /* Assets.xcassets in Resources */,
+				852AD2F79A37CA1FA67A8B25 /* Snorecard.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,6 +300,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */,
+				3B2BC9F64A3B10FB028B88D4 /* Snorecard.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -361,7 +367,7 @@
 		1C11057968406CC172841089 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -386,7 +392,7 @@
 		6B0E99F0B979BD9A322C6663 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = Snorecard/Snorecard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -412,7 +418,7 @@
 		832158C2F4D47BB20E7253CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = Snorecard/Snorecard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -438,7 +444,7 @@
 		CCB41BC03C9842BAE530C1C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
