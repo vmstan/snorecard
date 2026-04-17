@@ -150,6 +150,11 @@ final class Library {
     /// the next scan to recompute every day from scratch — useful when
     /// the computation logic has changed or a day's cache got out of
     /// sync with the raw data.
+    ///
+    /// **Intentionally narrow:** this only removes files matching
+    /// `DailyStatsCache.filename`. User-authored notes
+    /// (`DailyNotesCache.filename`) must never be deleted by a
+    /// rebuild — they aren't derived data and can't be recomputed.
     func invalidateStatsCacheAndReload() {
         guard let url = card?.rootURL else { return }
         let datalog = url.appendingPathComponent("DATALOG", isDirectory: true)
@@ -165,6 +170,33 @@ final class Library {
             }
         }
         load(url)
+    }
+
+    // MARK: - Per-day notes
+
+    /// Read the user-authored note for `day`, or `nil` when none
+    /// exists / the day folder has no files to anchor a note to.
+    func note(for day: ResMedDay) -> DailyNote? {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return nil }
+        return DailyNotesCache.load(for: folder)
+    }
+
+    /// Persist `text` as the note for `day`. A nil or whitespace-only
+    /// string removes the note entirely. The `updatedAt` timestamp is
+    /// stamped here so views don't need to care about it.
+    func setNote(_ text: String?, for day: ResMedDay) {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return }
+        let raw = text ?? ""
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DailyNotesCache.save(nil, to: folder)
+        } else {
+            DailyNotesCache.save(
+                DailyNote(text: raw, updatedAt: Date()),
+                to: folder
+            )
+        }
     }
 
     /// Auto-load data on launch. Tries to re-open the device the user

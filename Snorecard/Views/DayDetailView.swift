@@ -11,6 +11,17 @@ struct DayDetailView: View {
     @State private var loadedWaveform: WaveformBundle?
     @State private var loadError: String?
     @State private var isShowingSettings = false
+    @State private var isShowingNotes = false
+
+    #if os(macOS)
+    /// Which pane the macOS inspector is currently showing. Only one
+    /// inspector column can be open at a time, so both the Notes and
+    /// Device Settings buttons route through this enum — tapping the
+    /// same button again collapses the inspector, tapping the other
+    /// swaps content without closing.
+    enum InspectorPane { case notes, settings }
+    @State private var inspectorPane: InspectorPane? = nil
+    #endif
 
     var body: some View {
         ScrollView {
@@ -35,7 +46,35 @@ struct DayDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    #if os(macOS)
+                    // Wrap every inspector state change in the
+                    // same smooth spring so opening, closing, and
+                    // swapping panes all ease in at the same rate.
+                    // `.smooth(duration:)` gives a shorter, less
+                    // bouncy curve than SwiftUI's default for
+                    // side-column transitions.
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = (inspectorPane == .notes) ? nil : .notes
+                    }
+                    #else
+                    isShowingNotes.toggle()
+                    #endif
+                } label: {
+                    Label("Notes", systemImage: "note.text")
+                }
+                #if os(macOS)
+                .help("Add or edit a note for this night")
+                #endif
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    #if os(macOS)
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = (inspectorPane == .settings) ? nil : .settings
+                    }
+                    #else
                     isShowingSettings.toggle()
+                    #endif
                 } label: {
                     Label("Device Settings", systemImage: "info.circle")
                 }
@@ -45,21 +84,63 @@ struct DayDetailView: View {
             }
         }
         #if os(macOS)
-        .inspector(isPresented: $isShowingSettings) {
-            DailySettingsInspector(
-                settings: day.stats?.settings,
-                productName: day.stats?.productName
-                    ?? library.card?.identification?.productName,
-                serialNumber: library.card?.identification?.serialNumber,
-                deviceAlias: deviceAliasForInspector
-            )
-                .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
+        .inspector(isPresented: Binding(
+            get: { inspectorPane != nil },
+            set: { shown in
+                if !shown {
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = nil
+                    }
+                }
+            }
+        )) {
+            // Single inspector column that hosts either the note
+            // editor or the settings form. Swapping content between
+            // panes via the toolbar buttons doesn't collapse the
+            // column, matching how Finder's Get Info and Mail's
+            // Viewer sidebars behave. The `.id(inspectorPane)` +
+            // `.transition` combo cross-fades the two panes so the
+            // swap doesn't pop in harshly.
+            Group {
+                switch inspectorPane {
+                case .notes:
+                    inspectorNotesPane
+                case .settings:
+                    DailySettingsInspector(
+                        settings: day.stats?.settings,
+                        productName: day.stats?.productName
+                            ?? library.card?.identification?.productName,
+                        serialNumber: library.card?.identification?.serialNumber,
+                        deviceAlias: deviceAliasForInspector
+                    )
+                case .none:
+                    EmptyView()
+                }
+            }
+            .id(inspectorPane)
+            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
         }
+        .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
         #else
-        // On iOS `.inspector` collapses into the parent navigation
-        // stack and bleeds its title/toolbar into the day header.
-        // A sheet presents a clean, scoped surface instead.
+        .sheet(isPresented: $isShowingNotes) {
+            NavigationStack {
+                NotesCard(day: day)
+                    .padding(20)
+                    .navigationTitle("Notes")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isShowingNotes = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isShowingSettings) {
+            // iOS `.inspector` collapses into the parent navigation
+            // stack and bleeds its title/toolbar into the day header,
+            // so settings also presents as a sheet on iPhone.
             DailySettingsInspector(
                 settings: day.stats?.settings,
                 productName: day.stats?.productName
@@ -75,6 +156,18 @@ struct DayDetailView: View {
             await loadAllSessions()
         }
     }
+
+    #if os(macOS)
+    /// NotesCard wrapped in the same navigation-title chrome the
+    /// Settings inspector uses, so both panes look like siblings
+    /// when the inspector switches between them.
+    private var inspectorNotesPane: some View {
+        NotesCard(day: day)
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .navigationTitle("Notes")
+    }
+    #endif
 
     /// Device name pulled from the currently-loaded card so the daily
     /// view's nav bar shows which machine the data belongs to.

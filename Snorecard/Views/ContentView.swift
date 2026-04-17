@@ -164,6 +164,22 @@ struct ContentView: View {
         }
     }
 
+    /// Day-detail on iOS already carries two per-night actions
+    /// (Notes and Device Settings) in its own toolbar — dropping
+    /// the app-level Options menu there keeps the nav bar from
+    /// feeling crowded. The sidebar and Overview still show it.
+    @ToolbarContentBuilder
+    private var detailToolbarButtonsForiOS: some ToolbarContent {
+        if !isViewingDay {
+            toolbarButtons
+        }
+    }
+
+    private var isViewingDay: Bool {
+        if case .day = library.selection { return true }
+        return false
+    }
+
     @ViewBuilder
     private var optionsMenu: some View {
         Menu {
@@ -314,7 +330,7 @@ struct ContentView: View {
             }
         }
         #if os(iOS)
-        .toolbar { toolbarButtons }
+        .toolbar { detailToolbarButtonsForiOS }
         #endif
     }
 }
