@@ -791,7 +791,7 @@ struct WaveformSection: View {
 
     /// Preset zoom windows in seconds. `0` means "fit the whole night".
     private static let zoomPresets: [(label: String, seconds: TimeInterval)] = [
-        ("Fit", 0),
+        ("All", 0),
         ("1h", 3600),
         ("30m", 1800),
         ("10m", 600),
@@ -800,28 +800,36 @@ struct WaveformSection: View {
 
     @ViewBuilder
     private var zoomControls: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            FlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            ChartSubviewTitle(title: "Timeline", subtitle: zoomRangeLabel)
+            // Segmented picker matches the Overview's range picker
+            // look-and-feel for consistency.
+            Picker("Zoom", selection: zoomSelection) {
                 ForEach(Self.zoomPresets, id: \.label) { preset in
-                    Button {
-                        applyZoom(seconds: preset.seconds)
-                    } label: {
-                        Text(preset.label)
-                            .font(.caption.monospacedDigit())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(isCurrentPreset(preset.seconds) ? Color.accentColor : Color.secondary)
+                    Text(preset.label).tag(preset.seconds)
                 }
             }
-            if isZoomed {
-                Text(zoomRangeLabel)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.leading, Self.plotAreaLeadingInset)
         }
-        .padding(.leading, Self.plotAreaLeadingInset)
+    }
+
+    /// Picker binding that maps the `zoomWindow` state to whichever
+    /// preset it currently matches (or the closest preset if the
+    /// user pinched to an intermediate value).
+    private var zoomSelection: Binding<TimeInterval> {
+        Binding(
+            get: {
+                Self.zoomPresets
+                    .min(by: {
+                        Swift.abs($0.seconds - zoomWindow) <
+                        Swift.abs($1.seconds - zoomWindow)
+                    })?
+                    .seconds ?? 0
+            },
+            set: { newValue in applyZoom(seconds: newValue) }
+        )
     }
 
     /// Pinch / magnify gesture that rescales `zoomWindow` around the
@@ -901,8 +909,14 @@ struct WaveformSection: View {
     }
 
     private var zoomRangeLabel: String {
-        let start = bundle.dayStart.addingTimeInterval(scrollPosition)
-        let end = bundle.dayStart.addingTimeInterval(scrollPosition + visibleDomainLength)
+        // At "All" (un-zoomed) show the full session span — not the
+        // scroll-window anchored bounds, which collapse to dayStart.
+        let startOffset = isZoomed ? scrollPosition : 0
+        let endOffset = isZoomed
+            ? scrollPosition + visibleDomainLength
+            : bundle.totalDuration
+        let start = bundle.dayStart.addingTimeInterval(startOffset)
+        let end = bundle.dayStart.addingTimeInterval(endOffset)
         let startStr = start.formatted(date: .omitted, time: .shortened)
         let endStr = end.formatted(date: .omitted, time: .shortened)
         return "\(startStr) – \(endStr)"
