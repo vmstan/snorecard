@@ -9,17 +9,25 @@ struct DayListView: View {
     var body: some View {
         List(selection: $selection) {
             #if os(macOS)
-            // macOS sidebar keeps the app-level "Snorecard" title in
-            // the window chrome, so surface the device name as the
-            // first section header.
+            // App name as the prominent header with the device
+            // name as a subheading — mirrors the iOS layout
+            // (`navigationTitle("Snorecard")` +
+            // `navigationSubtitle(deviceName)`) so both
+            // platforms read the same at a glance.
             Section {
                 overviewRow(isSelected: selection == .overview)
                     .tag(SidebarSelection.overview)
             } header: {
-                Text(library.displayName(for: card))
-                    .font(.title2.weight(.semibold))
-                    .padding(.bottom, 10)
-                    .textCase(nil)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Snorecard")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(library.displayName(for: card))
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 10)
+                .textCase(nil)
             }
             #else
             // iOS uses the navigation title for the device name (see
@@ -44,8 +52,14 @@ struct DayListView: View {
         }
         .listStyle(.sidebar)
         #if os(iOS)
-        .navigationTitle(library.displayName(for: card))
-        .navigationBarTitleDisplayMode(.inline)
+        // App name as the large title; device name lives in the
+        // navigation subtitle slot (iOS 26+) so the user sees
+        // "Snorecard" prominently with the active device as a
+        // smaller subheading underneath. UIKit collapses both
+        // into the nav bar inset as the list scrolls.
+        .navigationTitle("Snorecard")
+        .navigationSubtitle(library.displayName(for: card))
+        .navigationBarTitleDisplayMode(.large)
         .refreshable {
             // Pull-to-refresh mirrors the Refresh menu item. The
             // async variant holds the spinner open until prefetch +
@@ -123,9 +137,13 @@ struct DayListView: View {
             Spacer()
             if let avg = overallAHI {
                 VStack(alignment: .trailing, spacing: 1) {
+                    // Plain text — colour now lives on the
+                    // calendar / overview glyph instead, which
+                    // reads as a glanceable severity indicator
+                    // without dragging the number into the
+                    // green/amber/red palette.
                     Text(String(format: "%.2f", avg))
                         .font(.body.monospacedDigit())
-                        .foregroundStyle(isSelected ? Color.white : ahiColor(avg))
                     Text("AHI")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -134,6 +152,7 @@ struct DayListView: View {
             disclosureChevron
         }
         .padding(.vertical, 4)
+        .compactiOSRowInsets()
     }
 
     /// Average AHI across every day that has recorded usage. `nil` when
@@ -150,8 +169,16 @@ struct DayListView: View {
     @ViewBuilder
     private func row(for day: ResMedDay, isSelected: Bool) -> some View {
         let hasData = !day.files.isEmpty || day.stats?.hasUsage == true
+        let calendarTint: Color = {
+            guard let stats = day.stats, stats.hasUsage else { return .secondary }
+            return iconSeverityColor(stats.ahi)
+        }()
         HStack(alignment: .center, spacing: 10) {
-            CalendarDayTile(date: day.date, isSelected: isSelected)
+            CalendarDayTile(
+                date: day.date,
+                isSelected: isSelected,
+                tint: calendarTint
+            )
             VStack(alignment: .leading, spacing: 1) {
                 Text(day.date, format: .dateTime.weekday(.wide))
                     .font(.body)
@@ -164,12 +191,11 @@ struct DayListView: View {
             Spacer()
             if let stats = day.stats, stats.hasUsage {
                 VStack(alignment: .trailing, spacing: 1) {
-                    // When the row is selected the accent-tinted background
-                    // makes the severity colours unreadable, so fall back to
-                    // the selected-row foreground (white) in that case.
+                    // Colour lives on the calendar glyph to the
+                    // left now; the number stays in the row's
+                    // default foreground so it reads cleanly.
                     Text(String(format: "%.2f", stats.ahi))
                         .font(.body.monospacedDigit())
-                        .foregroundStyle(isSelected ? Color.white : ahiColor(stats.ahi))
                     Text("AHI")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -179,6 +205,7 @@ struct DayListView: View {
         }
         .padding(.vertical, 4)
         .foregroundStyle(hasData ? .primary : .tertiary)
+        .compactiOSRowInsets()
     }
 
     /// Trailing tap-affordance shown on iOS only — pairs with the
@@ -225,6 +252,21 @@ struct DayListView: View {
         default: .severityHigh
         }
     }
+
+    /// Higher-contrast variant of the severity palette used only
+    /// for the calendar-tile icon. The chart palette is
+    /// deliberately muted so stacked bars don't look harsh; an
+    /// 18 pt SF Symbol against a sidebar row needs more punch
+    /// to register as green / amber / red at a glance, and the
+    /// system colours give that contrast for free in both
+    /// light and dark mode.
+    private func iconSeverityColor(_ ahi: Double) -> Color {
+        switch ahi {
+        case ..<2: .green
+        case ..<5: .orange
+        default: .red
+        }
+    }
 }
 
 /// Glyph placed next to the Overview label in the sidebar. Bare
@@ -234,7 +276,11 @@ private struct OverviewGlyph: View {
     var isSelected: Bool = false
 
     private var iconColor: Color {
-        isSelected ? .white : .primary
+        // Accent tint when idle so the sidebar icon column has a
+        // splash of brand colour. Selected rows on iOS get a
+        // full-strength accent fill behind them, so the glyph
+        // flips to white for legibility.
+        isSelected ? .white : .accentColor
     }
 
     var body: some View {
@@ -253,6 +299,12 @@ private struct OverviewGlyph: View {
 private struct CalendarDayTile: View {
     let date: Date
     var isSelected: Bool = false
+    /// Tint applied to the SF Symbol when the row is idle —
+    /// callers pass an AHI-severity colour so each calendar
+    /// icon doubles as a glanceable severity indicator. Days
+    /// with no usage get `.secondary` from the caller, which
+    /// keeps unrecorded nights visually quiet.
+    var tint: Color = .accentColor
 
     private var symbolName: String {
         let day = Calendar.current.component(.day, from: date)
@@ -260,7 +312,10 @@ private struct CalendarDayTile: View {
     }
 
     private var iconColor: Color {
-        isSelected ? .white : .primary
+        // Selected rows on iOS get a full-strength accent fill
+        // behind them, so the glyph flips to white for legibility
+        // regardless of severity tint.
+        isSelected ? .white : tint
     }
 
     var body: some View {
@@ -268,6 +323,23 @@ private struct CalendarDayTile: View {
             .font(.system(size: 18, weight: .regular))
             .foregroundStyle(iconColor)
             .frame(width: 21, height: 22)
+    }
+}
+
+private extension View {
+    /// Tighten sidebar row insets on iOS so the day list packs
+    /// more entries on screen at once. Default `.sidebar` row
+    /// insets are generous (~11 pt vertical); this trims them
+    /// to ~4 pt so the rows feel denser without losing the tap
+    /// target. macOS keeps system defaults — its sidebar
+    /// already uses tighter row spacing out of the box.
+    @ViewBuilder
+    func compactiOSRowInsets() -> some View {
+        #if os(iOS)
+        self.listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        #else
+        self
+        #endif
     }
 }
 
