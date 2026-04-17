@@ -18,6 +18,11 @@ final class Library {
     enum LoadState: Equatable {
         case empty
         case loading(URL)
+        /// Transitional state — we have enough of the card to paint
+        /// the sidebar (from either a persisted snapshot or a quick
+        /// structure-only scan) but per-day aggregates are still
+        /// filling in. Views treat this the same as `.loaded`.
+        case hydrating(ResMedSDCard)
         case loaded(ResMedSDCard)
         case failed(String)
     }
@@ -57,8 +62,17 @@ final class Library {
     }
 
     var card: ResMedSDCard? {
-        if case .loaded(let card) = state { return card }
-        return nil
+        switch state {
+        case .loaded(let card), .hydrating(let card): return card
+        default: return nil
+        }
+    }
+
+    /// `true` while a progressive backfill is still in flight — used
+    /// by views that want to show a subtle "finishing…" indicator.
+    var isHydrating: Bool {
+        if case .hydrating = state { return true }
+        return false
     }
 
     var selectedDay: ResMedDay? {
@@ -140,6 +154,14 @@ final class Library {
         guard case .empty = state else { return }
 
         if let url = Self.preferredICloudDeviceFolder() {
+            // Seed from the on-disk snapshot (keyed on serial, which
+            // is the iCloud folder's last path component) so the
+            // sidebar appears instantly — the subsequent `load` pass
+            // refreshes days as they finish aggregating.
+            let serial = url.lastPathComponent
+            if let snapshot = CardSnapshot.load(forSerial: serial) {
+                state = .hydrating(snapshot)
+            }
             load(url)
             return
         }
@@ -232,15 +254,41 @@ final class Library {
     }
 
     func load(_ url: URL) {
-        state = .loading(url)
+        // If the sidebar already shows the device being loaded (via
+        // a snapshot-seeded `.hydrating` state, or a prior `.loaded`
+        // card being refreshed) preserve the visible day list so the
+        // user doesn't get flashed a loading screen.
+        let existingCard: ResMedSDCard? = {
+            switch state {
+            case .hydrating(let c), .loaded(let c): return c
+            default: return nil
+            }
+        }()
+        let preserveHydration: Bool = {
+            guard let existing = existingCard else { return false }
+            if existing.rootURL == url { return true }
+            if existing.identification?.serialNumber == url.lastPathComponent {
+                return true
+            }
+            return false
+        }()
+
+        if preserveHydration, let existing = existingCard {
+            // Keep what the user sees on screen as the hydrating card
+            // while we kick off a fresh scan in the background.
+            state = .hydrating(existing)
+        } else {
+            state = .loading(url)
+            #if os(iOS)
+            // On iPhone NavigationSplitView is a stack — clear the
+            // selection immediately so the detail pane pops back to
+            // the sidebar instead of leaving the user stuck on a now-
+            // stale Overview / Day view while the new device loads.
+            selection = nil
+            #endif
+        }
         cloudPrefetchProgress = nil
-        #if os(iOS)
-        // On iPhone NavigationSplitView is a stack — clear the
-        // selection immediately so the detail pane pops back to
-        // the sidebar instead of leaving the user stuck on a now-
-        // stale Overview / Day view while the new device loads.
-        selection = nil
-        #endif
+
         let source = CardSource.detect(from: url)
         Task.detached { [weak self] in
             // Eagerly download iCloud sidecar placeholders so the
@@ -259,50 +307,60 @@ final class Library {
             }
 
             do {
-                let sdCard = try SDCardImporter.scan(url)
+                // Phase 1 — quick structure-only scan. Gives us the
+                // day list and any sidecar-cached stats immediately.
+                let structure = try SDCardImporter.scanStructure(url)
 
-                // For SD card imports, merge new day folders into iCloud
-                // and then re-scan iCloud so the view reflects the
-                // combined history instead of only what was on the card.
-                var finalCard = sdCard
-                var finalURL = url
+                // For SD card imports, merge new day folders into
+                // iCloud first, then use the iCloud folder as the
+                // canonical source so history accumulates there.
+                var currentCard = structure
+                var currentURL = url
                 if source == .sdCard {
                     if let iCloudURL = await Self.mergeIntoICloud(
                         sourceURL: url,
-                        card: sdCard
+                        card: structure
                     ),
-                       let merged = try? SDCardImporter.scan(iCloudURL) {
-                        finalCard = merged
-                        finalURL = iCloudURL
+                       let merged = try? SDCardImporter.scanStructure(iCloudURL) {
+                        currentCard = merged
+                        currentURL = iCloudURL
                     }
                 }
 
-                let loadedCard = finalCard
-                let persistedPath = finalURL.path
-                let loadedSerial = loadedCard.identification?.serialNumber
+                // Publish the structure so the sidebar renders now,
+                // before the aggregate backfill starts chewing EDFs.
+                let seededCard = currentCard
+                let persistedPath = currentURL.path
+                let loadedSerial = seededCard.identification?.serialNumber
                 await MainActor.run {
                     UserDefaults.standard.set(persistedPath, forKey: Self.lastPathKey)
                     self?.rememberLastOpened(serial: loadedSerial)
-                    self?.state = .loaded(loadedCard)
-                    #if os(iOS)
-                    // On iOS the split view collapses to a stack;
-                    // leaving selection nil surfaces the sidebar so
-                    // the user picks Overview or a day themselves
-                    // instead of being dropped straight into Overview.
-                    self?.selection = nil
-                    #else
-                    // On macOS the sidebar is always visible, so
-                    // default the detail pane to the Overview (or
-                    // the latest day with data if STR.edf is empty)
-                    // so there's something to look at immediately.
-                    if loadedCard.days.contains(where: { $0.stats?.hasUsage == true }) {
-                        self?.selection = .overview
-                    } else if let fallback = loadedCard.days.last(where: { !$0.files.isEmpty })?.id {
-                        self?.selection = .day(fallback)
-                    } else {
-                        self?.selection = nil
-                    }
-                    #endif
+                    self?.state = .hydrating(seededCard)
+                }
+
+                // Phase 2 — stream per-day aggregates. Each callback
+                // replaces one day's stats in place; the accumulated
+                // card is the new canonical value until the final
+                // `.loaded` transition below.
+                let productName = seededCard.identification?.productName
+                nonisolated(unsafe) var accumulated = seededCard
+                await SDCardImporter.backfillStats(
+                    for: seededCard,
+                    productName: productName
+                ) { @MainActor [weak self] updatedDay in
+                    accumulated = accumulated.replacing(day: updatedDay)
+                    // Keep publishing as `.hydrating` — the final
+                    // `.loaded` transition runs once the group finishes.
+                    self?.state = .hydrating(accumulated)
+                }
+
+                let finalCard = accumulated
+                await MainActor.run {
+                    self?.state = .loaded(finalCard)
+                    // Persist snapshot so the next launch can paint
+                    // the sidebar before any I/O completes.
+                    CardSnapshot.save(finalCard)
+                    self?.applyDefaultSelection(for: finalCard)
                 }
             } catch {
                 await MainActor.run {
@@ -310,6 +368,36 @@ final class Library {
                 }
             }
         }
+    }
+
+    /// Choose the detail-pane selection after a card finishes loading.
+    /// On iOS we stay on the sidebar; on macOS we default to Overview
+    /// (or the most recent day with raw files if STR.edf is empty).
+    private func applyDefaultSelection(for card: ResMedSDCard) {
+        #if os(iOS)
+        // iOS NavigationSplitView is a stack — leaving selection nil
+        // drops the user back on the sidebar rather than a stale
+        // detail pane. Only clear if we weren't mid-drill-down via
+        // the snapshot-hydration flow.
+        if selection == nil { return }
+        if case .day(let id) = selection,
+           card.days.contains(where: { $0.id == id }) {
+            return
+        }
+        selection = nil
+        #else
+        // macOS keeps the sidebar visible, so pre-select something
+        // sensible — but don't override a selection the user already
+        // made while the `.hydrating` state was up.
+        if selection != nil { return }
+        if card.days.contains(where: { $0.stats?.hasUsage == true }) {
+            selection = .overview
+        } else if let fallback = card.days.last(where: { !$0.files.isEmpty })?.id {
+            selection = .day(fallback)
+        } else {
+            selection = nil
+        }
+        #endif
     }
 
     // MARK: - iCloud sync

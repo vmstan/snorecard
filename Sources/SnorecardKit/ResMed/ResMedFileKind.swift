@@ -1,7 +1,7 @@
 import Foundation
 
 /// Role of a ResMed EDF file within an SD card export, derived from its filename suffix.
-public enum ResMedFileKind: String, Sendable, CaseIterable {
+public enum ResMedFileKind: String, Sendable, CaseIterable, Codable {
     /// Daily summary statistics (root of SD card).
     case summary = "STR"
     /// Breath Records: high-rate flow and mask-pressure waveforms.

@@ -47,6 +47,59 @@ struct DayListView: View {
         .navigationTitle(library.displayName(for: card))
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let progress = hydrationProgress {
+                hydrationFooter(done: progress.done, total: progress.total)
+            }
+        }
+    }
+
+    /// Small footer chip shown while the backfill pass is still
+    /// running. Disappears the moment `library.state` transitions
+    /// from `.hydrating` to `.loaded`.
+    @ViewBuilder
+    private func hydrationFooter(done: Int, total: Int) -> some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("Updating · \(done) of \(total) days")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    /// `(completed, total)` backfill progress, or `nil` when not
+    /// hydrating / nothing needs aggregating. Mirrors the
+    /// `SDCardImporter.needsBackfill` check so the count lines up
+    /// with what the importer is actually doing.
+    private var hydrationProgress: (done: Int, total: Int)? {
+        guard library.isHydrating else { return nil }
+        let candidates = card.days.filter { !$0.files.isEmpty }
+        let total = candidates.count
+        guard total > 0 else { return nil }
+        let done = candidates.filter(Self.hasAggregatedStats).count
+        // Don't flash a "0 of 0" chip — and if the count is already
+        // at the total we're a frame or two away from `.loaded`.
+        guard done < total else { return nil }
+        return (done, total)
+    }
+
+    /// Day rows with any PLD/EVE-derived field filled in have been
+    /// through the full aggregate pass already.
+    private static func hasAggregatedStats(_ day: ResMedDay) -> Bool {
+        guard let s = day.stats else { return false }
+        return s.flowLimit95 != nil
+            || s.glasgowIndex != nil
+            || s.timeInApneaSeconds != nil
+            || s.largeLeakSeconds != nil
     }
 
     /// Sidebar row for the "Overview" entry. Mirrors the day-row layout

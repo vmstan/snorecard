@@ -1,7 +1,7 @@
 import Foundation
 
 /// One raw EDF file belonging to a session, discovered on the SD card.
-public struct ResMedDataFile: Sendable, Equatable, Identifiable {
+public struct ResMedDataFile: Sendable, Equatable, Identifiable, Codable {
     public var id: URL { url }
     public let url: URL
     public let kind: ResMedFileKind
@@ -10,17 +10,30 @@ public struct ResMedDataFile: Sendable, Equatable, Identifiable {
     /// Size of the file on disk, or `nil` if unknown. Used to pick the main
     /// session of a day (largest file wins).
     public let byteSize: Int?
+
+    public init(url: URL, kind: ResMedFileKind, timestamp: Date?, byteSize: Int?) {
+        self.url = url
+        self.kind = kind
+        self.timestamp = timestamp
+        self.byteSize = byteSize
+    }
 }
 
 /// All files recorded on a single calendar day (`DATALOG/YYYYMMDD`).
-public struct ResMedDay: Sendable, Equatable, Identifiable {
+public struct ResMedDay: Sendable, Equatable, Identifiable, Codable {
     public var id: Date { date }
     /// Midnight of the day, in device-local time.
     public let date: Date
     public let files: [ResMedDataFile]
     /// Aggregate statistics for this day, parsed from `STR.edf`. `nil` when
     /// the summary file either didn't cover this date or couldn't be decoded.
-    public let stats: DailyStatistics?
+    public var stats: DailyStatistics?
+
+    public init(date: Date, files: [ResMedDataFile], stats: DailyStatistics?) {
+        self.date = date
+        self.files = files
+        self.stats = stats
+    }
 
     public func files(of kind: ResMedFileKind) -> [ResMedDataFile] {
         files.filter { $0.kind == kind }
@@ -39,11 +52,34 @@ public struct ResMedDay: Sendable, Equatable, Identifiable {
 }
 
 /// Top-level result of scanning an SD card root directory.
-public struct ResMedSDCard: Sendable, Equatable {
+public struct ResMedSDCard: Sendable, Equatable, Codable {
     public let rootURL: URL
     public let identification: ResMedIdentification?
     public let summaryFileURL: URL?
-    public let days: [ResMedDay]
+    public var days: [ResMedDay]
+
+    public init(
+        rootURL: URL,
+        identification: ResMedIdentification?,
+        summaryFileURL: URL?,
+        days: [ResMedDay]
+    ) {
+        self.rootURL = rootURL
+        self.identification = identification
+        self.summaryFileURL = summaryFileURL
+        self.days = days
+    }
+
+    /// Return a copy with `day` substituted in for whichever existing day
+    /// has the matching `id`. Silently no-ops if no day with that id
+    /// exists (e.g. the card was swapped mid-backfill).
+    public func replacing(day: ResMedDay) -> ResMedSDCard {
+        var copy = self
+        if let idx = copy.days.firstIndex(where: { $0.id == day.id }) {
+            copy.days[idx] = day
+        }
+        return copy
+    }
 }
 
 public enum SDCardImportError: Error, CustomStringConvertible {
@@ -61,9 +97,29 @@ public enum SDCardImportError: Error, CustomStringConvertible {
 }
 
 public enum SDCardImporter {
-    /// Scan an SD card root and build an inventory of days and files.
-    /// The scanner does not read EDF contents — it only inspects filenames.
+    /// Scan an SD card root and build an inventory of days and files,
+    /// producing fully-aggregated statistics for each day. This is the
+    /// legacy one-shot entry point — it's implemented as
+    /// `scanStructure` + a synchronous drain of `backfillStats`, so it
+    /// still returns a fully-populated card for callers (like
+    /// `SnorecardProbe`) that don't want progressive updates.
     public static func scan(_ root: URL) throws -> ResMedSDCard {
+        var card = try scanStructure(root)
+        let productName = card.identification?.productName
+        let updates = backfillStatsSync(for: card, productName: productName)
+        for day in updates {
+            card = card.replacing(day: day)
+        }
+        return card
+    }
+
+    /// Quick filesystem-only scan. Returns a `ResMedSDCard` populated
+    /// with day folders + file inventories, and per-day `stats` pulled
+    /// from the sidecar cache when available (falling back to the
+    /// STR-only summary record when the cache hasn't been written yet).
+    /// Skips every expensive PLD/BRP/EVE aggregate pass — use
+    /// `backfillStats` to fill the remaining days in.
+    public static func scanStructure(_ root: URL) throws -> ResMedSDCard {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
@@ -83,8 +139,9 @@ public enum SDCardImporter {
         let strURL = root.appendingPathComponent("STR.edf")
         let summaryURL = fm.fileExists(atPath: strURL.path) ? strURL : nil
 
-        // Decode STR.edf once up front so every day can see if it has
-        // pre-computed summary stats available.
+        // Decode STR.edf once up front so every day can fall back to
+        // its pre-computed summary when the sidecar cache hasn't been
+        // written yet.
         var statsByDate: [Date: DailyStatistics] = [:]
         if let summaryURL,
            let strFile = try? EDFFile(contentsOf: summaryURL),
@@ -105,17 +162,11 @@ public enum SDCardImporter {
         .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        let productName = identification?.productName
-
-        // Process each day folder concurrently. Each task is
-        // independent — they don't share mutable state — so a
-        // `TaskGroup` gives a near-linear speedup on multi-core
-        // machines.
-        let days: [ResMedDay] = importDaysConcurrently(
-            dayDirs: dayDirs,
-            statsByDate: statsByDate,
-            productName: productName
-        )
+        let days: [ResMedDay] = dayDirs
+            .compactMap { dir in
+                structureDay(dir: dir, statsByDate: statsByDate)
+            }
+            .sorted { $0.date < $1.date }
 
         return ResMedSDCard(
             rootURL: root,
@@ -125,29 +176,80 @@ public enum SDCardImporter {
         )
     }
 
-    /// Wraps a `TaskGroup` that processes day folders in parallel and
-    /// returns them sorted back into calendar order.
-    private static func importDaysConcurrently(
-        dayDirs: [URL],
-        statsByDate: [Date: DailyStatistics],
+    /// Streaming backfill — for each day that still needs full stats
+    /// (sidecar cache missed during `scanStructure`), run the
+    /// `DailyStatistics.aggregate` / STR merge / sidecar save pipeline
+    /// and emit the refreshed `ResMedDay` via `onDay`.
+    ///
+    /// Callback is awaited serially per day, so the caller controls
+    /// throttling / publishing cadence from the outside.
+    public static func backfillStats(
+        for card: ResMedSDCard,
+        productName: String?,
+        onDay: @MainActor @Sendable (ResMedDay) async -> Void
+    ) async {
+        // Rebuild the STR map from the card so merges can still run.
+        // Cheap — a single EDF header + signal decode.
+        let statsByDate = decodeSTR(
+            summaryURL: card.summaryFileURL,
+            productName: productName
+        )
+
+        let candidates = card.days.filter { needsBackfill($0) }
+
+        // Concurrent per-day work with bounded parallelism — each day
+        // is independent, matching the original `TaskGroup` shape.
+        let results: [ResMedDay] = await withTaskGroup(of: ResMedDay?.self) { group in
+            for day in candidates {
+                group.addTask {
+                    aggregateDay(
+                        day: day,
+                        statsByDate: statsByDate,
+                        productName: productName
+                    )
+                }
+            }
+            var collected: [ResMedDay] = []
+            for await updated in group {
+                if let updated { collected.append(updated) }
+            }
+            // Deterministic oldest-first emit so the sidebar fills in
+            // chronological order.
+            return collected.sorted { $0.date < $1.date }
+        }
+
+        for updated in results {
+            await onDay(updated)
+        }
+    }
+
+    /// Synchronous variant used by `scan(_:)` so non-async callers
+    /// (e.g. `SnorecardProbe`) keep their one-shot behaviour.
+    private static func backfillStatsSync(
+        for card: ResMedSDCard,
         productName: String?
     ) -> [ResMedDay] {
+        let statsByDate = decodeSTR(
+            summaryURL: card.summaryFileURL,
+            productName: productName
+        )
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var collected: [ResMedDay] = []
         Task.detached(priority: .userInitiated) {
+            let candidates = card.days.filter { needsBackfill($0) }
             var result: [ResMedDay] = []
             await withTaskGroup(of: ResMedDay?.self) { group in
-                for dir in dayDirs {
+                for day in candidates {
                     group.addTask {
-                        await importDay(
-                            dir: dir,
+                        aggregateDay(
+                            day: day,
                             statsByDate: statsByDate,
                             productName: productName
                         )
                     }
                 }
-                for await day in group {
-                    if let day { result.append(day) }
+                for await updated in group {
+                    if let updated { result.append(updated) }
                 }
             }
             result.sort { $0.date < $1.date }
@@ -158,20 +260,97 @@ public enum SDCardImporter {
         return collected
     }
 
-    /// Build one day's `ResMedDay`, using the sidecar stats cache when
-    /// valid and falling back to the full `DailyStatistics.aggregate`
-    /// pass otherwise. Writes the sidecar back out so the next launch
-    /// hits the cache.
-    private static func importDay(
-        dir: URL,
-        statsByDate: [Date: DailyStatistics],
+    /// Decode STR.edf into a `date → DailyStatistics` map, or an empty
+    /// map on any failure. Identical work to what `scanStructure` does
+    /// up front — repeated here so backfill can run against a card
+    /// object it didn't build itself (e.g. a snapshot hydrated from
+    /// disk on launch).
+    private static func decodeSTR(
+        summaryURL: URL?,
         productName: String?
-    ) async -> ResMedDay? {
-        let fm = FileManager.default
+    ) -> [Date: DailyStatistics] {
+        guard let summaryURL,
+              let strFile = try? EDFFile(contentsOf: summaryURL),
+              let decoded = try? DailyStatistics.decode(
+                  from: strFile,
+                  productName: productName
+              )
+        else { return [:] }
+        var map: [Date: DailyStatistics] = [:]
+        for stats in decoded {
+            map[stats.date] = stats
+        }
+        return map
+    }
+
+    /// True when the day hasn't gone through the full aggregate pass
+    /// yet — either `stats` is nil entirely, or the stats we have came
+    /// from STR.edf alone (no PLD-derived percentiles).
+    private static func needsBackfill(_ day: ResMedDay) -> Bool {
+        guard let stats = day.stats else { return true }
+        // STR-only fallback is recognisable by missing PLD percentiles —
+        // flowLimit95, glasgowIndex, timeInApneaSeconds are all computed
+        // from PLD/EVE inputs. Any one being present means we already
+        // ran the aggregate pass (or a past aggregate was cached in the
+        // sidecar).
+        if stats.flowLimit95 != nil || stats.glasgowIndex != nil
+            || stats.timeInApneaSeconds != nil || stats.largeLeakSeconds != nil {
+            return false
+        }
+        return true
+    }
+
+    /// Build the structure-only entry for one day folder.
+    private static func structureDay(
+        dir: URL,
+        statsByDate: [Date: DailyStatistics]
+    ) -> ResMedDay? {
         let name = dir.lastPathComponent
         guard let date = parseFolderDate(name) else { return nil }
+        let files = enumerateFiles(in: dir)
+        let fingerprint = DailyStatsCache.Fingerprint.build(for: files)
 
-        let files: [ResMedDataFile] = ((try? fm.contentsOfDirectory(
+        // Sidecar cache hit → use the cached aggregate directly.
+        if let cached = DailyStatsCache.load(for: dir, fingerprint: fingerprint) {
+            return ResMedDay(date: date, files: files, stats: cached)
+        }
+        // Otherwise fall back to whatever STR.edf already knows. The
+        // backfill pass will replace this with a full aggregate later.
+        return ResMedDay(date: date, files: files, stats: statsByDate[date])
+    }
+
+    /// Run the full PLD/EVE aggregate for one day, merge with STR, and
+    /// persist the sidecar so the next launch hits the cache.
+    private static func aggregateDay(
+        day: ResMedDay,
+        statsByDate: [Date: DailyStatistics],
+        productName: String?
+    ) -> ResMedDay? {
+        let placeholder = ResMedDay(date: day.date, files: day.files, stats: nil)
+        var stats = DailyStatistics.aggregate(
+            for: placeholder,
+            productName: productName
+        )
+        if let direct = statsByDate[day.date], stats != nil {
+            stats = mergeSTRWithAggregate(str: direct, aggregate: stats!)
+        }
+
+        if let finalStats = stats {
+            let fingerprint = DailyStatsCache.Fingerprint.build(for: day.files)
+            let dir = day.files.first?.url.deletingLastPathComponent()
+            if let dir {
+                DailyStatsCache.save(finalStats, to: dir, fingerprint: fingerprint)
+            }
+        }
+        return ResMedDay(date: day.date, files: day.files, stats: stats)
+    }
+
+    /// Enumerate every EDF file in `dir`, sorted by filename, as
+    /// `ResMedDataFile` records. Filters out anything whose filename
+    /// doesn't decode to a known `ResMedFileKind`.
+    private static func enumerateFiles(in dir: URL) -> [ResMedDataFile] {
+        let fm = FileManager.default
+        return ((try? fm.contentsOfDirectory(
             at: dir,
             includingPropertiesForKeys: [.fileSizeKey],
             options: [.skipsHiddenFiles]
@@ -190,31 +369,6 @@ public enum SDCardImporter {
                     byteSize: size
                 )
             }
-
-        let fingerprint = DailyStatsCache.Fingerprint.build(for: files)
-
-        // Fast path — sidecar hit. Skip all EDF decoding.
-        if let cached = DailyStatsCache.load(for: dir, fingerprint: fingerprint) {
-            return ResMedDay(date: date, files: files, stats: cached)
-        }
-
-        // Slow path — decode once through the unified aggregate.
-        let placeholder = ResMedDay(date: date, files: files, stats: nil)
-        var stats = DailyStatistics.aggregate(
-            for: placeholder,
-            productName: productName
-        )
-        // If the STR.edf had a record for this day, prefer its
-        // mode/maskEvents/etc. but keep the PLD-measured percentiles
-        // and Glasgow Index from the aggregate pass.
-        if let direct = statsByDate[date], stats != nil {
-            stats = mergeSTRWithAggregate(str: direct, aggregate: stats!)
-        }
-
-        if let finalStats = stats {
-            DailyStatsCache.save(finalStats, to: dir, fingerprint: fingerprint)
-        }
-        return ResMedDay(date: date, files: files, stats: stats)
     }
 
     /// STR.edf provides a few fields we can't derive from raw files

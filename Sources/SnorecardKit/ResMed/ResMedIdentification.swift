@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The file is a newline-separated list of `#TAG value` lines. We extract the
 /// fields OSCAR-lite needs and keep the full map for future use.
-public struct ResMedIdentification: Sendable, Equatable {
+public struct ResMedIdentification: Sendable, Equatable, Codable {
     public let serialNumber: String?
     public let productName: String?
     public let productCode: String?

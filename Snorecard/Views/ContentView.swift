@@ -201,7 +201,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-            case .loaded(let card):
+            case .loaded(let card), .hydrating(let card):
                 DayListView(card: card, selection: $library.selection)
             }
         }
@@ -219,7 +219,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         Group {
-            if case .loaded(let card) = library.state {
+            if let card = library.card {
                 switch library.selection {
                 case .overview:
                     OverviewView(card: card)

@@ -26,6 +26,15 @@ public enum CloudPrefetcher {
         timeout: TimeInterval = 600,
         progress: @Sendable (Progress) async -> Void = { _ in }
     ) async {
+        // Fast path — if every day folder we can already see has a
+        // locally-readable sidecar and no placeholder files, skip the
+        // `NSMetadataQuery` dance entirely. This is the common case on
+        // a launch where nothing has changed remotely since last time.
+        if localSidecarsAllReadable(in: deviceFolder) {
+            await progress(Progress(completed: 0, total: 0))
+            return
+        }
+
         // Ask iCloud's server-side index for every sidecar under the
         // device folder — including entries iOS hasn't materialized
         // in its local directory listings yet.
@@ -85,6 +94,49 @@ public enum CloudPrefetcher {
         }
         return status == .current || status == .downloaded
     }
+
+    /// Filesystem-only scan — walk every day folder iOS has already
+    /// materialized and confirm each `.snorecard-stats.json` sidecar
+    /// is locally readable. Returns `false` the moment we see a day
+    /// folder whose sidecar is missing or a placeholder. Doesn't
+    /// know about day folders that haven't synced down yet; the
+    /// full `NSMetadataQuery` path handles that case.
+    private static func localSidecarsAllReadable(in deviceFolder: URL) -> Bool {
+        let fm = FileManager.default
+        let datalog = deviceFolder.appendingPathComponent("DATALOG", isDirectory: true)
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: datalog.path, isDirectory: &isDir), isDir.boolValue else {
+            // No DATALOG yet — nothing to fast-path over. Let the
+            // slow path run; it'll handle the empty case fine.
+            return false
+        }
+        guard let dayDirs = try? fm.contentsOfDirectory(
+            at: datalog,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+
+        // Short-circuit on the first folder that needs a remote
+        // fetch. An empty DATALOG (no day folders) still counts as
+        // "warm" — nothing to download.
+        for dir in dayDirs {
+            let isDirectory = (try? dir.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            guard isDirectory else { continue }
+            let sidecar = dir.appendingPathComponent(DailyStatsCache.filename)
+            if !fm.fileExists(atPath: sidecar.path) {
+                // Missing sidecar. If the day has raw EDFs we'd want
+                // to download one once iCloud produces it — defer to
+                // the slow path so it can wait for the file to arrive.
+                return false
+            }
+            if !isReadable(sidecar) {
+                return false
+            }
+        }
+        return true
+    }
 }
 
 /// Wraps `NSMetadataQuery` to enumerate every sidecar URL under a
@@ -138,7 +190,10 @@ private final class SidecarDiscovery {
                 Task { @MainActor [weak self] in
                     // Short settle window — give any trailing index
                     // updates a chance to land before we snapshot.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    // Kept tight (400 ms) because the outer fast path
+                    // already handled the "everything is warm" case;
+                    // missed late arrivals will surface on next launch.
+                    try? await Task.sleep(nanoseconds: 400_000_000)
                     self?.finish()
                 }
             }
