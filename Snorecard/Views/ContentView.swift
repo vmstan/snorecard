@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isRenamingDevice = false
     @State private var isConfirmingRebuild = false
+    @State private var isShowingBackups = false
     @State private var knownDevices: [Library.DeviceFolder] = []
 
     private var otherDevices: [Library.DeviceFolder] {
@@ -53,6 +54,10 @@ struct ContentView: View {
         #if os(macOS)
         .toolbar { toolbarButtons }
         #endif
+        .sheet(isPresented: $isShowingBackups) {
+            BackupsView()
+                .environment(library)
+        }
         .sheet(isPresented: $isRenamingDevice) {
             if let card = library.card,
                let serial = card.identification?.serialNumber {
@@ -99,6 +104,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildStatistics)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 isConfirmingRebuild = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
+            if library.card?.identification?.serialNumber != nil {
+                isShowingBackups = true
             }
         }
         #endif
@@ -223,6 +233,11 @@ struct ContentView: View {
                 }
 
                 Divider()
+                Button {
+                    isShowingBackups = true
+                } label: {
+                    Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+                }
                 Button(role: .destructive) {
                     isConfirmingRebuild = true
                 } label: {

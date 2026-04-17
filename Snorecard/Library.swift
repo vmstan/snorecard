@@ -286,7 +286,11 @@ final class Library {
             includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles]
         )) ?? []).filter { url in
-            (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            // The Backups/ sibling holds `.aar` archives, not raw
+            // device data. Skip it so restored archives don't get
+            // mistaken for a separate device.
+            guard url.lastPathComponent != Self.backupsFolderName else { return false }
+            return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
         }
 
         return subfolders
@@ -578,4 +582,199 @@ final class Library {
         card.identification?.serialNumber.flatMap { $0.isEmpty ? nil : $0 }
             ?? "Unknown Device"
     }
+
+    // MARK: - Backups
+
+    /// Subfolder name under `iCloudDriveRoot` that holds `.aar`
+    /// backup archives, one per backup event. Excluded from
+    /// `iCloudDeviceFolders` so archives never masquerade as
+    /// devices.
+    static let backupsFolderName = "Backups"
+
+    /// Metadata about a single backup file discovered in iCloud.
+    /// Presented in the Restore sheet.
+    struct BackupFile: Identifiable, Hashable, Sendable {
+        let url: URL
+        /// Device serial this backup was taken from (the filename's
+        /// leading segment). Used to group backups per device.
+        let serial: String
+        /// Moment the backup was written, parsed from the filename
+        /// or falling back to the file's modification date.
+        let createdAt: Date
+        /// Size in bytes on disk.
+        let byteSize: Int
+        var id: URL { url }
+    }
+
+    enum BackupError: Error, CustomStringConvertible {
+        case noCard
+        case noCloudContainer
+
+        var description: String {
+            switch self {
+            case .noCard:
+                return "No device is loaded. Open a device before backing up."
+            case .noCloudContainer:
+                return "iCloud Drive is unavailable on this device."
+            }
+        }
+    }
+
+    /// Directory under iCloud Drive where archives live. Created on
+    /// first backup. `nil` if iCloud isn't configured.
+    static var backupsDirectory: URL? {
+        iCloudDriveRoot?.appendingPathComponent(backupsFolderName, isDirectory: true)
+    }
+
+    /// Archive the currently-loaded device's folder into the
+    /// Backups directory and return the resulting file URL. Runs
+    /// compression on a detached task so the main actor stays
+    /// responsive — the method is async and intended to be awaited
+    /// from a Task wrapping user-visible progress UI.
+    func createBackup() async throws -> BackupFile {
+        guard let card else { throw BackupError.noCard }
+        guard let backupsDir = Self.backupsDirectory else {
+            throw BackupError.noCloudContainer
+        }
+
+        let fm = FileManager.default
+        try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+
+        let serial = card.identification?.serialNumber
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? "Unknown"
+        let stamp = Self.backupFilenameFormatter.string(from: Date())
+        let filename = "\(serial)-\(stamp).aar"
+        let destination = backupsDir.appendingPathComponent(filename)
+        let sourceURL = card.rootURL
+
+        try await Task.detached(priority: .userInitiated) {
+            try DeviceArchive.compress(directory: sourceURL, to: destination)
+        }.value
+
+        let size = (try? destination.resourceValues(forKeys: [.fileSizeKey])
+            .fileSize) ?? 0
+        return BackupFile(
+            url: destination,
+            serial: serial,
+            createdAt: Date(),
+            byteSize: size
+        )
+    }
+
+    /// Every backup we can find on disk, newest first. If `serial`
+    /// is supplied, the list is filtered to archives whose filename
+    /// starts with that serial — the common "backups for the
+    /// currently-loaded device" case.
+    static func listBackups(forSerial serial: String? = nil) -> [BackupFile] {
+        guard let dir = backupsDirectory else { return [] }
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: dir.path) else { return [] }
+        let contents = (try? fm.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return contents
+            .filter { $0.pathExtension.lowercased() == "aar" }
+            .compactMap { url -> BackupFile? in
+                let name = url.deletingPathExtension().lastPathComponent
+                // Expected form: "<serial>-<yyyy-MM-dd-HHmmss>".
+                // Fallback: derive serial from leading segment and
+                // created-date from mtime when the stamp is
+                // unparseable.
+                let parts = name.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+                let rawSerial = parts.first.map(String.init) ?? name
+                if let requested = serial, requested != rawSerial {
+                    return nil
+                }
+                let parsedDate: Date? = parts.count == 2
+                    ? backupFilenameFormatter.date(from: String(parts[1]))
+                    : nil
+                let mtime = (try? url.resourceValues(
+                    forKeys: [.contentModificationDateKey]
+                ).contentModificationDate)
+                let size = (try? url.resourceValues(
+                    forKeys: [.fileSizeKey]
+                ).fileSize) ?? 0
+                return BackupFile(
+                    url: url,
+                    serial: rawSerial,
+                    createdAt: parsedDate ?? mtime ?? Date.distantPast,
+                    byteSize: size
+                )
+            }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Restore a backup over the top of the matching device folder,
+    /// atomically swapping the old tree out for the archive's
+    /// contents. The previous tree is moved aside first so a
+    /// mid-flight error doesn't leave the user with a half-restored
+    /// folder — on success the set-aside tree is deleted; on
+    /// failure it's put back.
+    func restoreBackup(_ backup: BackupFile) async throws {
+        guard let root = Self.iCloudBackupRoot else {
+            throw BackupError.noCloudContainer
+        }
+        let fm = FileManager.default
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let deviceURL = root.appendingPathComponent(backup.serial, isDirectory: true)
+        let sidelineURL = root.appendingPathComponent(
+            ".restore-old-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let stagingURL = fm.temporaryDirectory.appendingPathComponent(
+            "snorecard-restore-\(UUID().uuidString)",
+            isDirectory: true
+        )
+
+        let backupURL = backup.url
+        try await Task.detached(priority: .userInitiated) {
+            try DeviceArchive.decompress(archive: backupURL, into: stagingURL)
+        }.value
+
+        // Swap: move current device folder aside (if any), then
+        // move the staged extraction into its place.
+        let hadExistingFolder = fm.fileExists(atPath: deviceURL.path)
+        if hadExistingFolder {
+            try fm.moveItem(at: deviceURL, to: sidelineURL)
+        }
+        do {
+            try fm.moveItem(at: stagingURL, to: deviceURL)
+        } catch {
+            // Roll back — put the original folder back so the user
+            // isn't left with nothing after a failed restore.
+            if hadExistingFolder {
+                try? fm.moveItem(at: sidelineURL, to: deviceURL)
+            }
+            throw error
+        }
+
+        // Clean up the side-lined copy and any lingering cached
+        // sidecars so the newly-restored tree is decoded from
+        // scratch.
+        if hadExistingFolder {
+            try? fm.removeItem(at: sidelineURL)
+        }
+
+        // Reload the newly-restored folder.
+        load(deviceURL)
+    }
+
+    /// Delete a backup archive. Used by the Restore sheet's row-
+    /// level delete action.
+    func deleteBackup(_ backup: BackupFile) {
+        try? FileManager.default.removeItem(at: backup.url)
+    }
+
+    private static let backupFilenameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter
+    }()
 }

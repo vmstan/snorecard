@@ -34,6 +34,7 @@
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
 		B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */; };
+		BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
 		D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
 		D62F4533A6CF0C93E719D3AE /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
@@ -42,6 +43,7 @@
 		DA60A103DAFC2FF97CEBCF96 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
 		DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
+		E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		EA007307D3AE23AD81FAF0D9 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */; };
 		F14CA12481E8291C2404731A /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC9B5715C49902A1BC2AC38 /* OverviewView.swift */; };
@@ -63,6 +65,7 @@
 		31EE219CD297F228B03E4E9A /* Snorecard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snorecard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3936E5AE9456EE22D83787A3 /* Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Library.swift; sourceTree = "<group>"; };
 		49B7B53E724F0E12B081B827 /* EventDonutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDonutView.swift; sourceTree = "<group>"; };
+		54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupsView.swift; sourceTree = "<group>"; };
 		66C6D04437C93A95643D4FE7 /* snorecard */ = {isa = PBXFileReference; lastKnownFileType = folder; name = snorecard; path = .; sourceTree = SOURCE_ROOT; };
 		6AF56B9E1D066E90C067AE57 /* Snorecard-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Snorecard-iOS.entitlements"; sourceTree = "<group>"; };
 		722D23C564C439409491B429 /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
@@ -172,6 +175,7 @@
 			isa = PBXGroup;
 			children = (
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
+				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
 				FB115042FD0555DF4AFECD0E /* ContentView.swift */,
 				73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */,
 				9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */,
@@ -298,6 +302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */,
+				BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
 				AC510E3F49A711C07D621669 /* ContentView.swift in Sources */,
 				75D5F5B0DB330F4179F9FA48 /* DailySettingsInspector.swift in Sources */,
@@ -323,6 +328,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A654618BFC0E167BFA4B8FF /* AHIHourlyChart.swift in Sources */,
+				E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
 				EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */,

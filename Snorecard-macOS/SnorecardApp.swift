@@ -18,6 +18,7 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
 extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardRebuildStatistics = Notification.Name("Snorecard.RebuildStatistics")
+    static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
 }
 
 @main
@@ -95,6 +96,13 @@ struct SnorecardApp: App {
         }
 
         Divider()
+
+        Button {
+            NotificationCenter.default.post(name: .snorecardShowBackups, object: nil)
+        } label: {
+            Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+        }
+        .disabled(!hasCard)
 
         Button(role: .destructive) {
             NotificationCenter.default.post(name: .snorecardRebuildStatistics, object: nil)
