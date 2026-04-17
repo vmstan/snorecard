@@ -320,10 +320,26 @@ final class Library {
                     if let iCloudURL = await Self.mergeIntoICloud(
                         sourceURL: url,
                         card: structure
-                    ),
-                       let merged = try? SDCardImporter.scanStructure(iCloudURL) {
-                        currentCard = merged
-                        currentURL = iCloudURL
+                    ) {
+                        // Prefetch iCloud's view of this device so
+                        // the re-scan sees every historical day, not
+                        // just the ones we just copied off the SD.
+                        // Critical on iPhone first-run imports where
+                        // iOS hasn't materialized the device folder
+                        // at all yet.
+                        await CloudPrefetcher.prefetchSidecars(in: iCloudURL) { progress in
+                            await MainActor.run {
+                                self?.cloudPrefetchProgress = progress.completed < progress.total
+                                    ? progress
+                                    : nil
+                            }
+                        }
+                        await MainActor.run { self?.cloudPrefetchProgress = nil }
+
+                        if let merged = try? SDCardImporter.scanStructure(iCloudURL) {
+                            currentCard = merged
+                            currentURL = iCloudURL
+                        }
                     }
                 }
 
