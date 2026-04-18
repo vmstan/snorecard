@@ -8,6 +8,7 @@ import SnorecardKit
 extension Notification.Name {
     static let snorecardOpenDailyNotes = Notification.Name("Snorecard.OpenDailyNotes")
     static let snorecardOpenDailySettings = Notification.Name("Snorecard.OpenDailySettings")
+    static let snorecardOpenDeviceNotes = Notification.Name("Snorecard.OpenDeviceNotes")
 }
 
 struct ContentView: View {
@@ -26,8 +27,11 @@ struct ContentView: View {
     /// pane is nil. Matches the Finder Get Info / Mail Viewer
     /// precedent where one inspector swaps content instead of
     /// spawning extra windows.
-    enum InspectorPane { case rename, backups, notes, settings }
+    enum InspectorPane { case rename, backups, notes, deviceNotes, settings }
     @State private var inspectorPane: InspectorPane? = nil
+    #endif
+    #if os(iOS)
+    @State private var isShowingDeviceNotes = false
     #endif
 
     private var otherDevices: [Library.DeviceFolder] {
@@ -94,9 +98,15 @@ struct ContentView: View {
             // Day-level panes are meaningless once the user leaves
             // the day they were looking at, so retract the
             // inspector whenever selection flips away from a day.
+            // Symmetrically, the device-wide journal is only offered
+            // from the Overview, so retract it when the user drills
+            // into a day.
             if case .notes = inspectorPane, case .day = newSelection { return }
             if case .settings = inspectorPane, case .day = newSelection { return }
-            if inspectorPane == .notes || inspectorPane == .settings {
+            if case .deviceNotes = inspectorPane, case .overview = newSelection { return }
+            if inspectorPane == .notes
+                || inspectorPane == .settings
+                || inspectorPane == .deviceNotes {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                 }
@@ -122,6 +132,27 @@ struct ContentView: View {
                     },
                     onClose: { isRenamingDevice = false }
                 )
+            }
+        }
+        .sheet(isPresented: $isShowingDeviceNotes) {
+            NavigationStack {
+                DeviceNotesCard()
+                    .padding(20)
+                    .navigationTitle("Sleep Journal")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton { isShowingDeviceNotes = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .environment(library)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDeviceNotes)) { _ in
+            if library.card != nil {
+                isShowingDeviceNotes = true
             }
         }
         #endif
@@ -176,6 +207,11 @@ struct ContentView: View {
                 toggleInspector(.settings)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDeviceNotes)) { _ in
+            if library.card != nil {
+                toggleInspector(.deviceNotes)
+            }
+        }
         #endif
     }
 
@@ -210,6 +246,15 @@ struct ContentView: View {
         case .notes:
             if let day = library.selectedDay {
                 NotesCard(day: day)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle("Sleep Journal")
+            } else {
+                EmptyView()
+            }
+        case .deviceNotes:
+            if library.card != nil {
+                DeviceNotesCard()
                     .padding(16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .navigationTitle("Sleep Journal")
@@ -376,6 +421,19 @@ struct ContentView: View {
                     )
                 } label: {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
+                }
+                Divider()
+            } else if library.card != nil {
+                // Overview-scoped journal for the whole device —
+                // mirrors the per-night entry but keyed on the
+                // card rather than a single day.
+                Button {
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDeviceNotes,
+                        object: nil
+                    )
+                } label: {
+                    Label("Sleep Journal", systemImage: "note.text")
                 }
                 Divider()
             }

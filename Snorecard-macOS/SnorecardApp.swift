@@ -113,6 +113,13 @@ struct SnorecardApp: App {
         Divider()
 
         Button {
+            NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
+        } label: {
+            Label("Sleep Journal", systemImage: "note.text")
+        }
+        .disabled(!hasCard)
+
+        Button {
             NotificationCenter.default.post(name: .snorecardShowBackups, object: nil)
         } label: {
             Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")

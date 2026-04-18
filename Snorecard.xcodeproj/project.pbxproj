@@ -50,6 +50,8 @@
 		D88A174919214544AD7A4BB6 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3936E5AE9456EE22D83787A3 /* Library.swift */; };
 		DA60A103DAFC2FF97CEBCF96 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
+		DEA000CE000000000000ABC2 /* DeviceNotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA000CE000000000000ABC1 /* DeviceNotesCard.swift */; };
+		DEA000CE000000000000ABC3 /* DeviceNotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA000CE000000000000ABC1 /* DeviceNotesCard.swift */; };
 		DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
 		E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		EA007307D3AE23AD81FAF0D9 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
@@ -70,6 +72,7 @@
 		2F389374600456412824F0F6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardSource.swift; sourceTree = "<group>"; };
 		314A642CE58D016D8A5B1919 /* NotesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesCard.swift; sourceTree = "<group>"; };
+		DEA000CE000000000000ABC1 /* DeviceNotesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNotesCard.swift; sourceTree = "<group>"; };
 		31EE219CD297F228B03E4E9A /* Snorecard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snorecard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3936E5AE9456EE22D83787A3 /* Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Library.swift; sourceTree = "<group>"; };
 		49B7B53E724F0E12B081B827 /* EventDonutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDonutView.swift; sourceTree = "<group>"; };
@@ -198,6 +201,7 @@
 				49B7B53E724F0E12B081B827 /* EventDonutView.swift */,
 				ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */,
 				0F85425A6C4E977C75813A1E /* LoadingView.swift */,
+				DEA000CE000000000000ABC1 /* DeviceNotesCard.swift */,
 				314A642CE58D016D8A5B1919 /* NotesCard.swift */,
 				0CC9B5715C49902A1BC2AC38 /* OverviewView.swift */,
 				E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */,
@@ -333,6 +337,7 @@
 				FCDDCD1E72B5331F4FFE81A3 /* FolderPicker.swift in Sources */,
 				6BE2F7C24C6199A50A408A71 /* Library.swift in Sources */,
 				8047240FC6B1B672F0F3888E /* LoadingView.swift in Sources */,
+				DEA000CE000000000000ABC3 /* DeviceNotesCard.swift in Sources */,
 				DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */,
 				33CC3C1C20A116939A60A0C7 /* OverviewView.swift in Sources */,
 				C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */,
@@ -362,6 +367,7 @@
 				615A9F9CC9633EC81107A811 /* FolderPicker.swift in Sources */,
 				D88A174919214544AD7A4BB6 /* Library.swift in Sources */,
 				27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */,
+				DEA000CE000000000000ABC2 /* DeviceNotesCard.swift in Sources */,
 				DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */,
 				F14CA12481E8291C2404731A /* OverviewView.swift in Sources */,
 				D74609F82E3268E414246D58 /* PlatformColor.swift in Sources */,

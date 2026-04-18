@@ -202,6 +202,34 @@ final class Library {
         }
     }
 
+    // MARK: - Per-device notes
+
+    /// Read the device-wide "overall" note for the currently-loaded
+    /// card, or `nil` when no card is loaded / no note has been
+    /// authored yet. The sidecar lives at the root of the device
+    /// folder (next to `DATALOG/`).
+    func deviceNote() -> DeviceNote? {
+        guard let folder = card?.rootURL else { return nil }
+        return DeviceNotesCache.load(for: folder)
+    }
+
+    /// Persist `text` as the device-wide note for the currently-loaded
+    /// card. A nil or whitespace-only string removes the note
+    /// entirely. Mirrors `setNote(_:for:)` — same blank-means-delete
+    /// cleanup, same `updatedAt` stamping.
+    func setDeviceNote(_ text: String?) {
+        guard let folder = card?.rootURL else { return }
+        let raw = text ?? ""
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DeviceNotesCache.save(nil, to: folder)
+        } else {
+            DeviceNotesCache.save(
+                DeviceNote(text: raw, updatedAt: Date()),
+                to: folder
+            )
+        }
+    }
+
     /// Auto-load data on launch. Tries to re-open the device the user
     /// last actively selected (persisted in iCloud KVS so it follows
     /// the user across Macs and iPhones). Falls back to the most

@@ -90,6 +90,28 @@ struct OverviewView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        #if os(macOS)
+        // Matches the per-night Sleep Journal button in
+        // `DayDetailView`'s toolbar — same glyph, same label —
+        // but this one is scoped to the whole device. Routes
+        // through the shared `.snorecardOpenDeviceNotes`
+        // notification so `ContentView` owns the inspector
+        // state and the third column stays the one surface
+        // hosting accessory views.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDeviceNotes,
+                        object: nil
+                    )
+                } label: {
+                    Label("Sleep Journal", systemImage: "note.text")
+                }
+                .help("Add or edit overall notes for this device")
+            }
+        }
+        #endif
     }
 
     /// Segmented preset picker plus optional custom date-range pickers.
