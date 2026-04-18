@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.43137,0.56471,0.90980,1.00000",
-      "display-p3:0.10588,0.14510,0.32549,1.00000"
+      "display-p3:0.41961,0.12941,0.78824,1.00000",
+      "srgb:0.17647,0.06275,0.39608,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -19,6 +19,9 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "srgb:1.00000,0.83922,0.03922,1.00000"
+          },
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",
           "position" : {
