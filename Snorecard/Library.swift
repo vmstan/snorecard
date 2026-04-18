@@ -1,6 +1,9 @@
 import Foundation
 import SnorecardKit
 import Observation
+import os.log
+
+private let importLog = Logger(subsystem: "com.vmstan.Snorecard", category: "Import")
 
 /// Which section of the sidebar is active. An overview sits above all the days.
 enum SidebarSelection: Hashable, Sendable {
@@ -349,6 +352,23 @@ final class Library {
 
         let source = CardSource.detect(from: url)
         Task.detached { [weak self] in
+            // Re-arm security-scoped access for SD-card imports
+            // inside the detached task. On iOS the URL comes from
+            // UIDocumentPicker and needs an explicit
+            // start/stop pair — the picker's start in the
+            // delegate doesn't always propagate to a detached
+            // task, and without it the merge's
+            // `fm.contentsOfDirectory` throws and the whole
+            // import silently falls back to the SD-only path.
+            // No-op on iCloud URLs (returns false; the defer
+            // skips stop).
+            let didAccess = source == .sdCard
+                ? url.startAccessingSecurityScopedResource()
+                : false
+            defer {
+                if didAccess { url.stopAccessingSecurityScopedResource() }
+            }
+
             // Eagerly download iCloud sidecar placeholders so the
             // scan hits its cache path for every day.
             if source == .iCloud {
@@ -486,12 +506,16 @@ final class Library {
         sourceURL: URL,
         card: ResMedSDCard
     ) async -> URL? {
-        guard let backupRoot = iCloudBackupRoot else { return nil }
+        guard let backupRoot = iCloudBackupRoot else {
+            importLog.error("mergeIntoICloud: iCloud backup root unavailable")
+            return nil
+        }
 
         let fm = FileManager.default
         do {
             try fm.createDirectory(at: backupRoot, withIntermediateDirectories: true)
         } catch {
+            importLog.error("mergeIntoICloud: failed to create backup root: \(String(describing: error), privacy: .public)")
             return nil
         }
 
@@ -499,57 +523,108 @@ final class Library {
             Self.iCloudDeviceFolderName(for: card),
             isDirectory: true
         )
+        importLog.info("mergeIntoICloud: source=\(sourceURL.path, privacy: .public) dest=\(deviceFolder.path, privacy: .public)")
 
-        return await Task.detached(priority: .userInitiated) { () -> URL? in
+        // Inlined into the caller's task — the previous nested
+        // `Task.detached` lost the security-scoped resource
+        // access on iOS, which made every read of `sourceURL`
+        // throw a permission error and the merge silently
+        // returned nil. The outer caller (`Library.load`)
+        // already runs in a detached task, so we don't need a
+        // second one here.
+        let didAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess { sourceURL.stopAccessingSecurityScopedResource() }
+        }
+        importLog.debug("mergeIntoICloud: didAccess=\(didAccess)")
+
+        if !fm.fileExists(atPath: deviceFolder.path) {
             do {
-                if !fm.fileExists(atPath: deviceFolder.path) {
-                    try fm.createDirectory(
-                        at: deviceFolder,
-                        withIntermediateDirectories: true
-                    )
-                }
-
-                let topLevel = try fm.contentsOfDirectory(
-                    at: sourceURL,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
+                try fm.createDirectory(
+                    at: deviceFolder,
+                    withIntermediateDirectories: true
                 )
-
-                for entry in topLevel {
-                    let name = entry.lastPathComponent
-                    let dest = deviceFolder.appendingPathComponent(name)
-
-                    if name == "DATALOG" {
-                        if !fm.fileExists(atPath: dest.path) {
-                            try fm.createDirectory(
-                                at: dest,
-                                withIntermediateDirectories: true
-                            )
-                        }
-                        let dayDirs = (try? fm.contentsOfDirectory(
-                            at: entry,
-                            includingPropertiesForKeys: nil,
-                            options: [.skipsHiddenFiles]
-                        )) ?? []
-                        for dayDir in dayDirs {
-                            let dayDest = dest.appendingPathComponent(dayDir.lastPathComponent)
-                            guard !fm.fileExists(atPath: dayDest.path) else { continue }
-                            try? fm.copyItem(at: dayDir, to: dayDest)
-                        }
-                    } else {
-                        if fm.fileExists(atPath: dest.path) {
-                            try? fm.removeItem(at: dest)
-                        }
-                        try? fm.copyItem(at: entry, to: dest)
-                    }
-                }
-                return deviceFolder
             } catch {
-                // iCloud sync is best-effort; on failure the caller
-                // falls back to showing just the SD card data.
+                importLog.error("mergeIntoICloud: failed to create device folder: \(String(describing: error), privacy: .public)")
                 return nil
             }
-        }.value
+        }
+
+        // SD cards mounted via the Files app on iOS surface through
+        // userfsd / LiveFiles. POSIX enumeration of the volume *root*
+        // (`fm.contentsOfDirectory(at: sourceURL, …)`) fails with
+        // EINVAL on those paths — the mount point itself isn't a
+        // regular directory the file provider will list. Subfolders
+        // built with `appendingPathComponent` (e.g. `DATALOG/`) work
+        // because they hit the file provider's per-item read path,
+        // which is also why `SDCardImporter.scanStructure` succeeds.
+        //
+        // Workaround: skip the root enumeration entirely and probe
+        // for the small, well-known set of top-level entries a ResMed
+        // card writes. Anything missing is silently skipped.
+        let knownTopLevel = [
+            "DATALOG",
+            "STR.edf",
+            "STR.crc",
+            "Identification.tgt",
+            "Identification.crc",
+            "Identification.json",
+            "SETTINGS"
+        ]
+
+        // DATALOG day-folder copy — same logic as before.
+        let datalogSrc = sourceURL.appendingPathComponent("DATALOG", isDirectory: true)
+        let datalogDst = deviceFolder.appendingPathComponent("DATALOG", isDirectory: true)
+        if fm.fileExists(atPath: datalogSrc.path) {
+            if !fm.fileExists(atPath: datalogDst.path) {
+                try? fm.createDirectory(at: datalogDst, withIntermediateDirectories: true)
+            }
+            let dayDirs = (try? fm.contentsOfDirectory(
+                at: datalogSrc,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            importLog.info("mergeIntoICloud: DATALOG has \(dayDirs.count) day folders")
+            var copiedCount = 0
+            var skippedCount = 0
+            for dayDir in dayDirs {
+                let dayDest = datalogDst.appendingPathComponent(dayDir.lastPathComponent)
+                if fm.fileExists(atPath: dayDest.path) {
+                    skippedCount += 1
+                    continue
+                }
+                do {
+                    try fm.copyItem(at: dayDir, to: dayDest)
+                    copiedCount += 1
+                } catch {
+                    importLog.error("mergeIntoICloud: failed to copy \(dayDir.lastPathComponent, privacy: .public): \(String(describing: error), privacy: .public)")
+                }
+            }
+            importLog.info("mergeIntoICloud: DATALOG copied=\(copiedCount) skipped=\(skippedCount)")
+        } else {
+            importLog.error("mergeIntoICloud: DATALOG missing at source")
+            return nil
+        }
+
+        // Top-level non-DATALOG files / folders — overwrite-on-copy so
+        // the latest STR.edf and Identification files supersede what
+        // we already have in iCloud.
+        for name in knownTopLevel where name != "DATALOG" {
+            let src = sourceURL.appendingPathComponent(name)
+            guard fm.fileExists(atPath: src.path) else { continue }
+            let dst = deviceFolder.appendingPathComponent(name)
+            if fm.fileExists(atPath: dst.path) {
+                try? fm.removeItem(at: dst)
+            }
+            do {
+                try fm.copyItem(at: src, to: dst)
+            } catch {
+                importLog.error("mergeIntoICloud: failed to copy \(name, privacy: .public): \(String(describing: error), privacy: .public)")
+            }
+        }
+
+        importLog.info("mergeIntoICloud: success")
+        return deviceFolder
     }
 
     // MARK: - iCloud paths
