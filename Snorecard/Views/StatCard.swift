@@ -42,10 +42,12 @@ struct StatCard: View {
         )
     }
 
-    /// Neutral cards (no meaningful severity) get the same translucent
-    /// plate as before. Tinted cards wash the plate with the severity
-    /// colour — kept low-opacity so a wall of green/amber/red cards
-    /// still feels calm rather than alarming.
+    /// Neutral cards (no meaningful severity) and "good" cards both
+    /// get the same translucent plate — green-tinting every healthy
+    /// metric made the grid feel noisy, so green is now the implicit
+    /// default and only amber/red wash the plate with severity colour.
+    /// The tinted cases stay low-opacity so amber/red cards read as
+    /// attention cues rather than alarms.
     private var backgroundFill: Color {
         if isNeutralTint {
             return Color.primary.opacity(0.05)
@@ -54,7 +56,7 @@ struct StatCard: View {
     }
 
     private var isNeutralTint: Bool {
-        tint == .primary
+        tint == .primary || tint == .severityGood
     }
 
     /// Shared minimum card height so rows in the grid line up regardless of

@@ -337,21 +337,24 @@ struct DayDetailView: View {
         }
     }
 
-    /// Glasgow Index palette — green ≤ 0.2, amber in between, red ≥ 3.0.
+    /// Glasgow Index palette — neutral under 2, amber 2–3, red ≥ 3.
     private func glasgowColor(_ value: Double) -> Color {
         switch value {
-        case ..<0.2: .severityGood
+        case ..<2.0: .severityGood
         case ..<3.0: .severityLow
         default: .severityHigh
         }
     }
 
-    /// Usage palette — red under 4h compliance, amber 4–7h, green ≥ 7h.
+    /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
+    /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
     private func usageColor(_ hours: Double) -> Color {
         switch hours {
         case ..<4: .severityHigh
         case ..<7: .severityLow
-        default: .severityGood
+        case ..<9: .severityGood
+        case ..<10: .severityLow
+        default: .severityHigh
         }
     }
 
