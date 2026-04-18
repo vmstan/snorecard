@@ -376,7 +376,21 @@ struct ContentView: View {
     private var toolbarButtons: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             if !isLoading {
+                #if os(macOS)
+                // macOS: every other library command is reachable
+                // from the File menu, so the toolbar only surfaces
+                // Import SD Card — the one action a user reaches
+                // for often enough to justify a visible button.
+                Button {
+                    openSDCard()
+                } label: {
+                    Label("Import SD Card", systemImage: "sdcard")
+                }
+                .keyboardShortcut("o", modifiers: [.command])
+                .help("Import a ResMed SD card or DATALOG folder")
+                #else
                 optionsMenu
+                #endif
             }
         }
     }
