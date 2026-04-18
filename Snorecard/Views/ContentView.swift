@@ -399,6 +399,20 @@ struct ContentView: View {
     @ViewBuilder
     private var optionsMenu: some View {
         Menu {
+            // Import sits at the top on iOS across every view so
+            // "get more data in" is always the first option the
+            // user reaches for. macOS inherits the same ordering —
+            // there's no reason to differ, and the File menu
+            // carries the primary ⌘O entry anyway.
+            Button {
+                openSDCard()
+            } label: {
+                Label("Import SD Card", systemImage: "sdcard")
+            }
+            #if os(macOS)
+            .keyboardShortcut("o", modifiers: [.command])
+            #endif
+
             #if os(iOS)
             // Day-detail-specific actions piggyback on the
             // shared Options menu when the user is viewing a
@@ -406,6 +420,7 @@ struct ContentView: View {
             // macOS keeps these in the day-detail toolbar
             // proper because there's room for the extra glyphs.
             if isViewingDay {
+                Divider()
                 Button {
                     NotificationCenter.default.post(
                         name: .snorecardOpenDailyNotes,
@@ -422,11 +437,11 @@ struct ContentView: View {
                 } label: {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
                 }
-                Divider()
             } else if library.card != nil {
                 // Overview-scoped journal for the whole device —
                 // mirrors the per-night entry but keyed on the
                 // card rather than a single day.
+                Divider()
                 Button {
                     NotificationCenter.default.post(
                         name: .snorecardOpenDeviceNotes,
@@ -435,28 +450,7 @@ struct ContentView: View {
                 } label: {
                     Label("Sleep Journal", systemImage: "note.text")
                 }
-                Divider()
             }
-            #endif
-
-            if library.card?.identification?.serialNumber != nil {
-                Button {
-                    library.reloadCurrent()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                #if os(macOS)
-                .keyboardShortcut("r", modifiers: [.command])
-                #endif
-            }
-
-            Button {
-                openSDCard()
-            } label: {
-                Label("Import SD Card", systemImage: "sdcard")
-            }
-            #if os(macOS)
-            .keyboardShortcut("o", modifiers: [.command])
             #endif
 
             if library.card?.identification?.serialNumber != nil {
