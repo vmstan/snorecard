@@ -51,7 +51,7 @@ struct SnorecardApp: App {
             if let payload {
                 DetailedStatisticsView(payload: payload)
                     .padding(20)
-                    .frame(minWidth: 460, minHeight: 360)
+                    .frame(minWidth: 460, minHeight: 620)
                     .disableNonCloseWindowButtons()
             }
         }

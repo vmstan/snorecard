@@ -66,8 +66,12 @@ struct BackupsView: View {
                 .navigationTitle("Backup & Restore")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .topBarLeading) {
                         CloseSheetButton { onClose() }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Backup") { runBackup() }
+                            .disabled(library.card == nil || busyMessage != nil)
                     }
                 }
         }
@@ -220,6 +224,7 @@ struct BackupsView: View {
                     .foregroundStyle(.red)
             }
             .buttonStyle(.plain)
+            .padding(.leading, 12)
             .disabled(busyMessage != nil)
             .help("Delete this backup")
         }
@@ -256,26 +261,9 @@ struct BackupsView: View {
         .padding(.vertical, 16)
         .background(.bar)
         #else
-        // iOS: full-width Backup button sitting on a grouped plate,
-        // matching the "Use Default Name" button in RenameDeviceSheet.
-        Button {
-            runBackup()
-        } label: {
-            Text("Backup")
-                .font(.body)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 11)
-                .foregroundStyle((library.card == nil || busyMessage != nil) ? Color.secondary : Color.accentColor)
-        }
-        .buttonStyle(.plain)
-        .background(
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
-        .disabled(library.card == nil || busyMessage != nil)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.bar)
+        // iOS routes the Backup action through the navigation bar
+        // trailing item, so the bottom inset is empty.
+        EmptyView()
         #endif
     }
 
