@@ -59,8 +59,10 @@ struct SnorecardApp: App {
     }
 
     /// Full File-menu command stack — mirrors the in-app Actions
-    /// menu so users who instinctively reach for the menu bar get
-    /// the same surface.
+    /// ellipsis on iOS so users who reach for the menu bar get the
+    /// same surface. Order follows the iOS menu verbatim, with
+    /// Refresh kept at the top because ⌘R is a menu-bar staple the
+    /// iOS surface has no equivalent for (it uses pull-to-refresh).
     @ViewBuilder
     private var fileCommands: some View {
         let hasCard = library.card?.identification?.serialNumber != nil
@@ -68,6 +70,10 @@ struct SnorecardApp: App {
         let otherDevices = Library.iCloudDeviceFolders().filter { folder in
             folder.serial != currentSerial
         }
+        let isViewingDay: Bool = {
+            if case .day = library.selection { return true }
+            return false
+        }()
 
         Button {
             library.reloadCurrent()
@@ -91,6 +97,34 @@ struct SnorecardApp: App {
 
         Divider()
 
+        // Sleep Journal targets whichever scope the user is
+        // currently viewing — the per-night journal from a day,
+        // the device-wide journal from the Overview. Matches the
+        // iOS ellipsis, which swaps the same item between the two
+        // notifications based on `isViewingDay`.
+        Button {
+            NotificationCenter.default.post(
+                name: isViewingDay ? .snorecardOpenDailyNotes : .snorecardOpenDeviceNotes,
+                object: nil
+            )
+        } label: {
+            Label("Sleep Journal", systemImage: "note.text")
+        }
+        .disabled(!hasCard)
+
+        // Therapy Details is day-specific, so the menu entry is
+        // always visible (menu-bar convention: advertise the
+        // command, disable when inapplicable) but only enabled
+        // while a day is selected.
+        Button {
+            NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
+        } label: {
+            Label("Therapy Details", systemImage: "gauge.with.needle")
+        }
+        .disabled(!hasCard || !isViewingDay)
+
+        Divider()
+
         Button {
             NotificationCenter.default.post(name: .snorecardRenameDevice, object: nil)
         } label: {
@@ -111,13 +145,6 @@ struct SnorecardApp: App {
         }
 
         Divider()
-
-        Button {
-            NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
-        } label: {
-            Label("Sleep Journal", systemImage: "note.text")
-        }
-        .disabled(!hasCard)
 
         Button {
             NotificationCenter.default.post(name: .snorecardShowBackups, object: nil)
