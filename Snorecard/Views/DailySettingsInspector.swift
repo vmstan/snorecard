@@ -8,6 +8,7 @@ import SnorecardKit
 /// consistent surface for structured data.
 struct DailySettingsInspector: View {
     let settings: DeviceSettings?
+    @Environment(\.dismiss) private var dismiss
     /// Product name pulled from `Identification.tgt/json`.
     /// Surfaced in the Device section at the top of the sheet so
     /// the reader can see which machine wrote these settings.
@@ -32,6 +33,11 @@ struct DailySettingsInspector: View {
             content
                 .navigationTitle("Therapy Details")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        CloseSheetButton { dismiss() }
+                    }
+                }
         }
         #else
         content

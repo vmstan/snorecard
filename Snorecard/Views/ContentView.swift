@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var isConfirmingRebuild = false
     @State private var isShowingBackups = false
     @State private var knownDevices: [Library.DeviceFolder] = []
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     private var otherDevices: [Library.DeviceFolder] {
         let currentSerial = library.card?.identification?.serialNumber
@@ -63,6 +66,10 @@ struct ContentView: View {
         #if os(macOS)
         .toolbar { toolbarButtons }
         #endif
+        // iOS keeps these as sheets; macOS routes them through
+        // dedicated WindowGroups (see SnorecardApp) so they
+        // open as floating windows with traffic-light controls.
+        #if os(iOS)
         .sheet(isPresented: $isShowingBackups) {
             BackupsView()
                 .environment(library)
@@ -80,6 +87,7 @@ struct ContentView: View {
                 )
             }
         }
+        #endif
         .alert(
             "Rebuild Statistics?",
             isPresented: $isConfirmingRebuild
@@ -102,13 +110,11 @@ struct ContentView: View {
             knownDevices = Library.iCloudDeviceFolders()
         }
         #if os(macOS)
-        // Bridges from the macOS File menu — keeps the menu
-        // declarations in `SnorecardApp` flat by letting this view
-        // own the sheet/dialog toggles.
+        // Bridges from the macOS File menu and Options menu —
+        // sheets become standalone windows on macOS so they
+        // can show traffic-light controls.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRenameDevice)) { _ in
-            if library.card?.identification?.serialNumber != nil {
-                isRenamingDevice = true
-            }
+            openRenameWindow()
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildStatistics)) { _ in
             if library.card?.identification?.serialNumber != nil {
@@ -117,11 +123,30 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
             if library.card?.identification?.serialNumber != nil {
-                isShowingBackups = true
+                openWindow(id: "backups")
             }
         }
         #endif
     }
+
+    #if os(macOS)
+    /// Build the Rename Device payload from the currently
+    /// loaded card and open the window. Bails when no device
+    /// is loaded — the menu items are already disabled in
+    /// that state, but the notification path could still fire.
+    private func openRenameWindow() {
+        guard
+            let card = library.card,
+            let serial = card.identification?.serialNumber
+        else { return }
+        let payload = RenameDeviceWindowPayload(
+            serial: serial,
+            defaultName: card.identification?.productName ?? "ResMed Device",
+            currentOverride: library.deviceNameOverrides[serial]
+        )
+        openWindow(value: payload)
+    }
+    #endif
 
     private var isLoading: Bool {
         if case .loading = library.state { return true }
@@ -251,7 +276,11 @@ struct ContentView: View {
             if library.card?.identification?.serialNumber != nil {
                 Divider()
                 Button {
+                    #if os(macOS)
+                    openRenameWindow()
+                    #else
                     isRenamingDevice = true
+                    #endif
                 } label: {
                     Label("Rename Device", systemImage: "pencil")
                 }
@@ -269,7 +298,11 @@ struct ContentView: View {
 
                 Divider()
                 Button {
+                    #if os(macOS)
+                    openWindow(id: "backups")
+                    #else
                     isShowingBackups = true
+                    #endif
                 } label: {
                     Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
                 }

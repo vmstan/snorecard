@@ -13,9 +13,11 @@
 		1A890808947AEFF17CE27908 /* StatCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86917F47386EB72167DE2A0F /* StatCard.swift */; };
 		1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */; };
+		212BC53294F451B0D0EF5EA7 /* WindowControlAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */; };
 		27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F85425A6C4E977C75813A1E /* LoadingView.swift */; };
 		2BAA884B6AD33FB08FBB46D4 /* SnorecardKit in Frameworks */ = {isa = PBXBuildFile; productRef = DDDC85A59813C7B5309429E2 /* SnorecardKit */; };
 		2EAAE8503F4E3A1DC7AA1C2D /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722D23C564C439409491B429 /* SnorecardApp.swift */; };
+		2FEF3ECFC13C2E82F8943ECB /* WindowControlAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */; };
 		3014163F65DDE7F94A111788 /* EventDonutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B7B53E724F0E12B081B827 /* EventDonutView.swift */; };
 		33CC3C1C20A116939A60A0C7 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC9B5715C49902A1BC2AC38 /* OverviewView.swift */; };
 		3B2BC9F64A3B10FB028B88D4 /* Snorecard.icon in Resources */ = {isa = PBXBuildFile; fileRef = B7D3A08725D70B6A35104190 /* Snorecard.icon */; };
@@ -35,11 +37,13 @@
 		852AD2F79A37CA1FA67A8B25 /* Snorecard.icon in Resources */ = {isa = PBXBuildFile; fileRef = B7D3A08725D70B6A35104190 /* Snorecard.icon */; };
 		91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
+		95F01DA5C16C4F67CCF2A2E5 /* CloseSheetButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */; };
 		A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
 		B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */; };
 		BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
+		CA995AF314F2C4148C56F4D0 /* CloseSheetButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */; };
 		D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
 		D62F4533A6CF0C93E719D3AE /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
 		D74609F82E3268E414246D58 /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
@@ -75,11 +79,13 @@
 		722D23C564C439409491B429 /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
 		73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySettingsInspector.swift; sourceTree = "<group>"; };
 		755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AHIHourlyChart.swift; sourceTree = "<group>"; };
+		7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowControlAccessor.swift; sourceTree = "<group>"; };
 		86917F47386EB72167DE2A0F /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayDetailView.swift; sourceTree = "<group>"; };
 		ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		B7D3A08725D70B6A35104190 /* Snorecard.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Snorecard.icon; sourceTree = "<group>"; };
+		CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseSheetButton.swift; sourceTree = "<group>"; };
 		D2AF636BF6337EA599258DBC /* Snorecard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Snorecard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
 		E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineView.swift; sourceTree = "<group>"; };
@@ -183,6 +189,7 @@
 			children = (
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
 				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
+				CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */,
 				FB115042FD0555DF4AFECD0E /* ContentView.swift */,
 				73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */,
 				F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */,
@@ -196,6 +203,7 @@
 				E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */,
 				86917F47386EB72167DE2A0F /* StatCard.swift */,
 				0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */,
+				7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -314,6 +322,7 @@
 				1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */,
 				BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
+				CA995AF314F2C4148C56F4D0 /* CloseSheetButton.swift in Sources */,
 				AC510E3F49A711C07D621669 /* ContentView.swift in Sources */,
 				75D5F5B0DB330F4179F9FA48 /* DailySettingsInspector.swift in Sources */,
 				A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */,
@@ -331,6 +340,7 @@
 				B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */,
 				8088C122E1E00BB6138F5C98 /* StatCard.swift in Sources */,
 				5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */,
+				212BC53294F451B0D0EF5EA7 /* WindowControlAccessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -341,6 +351,7 @@
 				7A654618BFC0E167BFA4B8FF /* AHIHourlyChart.swift in Sources */,
 				E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
+				95F01DA5C16C4F67CCF2A2E5 /* CloseSheetButton.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
 				EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */,
 				7A9E9C118220CCFF77B186AC /* DailySignalSummaryTable.swift in Sources */,
@@ -358,6 +369,7 @@
 				2EAAE8503F4E3A1DC7AA1C2D /* SnorecardApp.swift in Sources */,
 				1A890808947AEFF17CE27908 /* StatCard.swift in Sources */,
 				5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */,
+				2FEF3ECFC13C2E82F8943ECB /* WindowControlAccessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

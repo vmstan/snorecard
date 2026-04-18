@@ -47,7 +47,7 @@ struct NotesCard: View {
                     Button {
                         text = ""
                     } label: {
-                        Label("Clear", systemImage: "xmark.circle.fill")
+                        Label("Clear", systemImage: "eraser")
                             .labelStyle(.iconOnly)
                             .font(.body)
                             .foregroundStyle(.secondary)

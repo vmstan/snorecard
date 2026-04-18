@@ -28,6 +28,11 @@ struct BackupsView: View {
                 .navigationTitle("Backup & Restore")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        CloseSheetButton { dismiss() }
+                    }
+                }
                 #endif
         }
         #if os(macOS)
@@ -98,7 +103,6 @@ struct BackupsView: View {
                 } label: {
                     Label("Backup", systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.borderedProminent)
                 .disabled(library.card == nil)
             }
         } else {
@@ -133,39 +137,52 @@ struct BackupsView: View {
                 // drag indicator for dismissal) on the trailing
                 // edge so both primary actions sit on the same
                 // row instead of stacking vertically.
-                Divider()
-                    .padding(.top, 10)
                 HStack {
                     #if os(macOS)
-                    // macOS keeps Back Up Now on the leading edge
-                    // and Done on the trailing edge, matching the
-                    // platform convention for sheet action bars.
-                    Button {
-                        runBackup()
-                    } label: {
-                        Label("Backup", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(library.card == nil)
+                    // The Backup window has Spotlight-style
+                    // traffic-light controls — the red close
+                    // button handles dismiss, so Done is
+                    // redundant. Backup sits on the trailing
+                    // edge as the sole confirmation action.
                     Spacer()
-                    Button("Done") { dismiss() }
+                    Button("Backup") { runBackup() }
                         .keyboardShortcut(.defaultAction)
+                        .disabled(library.card == nil)
                     #else
-                    // iOS centers the single action — the drag
-                    // indicator already handles dismissal so no
-                    // Done button competes for space.
-                    Spacer()
+                    // iOS styles Backup as a full-width, plain
+                    // text button on a `secondarySystemGrouped`
+                    // plate — matches the look of the "Use
+                    // Default Name" Form Section button on the
+                    // Rename Device sheet without needing to
+                    // rebuild the whole panel as a Form.
                     Button {
                         runBackup()
                     } label: {
-                        Label("Backup", systemImage: "square.and.arrow.down")
+                        Text("Backup")
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 11)
+                            .foregroundStyle(library.card == nil ? Color.secondary : Color.accentColor)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.plain)
+                    .background(
+                        Color(uiColor: .secondarySystemGroupedBackground),
+                        // 12pt matches iOS's `.buttonStyle(.bordered)`
+                        // and the bordered Restore button on each
+                        // backup row, so the action surfaces in the
+                        // sheet read as one consistent set.
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
                     .disabled(library.card == nil)
-                    Spacer()
                     #endif
                 }
-                .padding(12)
+                #if os(macOS)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                #else
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                #endif
             }
         }
     }

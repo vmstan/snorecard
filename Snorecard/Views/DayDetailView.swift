@@ -124,8 +124,8 @@ struct DayDetailView: View {
                     .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { isShowingNotes = false }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton { isShowingNotes = false }
                         }
                     }
             }

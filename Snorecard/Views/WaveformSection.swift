@@ -1435,9 +1435,13 @@ extension View {
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
-                    // Plain tap drops the probe at the tap point —
-                    // cheap, doesn't capture the touch long enough
-                    // for the system to interpret it as a nav swipe.
+                    // Tap-only — drag-scrubbing per chart was
+                    // claiming the touch on iOS even with the
+                    // horizontal-dominance bail-out, blocking
+                    // the parent ScrollView from handling
+                    // vertical scroll. Users still get continuous
+                    // scrubbing via the SessionTimelineView
+                    // strip at the top of the section.
                     .onTapGesture { location in
                         updateProbe(
                             atScreenX: location.x,
@@ -1446,28 +1450,6 @@ extension View {
                             binding: hoverBinding
                         )
                     }
-                    // Horizontal drag scrubs the probe in real time.
-                    // `.simultaneousGesture` runs alongside the
-                    // enclosing ScrollView and NavigationStack
-                    // gestures so vertical scroll and edge-swipe
-                    // back still work. The gesture only updates
-                    // when the drag is more horizontal than
-                    // vertical — otherwise we bail out and let the
-                    // ScrollView handle the vertical pan.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 6)
-                            .onChanged { value in
-                                let dx = abs(value.translation.width)
-                                let dy = abs(value.translation.height)
-                                guard dx > dy else { return }
-                                updateProbe(
-                                    atScreenX: value.location.x,
-                                    proxy: proxy,
-                                    geo: geo,
-                                    binding: hoverBinding
-                                )
-                            }
-                    )
             }
         }
     }

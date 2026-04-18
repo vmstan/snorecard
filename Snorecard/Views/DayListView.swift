@@ -370,42 +370,63 @@ struct RenameDeviceSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    nameField
-                } header: {
-                    Text("Name")
-                } footer: {
-                    Text("Shown in the sidebar. Syncs between your devices via iCloud.")
-                }
-
-                Section {
-                    LabeledContent("Device", value: defaultName)
-                    LabeledContent("Serial") {
-                        Text(serial).monospaced()
-                    }
-                } header: {
-                    Text("Device")
-                }
-
-                if currentOverride != nil {
+            VStack(spacing: 0) {
+                Form {
                     Section {
-                        Button("Use Default Name", role: .destructive) {
-                            onSave(nil)
-                            dismiss()
+                        nameField
+                    } header: {
+                        Text("Name")
+                    } footer: {
+                        Text("Shown in the sidebar. Syncs between your devices via iCloud.")
+                    }
+
+                    Section {
+                        LabeledContent("Device", value: defaultName)
+                        LabeledContent("Serial") {
+                            Text(serial).monospaced()
+                        }
+                    } header: {
+                        Text("Device")
+                    }
+
+                    if currentOverride != nil {
+                        Section {
+                            Button("Use Default Name", role: .destructive) {
+                                onSave(nil)
+                                dismiss()
+                            }
                         }
                     }
                 }
+                .formStyle(.grouped)
+
+                #if os(macOS)
+                // macOS pulls Cancel + Save into a bottom action
+                // bar matching BackupsView's pattern — keeps both
+                // sheets visually consistent. No divider above
+                // the bar; the form's section spacing already
+                // separates the buttons from the last row.
+                HStack {
+                    Button("Cancel") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button("Save", action: save)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                #endif
             }
-            .formStyle(.grouped)
             .navigationTitle("Rename Device")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+                // iOS keeps the standard sheet pattern: X close
+                // on the leading edge, Save as the trailing
+                // confirmation action.
+                ToolbarItem(placement: .topBarLeading) {
+                    CloseSheetButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
@@ -413,6 +434,7 @@ struct RenameDeviceSheet: View {
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            #endif
         }
         #if os(macOS)
         .frame(minWidth: 380, minHeight: 320)
