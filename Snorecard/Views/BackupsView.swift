@@ -1,81 +1,130 @@
 import SwiftUI
 import SnorecardKit
 
-/// Restore-from-backup sheet / inspector. Lists every archive in
+/// Restore-from-backup inspector / sheet. Lists every archive in
 /// iCloud's `Backups/` folder that matches the currently-loaded
 /// device serial, newest first, with a restore and a delete
-/// action per row. Also surfaces a "Back Up Now" button so the
-/// user can stack up a fresh archive from the same surface.
+/// action per row, plus a "Back Up Now" action in the footer bar.
+///
+/// The macOS layout mirrors `RenameDeviceSheet` and
+/// `DailySettingsInspector` on purpose: a grouped `Form` for the
+/// content, a bottom action bar pulled in via `.safeAreaInset`,
+/// and no `.alert` or `.task` modifiers on the root. The shared
+/// third-column inspector crashes during its collapse/expand
+/// animation if the hosted view mutates state or vends toolbar
+/// preferences while the split view is still animating, so the
+/// structure here avoids both: the backup list is loaded from a
+/// `DispatchQueue.main.async` hop inside `.onAppear` (pushing the
+/// state update to the next runloop pass, after layout settles)
+/// and destructive confirmations use a single consolidated
+/// confirmation dialog attached inside the Form rather than three
+/// root-level alerts.
 struct BackupsView: View {
     @Environment(Library.self) private var library
-    @Environment(\.dismiss) private var dismiss
+    /// Explicit close callback. `@Environment(\.dismiss)` would
+    /// target the host window when this view is hosted inside
+    /// the macOS inspector, which would quit the app instead of
+    /// collapsing the inspector column.
+    let onClose: () -> Void
 
     @State private var backups: [Library.BackupFile] = []
-    /// Which backup the user has asked to restore — drives the
-    /// confirmation alert.
-    @State private var restoreTarget: Library.BackupFile?
-    /// Which backup the user has asked to delete — drives the
-    /// delete confirmation.
-    @State private var deleteTarget: Library.BackupFile?
+    @State private var pendingConfirmation: PendingConfirmation?
     /// Set while a backup create / restore is in-flight so we can
     /// show progress and disable the other actions.
     @State private var busyMessage: String?
     @State private var errorMessage: String?
+    /// Flips to `true` once the initial `reloadList()` has run.
+    /// Until then the Backups section renders a placeholder row
+    /// instead of the empty-state text so the view body has the
+    /// same shape on first layout as it does after backups load —
+    /// that stability matters because the inspector's collapse
+    /// animation crashes if the hosted view's preference graph
+    /// reshapes mid-animation.
+    @State private var didLoad = false
+
+    /// Sum type for the confirmation dialog so we only attach one
+    /// `.confirmationDialog` modifier to the Form instead of three
+    /// separate root-level `.alert`s. Fewer modifiers means fewer
+    /// preferences flowing up to the window during the inspector
+    /// animation.
+    private enum PendingConfirmation: Identifiable {
+        case restore(Library.BackupFile)
+        case delete(Library.BackupFile)
+
+        var id: String {
+            switch self {
+            case .restore(let b): return "restore-\(b.id)"
+            case .delete(let b): return "delete-\(b.id)"
+            }
+        }
+    }
 
     var body: some View {
+        #if os(iOS)
         NavigationStack {
-            content
+            formBody
                 .navigationTitle("Backup & Restore")
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        CloseSheetButton { dismiss() }
+                        CloseSheetButton { onClose() }
                     }
                 }
-                #endif
         }
-        #if os(macOS)
-        .frame(minWidth: 440, minHeight: 360)
-        #else
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        #else
+        // macOS hosts this in the shared inspector column. No
+        // `NavigationStack` wrapper — its toolbar bridge conflicts
+        // with the root `NavigationSplitView`'s toolbar during the
+        // inspector collapse/expand animation. Matches the plain
+        // `.navigationTitle` pattern `RenameDeviceSheet` and
+        // `DailySettingsInspector` already use in the same column.
+        formBody
+            .navigationTitle("Backup & Restore")
         #endif
-        .task { reloadList() }
-        .alert(
-            "Restore from Backup?",
-            isPresented: Binding(
-                get: { restoreTarget != nil },
-                set: { if !$0 { restoreTarget = nil } }
-            ),
-            presenting: restoreTarget
-        ) { backup in
-            Button("Cancel", role: .cancel) { }
-            Button("Restore", role: .destructive) {
-                runRestore(backup)
-            }
-        } message: { backup in
-            Text("""
-            This will replace the current data for this device with the contents of the backup from \(backup.createdAt, format: .dateTime.year().month().day().hour().minute()).
+    }
 
-            The current version is moved aside during the swap and discarded once the restore completes successfully.
-            """)
-        }
-        .alert(
-            "Delete Backup?",
-            isPresented: Binding(
-                get: { deleteTarget != nil },
-                set: { if !$0 { deleteTarget = nil } }
-            ),
-            presenting: deleteTarget
-        ) { backup in
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                library.deleteBackup(backup)
-                reloadList()
+    // MARK: - Form body
+
+    @ViewBuilder
+    private var formBody: some View {
+        Form {
+            if let busyMessage {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(busyMessage)
+                        Spacer()
+                        Text("Keep the app open")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-        } message: { backup in
-            Text("Permanently remove the archive from \(backup.createdAt, format: .dateTime.year().month().day().hour().minute()) from iCloud.")
+
+            backupsSection
+
+            Section {
+                EmptyView()
+            } footer: {
+                Text("Backups live in iCloud Drive → Snorecard → Backups and are accessible to every device signed in to this account.")
+            }
+        }
+        .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            actionBar
+        }
+        .confirmationDialog(
+            confirmationTitle,
+            isPresented: confirmationBinding,
+            titleVisibility: .visible,
+            presenting: pendingConfirmation
+        ) { pending in
+            confirmationButtons(for: pending)
+        } message: { pending in
+            Text(confirmationMessage(for: pending))
         }
         .alert(
             "Something went wrong",
@@ -88,102 +137,54 @@ struct BackupsView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .onAppear {
+            // Defer the state mutation by one runloop pass so the
+            // initial inspector open animation (which drives the
+            // `NSSplitViewItem setCollapsed:` → toolbar-bridge
+            // update path) completes before `backups` changes and
+            // reshapes the view's preference graph. Mutating
+            // synchronously in `.task` / `.onAppear` was crashing
+            // inside `_postWindowNeedsUpdateConstraints`.
+            DispatchQueue.main.async {
+                reloadList()
+                didLoad = true
+            }
+        }
     }
 
+    // MARK: - Backups section
+
     @ViewBuilder
-    private var content: some View {
-        if backups.isEmpty && busyMessage == nil {
-            ContentUnavailableView {
-                Label("No Backups Yet", systemImage: "externaldrive.badge.plus")
-            } description: {
-                Text("Snapshots are stored in iCloud Drive under Snorecard → Backups and are accessible to every device signed in to this account.")
-            } actions: {
-                Button {
-                    runBackup()
-                } label: {
-                    Label("Backup", systemImage: "square.and.arrow.down")
-                }
-                .disabled(library.card == nil)
-            }
-        } else {
-            VStack(spacing: 0) {
-                if let busyMessage {
-                    busyChip(message: busyMessage)
-                }
-                List {
-                    ForEach(backups) { backup in
-                        row(for: backup)
-                    }
-                }
-                #if os(macOS)
-                .listStyle(.inset)
-                #endif
-
-                Text("Backups live in iCloud Drive → Snorecard → Backups and are accessible to every device signed in to this account.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    #if os(iOS)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    #else
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    #endif
-                    .padding(.horizontal, 14)
-                    .padding(.top, 6)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Persistent action footer. Back Up Now sits on
-                // the leading edge; Done (macOS only — iOS gets a
-                // drag indicator for dismissal) on the trailing
-                // edge so both primary actions sit on the same
-                // row instead of stacking vertically.
-                HStack {
-                    #if os(macOS)
-                    // The Backup window has Spotlight-style
-                    // traffic-light controls — the red close
-                    // button handles dismiss, so Done is
-                    // redundant. Backup sits on the trailing
-                    // edge as the sole confirmation action.
+    private var backupsSection: some View {
+        Section {
+            if !didLoad {
+                // Placeholder row — keeps the Section non-empty on
+                // the very first layout so the Form's preference
+                // graph doesn't reshape when the real rows arrive
+                // on the next runloop pass.
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading backups…")
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Backup") { runBackup() }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(library.card == nil)
-                    #else
-                    // iOS styles Backup as a full-width, plain
-                    // text button on a `secondarySystemGrouped`
-                    // plate — matches the look of the "Use
-                    // Default Name" Form Section button on the
-                    // Rename Device sheet without needing to
-                    // rebuild the whole panel as a Form.
-                    Button {
-                        runBackup()
-                    } label: {
-                        Text("Backup")
-                            .font(.body)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 11)
-                            .foregroundStyle(library.card == nil ? Color.secondary : Color.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        Color(uiColor: .secondarySystemGroupedBackground),
-                        // 12pt matches iOS's `.buttonStyle(.bordered)`
-                        // and the bordered Restore button on each
-                        // backup row, so the action surfaces in the
-                        // sheet read as one consistent set.
-                        in: RoundedRectangle(cornerRadius: 12)
-                    )
-                    .disabled(library.card == nil)
-                    #endif
                 }
-                #if os(macOS)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                #else
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                #endif
+            } else if backups.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("No Backups Yet", systemImage: "externaldrive.badge.plus")
+                        .font(.body)
+                    Text("Snapshots are stored in iCloud Drive under Snorecard → Backups and are accessible to every device signed in to this account.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } else {
+                ForEach(backups) { backup in
+                    row(for: backup)
+                }
             }
+        } header: {
+            Text("Available Backups")
         }
     }
 
@@ -203,21 +204,17 @@ struct BackupsView: View {
             }
             Spacer()
             Button {
-                restoreTarget = backup
+                pendingConfirmation = .restore(backup)
             } label: {
-                Label("Restore", systemImage: "arrow.uturn.backward.circle")
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .foregroundStyle(Color.accentColor)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .disabled(busyMessage != nil)
+            .help("Restore this backup")
 
-            // Direct trash button replaces the swipe-to-delete
-            // gesture — stays put instead of shoving the Restore
-            // button offscreen when interacted with. Still goes
-            // through the `deleteTarget` alert for confirmation
-            // so an accidental tap can't permanently remove the
-            // archive.
             Button(role: .destructive) {
-                deleteTarget = backup
+                pendingConfirmation = .delete(backup)
             } label: {
                 Image(systemName: "trash")
                     .foregroundStyle(.red)
@@ -228,37 +225,106 @@ struct BackupsView: View {
         }
         .contextMenu {
             Button(role: .destructive) {
-                deleteTarget = backup
+                pendingConfirmation = .delete(backup)
             } label: {
                 Label("Delete Backup", systemImage: "trash")
             }
         }
     }
 
-    /// Inline progress chip that lives at the top of the list
-    /// while a backup or restore is in flight. Stays out of the
-    /// way of the existing rows so the user can see the
-    /// new entry land the moment the chip disappears — that
-    /// transition is the "done" signal.
+    // MARK: - Action bar
+
     @ViewBuilder
-    private func busyChip(message: String) -> some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.primary)
+    private var actionBar: some View {
+        #if os(macOS)
+        // macOS bar mirrors `RenameDeviceSheet` — close button on
+        // the leading edge routes through `onClose` (not
+        // `dismiss()`, which would target the host window), and
+        // Backup on the trailing edge is the default-action
+        // confirmation button.
+        HStack {
+            Button("Cancel") { onClose() }
+                .keyboardShortcut(.cancelAction)
             Spacer()
-            Text("Keep the app open")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Button("Backup") { runBackup() }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .tint(.accentColor)
+                .disabled(library.card == nil || busyMessage != nil)
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.accentColor.opacity(0.12))
-        .overlay(alignment: .bottom) {
-            Divider()
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(.bar)
+        #else
+        // iOS: full-width Backup button sitting on a grouped plate,
+        // matching the "Use Default Name" button in RenameDeviceSheet.
+        Button {
+            runBackup()
+        } label: {
+            Text("Backup")
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 11)
+                .foregroundStyle((library.card == nil || busyMessage != nil) ? Color.secondary : Color.accentColor)
+        }
+        .buttonStyle(.plain)
+        .background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .disabled(library.card == nil || busyMessage != nil)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.bar)
+        #endif
+    }
+
+    // MARK: - Confirmation dialog plumbing
+
+    private var confirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingConfirmation != nil },
+            set: { if !$0 { pendingConfirmation = nil } }
+        )
+    }
+
+    private var confirmationTitle: String {
+        switch pendingConfirmation {
+        case .restore: return "Restore from Backup?"
+        case .delete:  return "Delete Backup?"
+        case .none:    return ""
+        }
+    }
+
+    private func confirmationMessage(for pending: PendingConfirmation) -> String {
+        switch pending {
+        case .restore(let backup):
+            let stamp = backup.createdAt.formatted(.dateTime.year().month().day().hour().minute())
+            return """
+            This will replace the current data for this device with the contents of the backup from \(stamp).
+
+            The current version is moved aside during the swap and discarded once the restore completes successfully.
+            """
+        case .delete(let backup):
+            let stamp = backup.createdAt.formatted(.dateTime.year().month().day().hour().minute())
+            return "Permanently remove the archive from \(stamp) from iCloud."
+        }
+    }
+
+    @ViewBuilder
+    private func confirmationButtons(for pending: PendingConfirmation) -> some View {
+        switch pending {
+        case .restore(let backup):
+            Button("Restore", role: .destructive) {
+                runRestore(backup)
+            }
+            Button("Cancel", role: .cancel) { }
+        case .delete(let backup):
+            Button("Delete", role: .destructive) {
+                library.deleteBackup(backup)
+                reloadList()
+            }
+            Button("Cancel", role: .cancel) { }
         }
     }
 
@@ -283,7 +349,7 @@ struct BackupsView: View {
             defer { withAnimation { busyMessage = nil } }
             do {
                 try await library.restoreBackup(backup)
-                dismiss()
+                onClose()
             } catch {
                 errorMessage = String(describing: error)
             }

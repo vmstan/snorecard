@@ -351,97 +351,115 @@ struct RenameDeviceSheet: View {
     let defaultName: String
     let currentOverride: String?
     let onSave: (String?) -> Void
+    /// Explicit close callback supplied by the caller — we avoid
+    /// `@Environment(\.dismiss)` because the shared macOS
+    /// inspector attaches to the root `NavigationSplitView`, and
+    /// `dismiss` in that hierarchy resolves to the window, which
+    /// would close the main window (and quit the app) instead of
+    /// collapsing the inspector column.
+    let onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var name: String
 
     init(
         serial: String,
         defaultName: String,
         currentOverride: String?,
-        onSave: @escaping (String?) -> Void
+        onSave: @escaping (String?) -> Void,
+        onClose: @escaping () -> Void
     ) {
         self.serial = serial
         self.defaultName = defaultName
         self.currentOverride = currentOverride
         self.onSave = onSave
+        self.onClose = onClose
         self._name = State(initialValue: currentOverride ?? "")
     }
 
     var body: some View {
+        #if os(iOS)
         NavigationStack {
-            VStack(spacing: 0) {
-                Form {
-                    Section {
-                        nameField
-                    } header: {
-                        Text("Name")
-                    } footer: {
-                        Text("Shown in the sidebar. Syncs between your devices via iCloud.")
+            formBody
+                .navigationTitle("Rename Device")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    // iOS keeps the standard sheet pattern: X close
+                    // on the leading edge, Save as the trailing
+                    // confirmation action.
+                    ToolbarItem(placement: .topBarLeading) {
+                        CloseSheetButton { onClose() }
                     }
-
-                    Section {
-                        LabeledContent("Device", value: defaultName)
-                        LabeledContent("Serial") {
-                            Text(serial).monospaced()
-                        }
-                    } header: {
-                        Text("Device")
-                    }
-
-                    if currentOverride != nil {
-                        Section {
-                            Button("Use Default Name", role: .destructive) {
-                                onSave(nil)
-                                dismiss()
-                            }
-                        }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save", action: save)
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
-                .formStyle(.grouped)
-
-                #if os(macOS)
-                // macOS pulls Cancel + Save into a bottom action
-                // bar matching BackupsView's pattern — keeps both
-                // sheets visually consistent. No divider above
-                // the bar; the form's section spacing already
-                // separates the buttons from the last row.
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button("Save", action: save)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                #endif
-            }
-            .navigationTitle("Rename Device")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // iOS keeps the standard sheet pattern: X close
-                // on the leading edge, Save as the trailing
-                // confirmation action.
-                ToolbarItem(placement: .topBarLeading) {
-                    CloseSheetButton { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            #endif
         }
-        #if os(macOS)
-        .frame(minWidth: 380, minHeight: 320)
-        #else
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        #else
+        // macOS hosts this in the shared inspector column. A
+        // NavigationStack wrapper would cause `dismiss()` to
+        // target the stack instead of the inspector and crash
+        // once the owning state mutates, so we skip it and rely
+        // on `.navigationTitle` bubbling up to the column's
+        // chrome — matching `DailySettingsInspector`.
+        formBody
+            .navigationTitle("Rename Device")
         #endif
+    }
+
+    @ViewBuilder
+    private var formBody: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    nameField
+                } header: {
+                    Text("Name")
+                } footer: {
+                    Text("Shown in the sidebar. Syncs between your devices via iCloud.")
+                }
+
+                Section {
+                    LabeledContent("Device", value: defaultName)
+                    LabeledContent("Serial") {
+                        Text(serial).monospaced()
+                    }
+                } header: {
+                    Text("Device")
+                }
+
+                if currentOverride != nil {
+                    Section {
+                        Button("Use Default Name", role: .destructive) {
+                            onSave(nil)
+                            onClose()
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            #if os(macOS)
+            // macOS pulls Cancel + Save into a bottom action
+            // bar matching BackupsView's pattern — keeps both
+            // surfaces visually consistent. No divider above
+            // the bar; the form's section spacing already
+            // separates the buttons from the last row.
+            HStack {
+                Button("Cancel") { onClose() }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            #endif
+        }
     }
 
     @ViewBuilder
@@ -461,6 +479,6 @@ struct RenameDeviceSheet: View {
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(trimmed.isEmpty ? nil : trimmed)
-        dismiss()
+        onClose()
     }
 }

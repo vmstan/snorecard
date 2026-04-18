@@ -16,8 +16,18 @@ struct ContentView: View {
     @State private var isConfirmingRebuild = false
     @State private var isShowingBackups = false
     @State private var knownDevices: [Library.DeviceFolder] = []
+
     #if os(macOS)
-    @Environment(\.openWindow) private var openWindow
+    /// Which pane the shared macOS inspector is currently showing.
+    /// A single third column hosts all library- and day-level
+    /// accessory views (rename, backups, sleep journal, therapy
+    /// details) so they behave consistently — opening one replaces
+    /// whatever was there, and the column slides out when the
+    /// pane is nil. Matches the Finder Get Info / Mail Viewer
+    /// precedent where one inspector swaps content instead of
+    /// spawning extra windows.
+    enum InspectorPane { case rename, backups, notes, settings }
+    @State private var inspectorPane: InspectorPane? = nil
     #endif
 
     private var otherDevices: [Library.DeviceFolder] {
@@ -65,13 +75,39 @@ struct ContentView: View {
         }
         #if os(macOS)
         .toolbar { toolbarButtons }
+        .inspector(isPresented: Binding(
+            get: { inspectorPane != nil },
+            set: { shown in
+                if !shown {
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = nil
+                    }
+                }
+            }
+        )) {
+            inspectorContent
+                .id(inspectorPane)
+                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+        }
+        .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
+        .onChange(of: library.selection) { _, newSelection in
+            // Day-level panes are meaningless once the user leaves
+            // the day they were looking at, so retract the
+            // inspector whenever selection flips away from a day.
+            if case .notes = inspectorPane, case .day = newSelection { return }
+            if case .settings = inspectorPane, case .day = newSelection { return }
+            if inspectorPane == .notes || inspectorPane == .settings {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                }
+            }
+        }
         #endif
-        // iOS keeps these as sheets; macOS routes them through
-        // dedicated WindowGroups (see SnorecardApp) so they
-        // open as floating windows with traffic-light controls.
+        // iOS keeps these as sheets; macOS routes them through the
+        // shared inspector column declared above.
         #if os(iOS)
         .sheet(isPresented: $isShowingBackups) {
-            BackupsView()
+            BackupsView(onClose: { isShowingBackups = false })
                 .environment(library)
         }
         .sheet(isPresented: $isRenamingDevice) {
@@ -83,7 +119,8 @@ struct ContentView: View {
                     currentOverride: library.deviceNameOverrides[serial],
                     onSave: { newName in
                         library.setDeviceName(newName, for: serial)
-                    }
+                    },
+                    onClose: { isRenamingDevice = false }
                 )
             }
         }
@@ -110,11 +147,14 @@ struct ContentView: View {
             knownDevices = Library.iCloudDeviceFolders()
         }
         #if os(macOS)
-        // Bridges from the macOS File menu and Options menu —
-        // sheets become standalone windows on macOS so they
-        // can show traffic-light controls.
+        // Bridges from the macOS File menu, Options menu, and the
+        // day-detail toolbar. All routes funnel into the same
+        // inspector state so the third column is the one surface
+        // hosting these accessory views.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRenameDevice)) { _ in
-            openRenameWindow()
+            if library.card?.identification?.serialNumber != nil {
+                toggleInspector(.rename)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildStatistics)) { _ in
             if library.card?.identification?.serialNumber != nil {
@@ -123,28 +163,116 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
             if library.card?.identification?.serialNumber != nil {
-                openWindow(id: "backups")
+                toggleInspector(.backups)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
+            if case .day = library.selection {
+                toggleInspector(.notes)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
+            if case .day = library.selection {
+                toggleInspector(.settings)
             }
         }
         #endif
     }
 
     #if os(macOS)
-    /// Build the Rename Device payload from the currently
-    /// loaded card and open the window. Bails when no device
-    /// is loaded — the menu items are already disabled in
-    /// that state, but the notification path could still fire.
-    private func openRenameWindow() {
-        guard
+    /// Toggle the given pane: tapping the button for the
+    /// already-visible pane collapses the inspector; tapping
+    /// another swaps content in place without a close/reopen
+    /// flicker. Matches the behavior the day-detail toolbar had
+    /// before these panes were unified here.
+    private func toggleInspector(_ pane: InspectorPane) {
+        withAnimation(.smooth(duration: 0.32)) {
+            inspectorPane = (inspectorPane == pane) ? nil : pane
+        }
+    }
+
+    /// Contents of the shared inspector column. Each case is
+    /// wrapped in a `NavigationStack` so the pane gets its own
+    /// title bar, matching how `DailySettingsInspector` and
+    /// `NotesCard` already present themselves on iOS.
+    @ViewBuilder
+    private var inspectorContent: some View {
+        switch inspectorPane {
+        case .rename:
+            renameInspectorPane
+        case .backups:
+            BackupsView(onClose: {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                }
+            })
+                .environment(library)
+        case .notes:
+            if let day = library.selectedDay {
+                NotesCard(day: day)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle("Sleep Journal")
+            } else {
+                EmptyView()
+            }
+        case .settings:
+            if let day = library.selectedDay {
+                DailySettingsInspector(
+                    settings: day.stats?.settings,
+                    productName: day.stats?.productName
+                        ?? library.card?.identification?.productName,
+                    serialNumber: library.card?.identification?.serialNumber,
+                    deviceAlias: deviceAliasForInspector
+                )
+            } else {
+                EmptyView()
+            }
+        case .none:
+            EmptyView()
+        }
+    }
+
+    /// Rename Device rendered as a Spotlight-style panel inside
+    /// the inspector. Closes by driving `inspectorPane` back to
+    /// nil — we can't use `@Environment(\.dismiss)` here because
+    /// inside an `.inspector` attached to the root
+    /// `NavigationSplitView` it resolves to the host window and
+    /// would quit the app via
+    /// `applicationShouldTerminateAfterLastWindowClosed`.
+    @ViewBuilder
+    private var renameInspectorPane: some View {
+        if
             let card = library.card,
             let serial = card.identification?.serialNumber
-        else { return }
-        let payload = RenameDeviceWindowPayload(
-            serial: serial,
-            defaultName: card.identification?.productName ?? "ResMed Device",
-            currentOverride: library.deviceNameOverrides[serial]
-        )
-        openWindow(value: payload)
+        {
+            RenameDeviceSheet(
+                serial: serial,
+                defaultName: card.identification?.productName ?? "ResMed Device",
+                currentOverride: library.deviceNameOverrides[serial],
+                onSave: { newName in
+                    library.setDeviceName(newName, for: serial)
+                },
+                onClose: {
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = nil
+                    }
+                }
+            )
+        } else {
+            EmptyView()
+        }
+    }
+
+    /// User-set alias for the current card, or nil when unset.
+    /// The settings inspector hides the device row when this is
+    /// nil so the product name doesn't duplicate across rows.
+    private var deviceAliasForInspector: String? {
+        guard let serial = library.card?.identification?.serialNumber,
+              let alias = library.deviceNameOverrides[serial],
+              !alias.isEmpty
+        else { return nil }
+        return alias
     }
     #endif
 
@@ -277,7 +405,7 @@ struct ContentView: View {
                 Divider()
                 Button {
                     #if os(macOS)
-                    openRenameWindow()
+                    toggleInspector(.rename)
                     #else
                     isRenamingDevice = true
                     #endif
@@ -299,7 +427,7 @@ struct ContentView: View {
                 Divider()
                 Button {
                     #if os(macOS)
-                    openWindow(id: "backups")
+                    toggleInspector(.backups)
                     #else
                     isShowingBackups = true
                     #endif

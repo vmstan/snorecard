@@ -13,16 +13,6 @@ struct DayDetailView: View {
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
 
-    #if os(macOS)
-    /// Which pane the macOS inspector is currently showing. Only one
-    /// inspector column can be open at a time, so both the Notes and
-    /// Device Settings buttons route through this enum — tapping the
-    /// same button again collapses the inspector, tapping the other
-    /// swaps content without closing.
-    enum InspectorPane { case notes, settings }
-    @State private var inspectorPane: InspectorPane? = nil
-    #endif
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -52,15 +42,17 @@ struct DayDetailView: View {
         #endif
         #if os(macOS)
         // macOS keeps these as discrete toolbar buttons because
-        // there's room. iOS routes the same actions through the
-        // shared Options menu (see ContentView.optionsMenu) so
-        // the nav bar stays a single ellipsis button.
+        // there's room. Both iOS (via the shared Options menu)
+        // and macOS funnel through the same notifications so the
+        // shared inspector in `ContentView` owns the display
+        // state; this view just announces intent.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(.smooth(duration: 0.32)) {
-                        inspectorPane = (inspectorPane == .notes) ? nil : .notes
-                    }
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDailyNotes,
+                        object: nil
+                    )
                 } label: {
                     Label("Sleep Journal", systemImage: "note.text")
                 }
@@ -68,9 +60,10 @@ struct DayDetailView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(.smooth(duration: 0.32)) {
-                        inspectorPane = (inspectorPane == .settings) ? nil : .settings
-                    }
+                    NotificationCenter.default.post(
+                        name: .snorecardOpenDailySettings,
+                        object: nil
+                    )
                 } label: {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
                 }
@@ -78,45 +71,7 @@ struct DayDetailView: View {
             }
         }
         #endif
-        #if os(macOS)
-        .inspector(isPresented: Binding(
-            get: { inspectorPane != nil },
-            set: { shown in
-                if !shown {
-                    withAnimation(.smooth(duration: 0.32)) {
-                        inspectorPane = nil
-                    }
-                }
-            }
-        )) {
-            // Single inspector column that hosts either the note
-            // editor or the settings form. Swapping content between
-            // panes via the toolbar buttons doesn't collapse the
-            // column, matching how Finder's Get Info and Mail's
-            // Viewer sidebars behave. The `.id(inspectorPane)` +
-            // `.transition` combo cross-fades the two panes so the
-            // swap doesn't pop in harshly.
-            Group {
-                switch inspectorPane {
-                case .notes:
-                    inspectorNotesPane
-                case .settings:
-                    DailySettingsInspector(
-                        settings: day.stats?.settings,
-                        productName: day.stats?.productName
-                            ?? library.card?.identification?.productName,
-                        serialNumber: library.card?.identification?.serialNumber,
-                        deviceAlias: deviceAliasForInspector
-                    )
-                case .none:
-                    EmptyView()
-                }
-            }
-            .id(inspectorPane)
-            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
-        }
-        .inspectorColumnWidth(min: 280, ideal: 340, max: 480)
-        #else
+        #if os(iOS)
         .sheet(isPresented: $isShowingNotes) {
             NavigationStack {
                 NotesCard(day: day)
@@ -160,18 +115,6 @@ struct DayDetailView: View {
             await loadAllSessions()
         }
     }
-
-    #if os(macOS)
-    /// NotesCard wrapped in the same navigation-title chrome the
-    /// Settings inspector uses, so both panes look like siblings
-    /// when the inspector switches between them.
-    private var inspectorNotesPane: some View {
-        NotesCard(day: day)
-            .padding(16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .navigationTitle("Sleep Journal")
-    }
-    #endif
 
     /// Device name pulled from the currently-loaded card so the daily
     /// view's nav bar shows which machine the data belongs to.

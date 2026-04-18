@@ -21,19 +21,6 @@ extension Notification.Name {
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
 }
 
-/// Codable payload threaded through SwiftUI's `openWindow(value:)`
-/// API so the macOS Rename Device window can render without a
-/// shared mutable state container. Carries the device's serial
-/// (the source of truth for the alias map), the current alias,
-/// and the marketing product name to seed the field.
-struct RenameDeviceWindowPayload: Hashable, Codable, Identifiable {
-    let serial: String
-    let defaultName: String
-    let currentOverride: String?
-
-    var id: String { serial }
-}
-
 @main
 struct SnorecardApp: App {
     @NSApplicationDelegateAdaptor(SnorecardAppDelegate.self) private var appDelegate
@@ -66,38 +53,6 @@ struct SnorecardApp: App {
                     .padding(20)
                     .frame(minWidth: 460, minHeight: 360)
                     .disableNonCloseWindowButtons()
-            }
-        }
-        .windowResizability(.contentSize)
-
-        // Singleton Backup & Restore window — replaces the
-        // macOS sheet so the panel shows traffic-light
-        // controls. Minimize / zoom are disabled so only the
-        // red close button is active, Spotlight-style.
-        Window("Backup & Restore", id: "backups") {
-            BackupsView()
-                .environment(library)
-                .frame(minWidth: 460, minHeight: 380)
-                .disableNonCloseWindowButtons()
-        }
-        .windowResizability(.contentSize)
-
-        // Rename Device window — keyed on serial via the
-        // payload so opening rename for the same device twice
-        // reuses the existing window. Library is injected so
-        // the view can call `setDeviceName` directly.
-        WindowGroup(for: RenameDeviceWindowPayload.self) { $payload in
-            if let payload {
-                RenameDeviceSheet(
-                    serial: payload.serial,
-                    defaultName: payload.defaultName,
-                    currentOverride: payload.currentOverride,
-                    onSave: { newName in
-                        library.setDeviceName(newName, for: payload.serial)
-                    }
-                )
-                .frame(minWidth: 380, minHeight: 320)
-                .disableNonCloseWindowButtons()
             }
         }
         .windowResizability(.contentSize)
