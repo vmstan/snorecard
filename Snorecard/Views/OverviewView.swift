@@ -71,6 +71,18 @@ struct OverviewView: View {
                         .frame(maxWidth: .infinity, minHeight: 160)
                     } else {
                         summaryCards
+                        if library.intelligence.isReady {
+                            TrendNarrativeCard(
+                                stats: stats,
+                                rangeStart: rangeStart,
+                                rangeEnd: rangeEnd
+                            )
+                            CorrelationHintsCard(
+                                stats: stats,
+                                rangeStart: rangeStart,
+                                rangeEnd: rangeEnd
+                            )
+                        }
                         ahiChart
                         usageChart
                         glasgowChart

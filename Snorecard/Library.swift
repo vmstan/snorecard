@@ -41,11 +41,35 @@ final class Library {
     /// instead of looking stuck.
     var cloudPrefetchProgress: CloudPrefetcher.Progress?
 
+    /// Single source of truth for whether Apple Intelligence can be
+    /// used in this session. Views gate every narrative-backed
+    /// surface on `intelligence.isReady`.
+    let intelligence: IntelligenceAvailability
+    /// Narration backend for every Intelligence-backed surface.
+    /// Views still call through `library.narration` but only
+    /// after checking `library.intelligence.isReady`; if the
+    /// model becomes unavailable mid-call, the service throws
+    /// and the caller hides the surface.
+    let narration: NarrationService
+
+    /// Serial number → per-day tag-extraction task. Tracked here
+    /// so a rapid note edit (750 ms autosave churning) cancels
+    /// the in-flight extraction and reschedules rather than
+    /// piling up sessions for the same note.
+    private var pendingTagExtractions: [URL: Task<Void, Never>] = [:]
+
     private static let lastPathKey = "SnorecardLastSDPath"
     private static let deviceNamesKey = "deviceNameOverrides"
     private static let lastOpenedSerialKey = "lastOpenedSerial"
 
     init() {
+        self.intelligence = IntelligenceAvailability()
+        // Always wire up the Foundation-backed service — availability
+        // is enforced at the view layer via `intelligence.isReady`.
+        // If the model flips to unavailable mid-session, the service
+        // throws `sessionFailed` and the caller hides its card.
+        self.narration = FoundationNarrationService()
+
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
             as? [String: String] ?? [:]
@@ -188,17 +212,251 @@ final class Library {
     /// Persist `text` as the note for `day`. A nil or whitespace-only
     /// string removes the note entirely. The `updatedAt` timestamp is
     /// stamped here so views don't need to care about it.
+    ///
+    /// After persisting, schedules a best-effort tag extraction pass
+    /// when Apple Intelligence is available. Existing
+    /// `extractedTags` are preserved when the note text hash is
+    /// unchanged, so re-saving the same text doesn't churn the model.
     func setNote(_ text: String?, for day: ResMedDay) {
         guard let folder = day.files.first?.url.deletingLastPathComponent()
         else { return }
         let raw = text ?? ""
-        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
             DailyNotesCache.save(nil, to: folder)
-        } else {
-            DailyNotesCache.save(
-                DailyNote(text: raw, updatedAt: Date()),
+            pendingTagExtractions.removeValue(forKey: folder)?.cancel()
+            return
+        }
+        let prior = DailyNotesCache.load(for: folder)
+        let newHash = IntelligenceCache.hash(of: raw)
+        let reuseTags = prior?.tagsInputHash == newHash
+            && prior?.taxonomyVersion == NoteTagTaxonomy.version
+        DailyNotesCache.save(
+            DailyNote(
+                text: raw,
+                updatedAt: Date(),
+                extractedTags: reuseTags ? prior?.extractedTags : nil,
+                tagsInputHash: reuseTags ? prior?.tagsInputHash : nil,
+                taxonomyVersion: reuseTags ? prior?.taxonomyVersion : nil
+            ),
+            to: folder
+        )
+        extractTagsIfNeeded(for: folder, text: raw, hash: newHash)
+    }
+
+    /// Kick off a best-effort tag-extraction pass for a note. Bails
+    /// out silently when Apple Intelligence is unavailable, when a
+    /// fresh extraction for this exact text is already queued, or
+    /// when the cached result is still valid.
+    private func extractTagsIfNeeded(
+        for folder: URL,
+        text: String,
+        hash: String
+    ) {
+        guard intelligence.isReady else { return }
+        // Short-circuit when we already have tags for this text.
+        if let note = DailyNotesCache.load(for: folder),
+           note.tagsInputHash == hash,
+           note.taxonomyVersion == NoteTagTaxonomy.version,
+           note.extractedTags != nil {
+            return
+        }
+        pendingTagExtractions[folder]?.cancel()
+        let service = narration
+        pendingTagExtractions[folder] = Task { @MainActor in
+            do {
+                let result = try await service.extractNoteTags(
+                    NoteTagInput(text: text)
+                )
+                guard !Task.isCancelled else { return }
+                // Re-read — the user may have edited mid-flight. If
+                // the current note's text no longer matches the hash
+                // we generated against, discard the result so stale
+                // tags don't overwrite a fresh note.
+                guard let current = DailyNotesCache.load(for: folder),
+                      IntelligenceCache.hash(of: current.text) == hash
+                else { return }
+                DailyNotesCache.save(
+                    DailyNote(
+                        text: current.text,
+                        updatedAt: current.updatedAt,
+                        extractedTags: result.tags,
+                        tagsInputHash: hash,
+                        taxonomyVersion: NoteTagTaxonomy.version
+                    ),
+                    to: folder
+                )
+            } catch {
+                // Best-effort — swallow failures. The next save
+                // attempt will try again.
+            }
+        }
+    }
+
+    // MARK: - Intelligence helpers
+
+    /// Fetch the on-device night summary for `day`, hitting the
+    /// `.snorecard-intelligence.json` sidecar first so repeat views
+    /// of the same night are instant. Returns `nil` when Apple
+    /// Intelligence is unavailable or the model refuses the output.
+    func nightSummary(for day: ResMedDay) async -> NightSummaryOutput? {
+        guard intelligence.isReady else { return nil }
+        guard let folder = day.files.first?.url.deletingLastPathComponent(),
+              let stats = day.stats, stats.hasUsage else { return nil }
+        let allStats = (card?.days.compactMap(\.stats) ?? []).filter(\.hasUsage)
+        let baseline = IntelligenceInputBuilder.Baseline.trailing14(
+            before: day.date,
+            from: allStats
+        )
+        let note = DailyNotesCache.load(for: folder)?.text
+        let input = IntelligenceInputBuilder.nightSummary(
+            stats: stats,
+            baseline: baseline,
+            userNote: note
+        )
+        let hash = IntelligenceCache.hash(of: input)
+        if let cached = IntelligenceCache.loadNightSummary(
+            for: folder,
+            matching: hash,
+            templateVersion: NightSummaryPrompt.templateVersion
+        ) {
+            return cached
+        }
+        do {
+            let output = try await narration.nightSummary(input)
+            IntelligenceCache.saveNightSummary(
+                output,
+                inputHash: hash,
+                templateVersion: NightSummaryPrompt.templateVersion,
                 to: folder
             )
+            return output
+        } catch {
+            return nil
+        }
+    }
+
+    /// Fetch the on-device overview narrative for a pre-filtered
+    /// window. Caches keyed on the input hash so switching between
+    /// preset ranges (7d / 14d / 30d) doesn't regenerate unless the
+    /// underlying aggregates actually changed.
+    func overviewNarrative(
+        stats: [DailyStatistics],
+        rangeStart: Date,
+        rangeEnd: Date
+    ) async -> OverviewNarrativeOutput? {
+        guard intelligence.isReady else { return nil }
+        guard let folder = card?.rootURL else { return nil }
+        guard !stats.isEmpty else { return nil }
+        let input = IntelligenceInputBuilder.overviewNarrative(
+            stats: stats,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd
+        )
+        let hash = IntelligenceCache.hash(of: input)
+        if let cached = IntelligenceCache.loadOverviewNarrative(
+            for: folder,
+            matching: hash,
+            templateVersion: OverviewNarrativePrompt.templateVersion
+        ) {
+            return cached
+        }
+        do {
+            let output = try await narration.overviewNarrative(input)
+            IntelligenceCache.saveOverviewNarrative(
+                output,
+                inputHash: hash,
+                templateVersion: OverviewNarrativePrompt.templateVersion,
+                to: folder
+            )
+            return output
+        } catch {
+            return nil
+        }
+    }
+
+    /// Explain a single metric for the selected day. `trailing`
+    /// should be the recent window the caller has already filtered
+    /// (typically the last 14 days with usage).
+    func explainMetric(
+        _ metric: ExplainableMetric,
+        for day: ResMedDay,
+        trailing: [DailyStatistics]
+    ) async -> MetricExplainOutput? {
+        guard intelligence.isReady else { return nil }
+        guard let folder = day.files.first?.url.deletingLastPathComponent(),
+              let stats = day.stats else { return nil }
+        guard let input = IntelligenceInputBuilder.metricExplain(
+            metric: metric,
+            stats: stats,
+            trailing: trailing
+        ) else { return nil }
+        let hash = IntelligenceCache.hash(of: input)
+        if let cached = IntelligenceCache.loadMetricExplain(
+            for: folder,
+            metric: metric,
+            matching: hash,
+            templateVersion: MetricExplainPrompt.templateVersion
+        ) {
+            return cached
+        }
+        do {
+            let output = try await narration.explainMetric(input)
+            IntelligenceCache.saveMetricExplain(
+                output,
+                metric: metric,
+                inputHash: hash,
+                templateVersion: MetricExplainPrompt.templateVersion,
+                to: folder
+            )
+            return output
+        } catch {
+            return nil
+        }
+    }
+
+    /// Build the correlation observations + LLM narration for the
+    /// supplied range. Returns a bundle the view can render as a
+    /// single card, or `nil` when the range doesn't meet the
+    /// `TagCorrelator` thresholds.
+    struct CorrelationBundle {
+        let observations: [CorrelationNarrativeInput.Observation]
+        let narration: CorrelationNarrativeOutput
+    }
+
+    func correlationHints(
+        stats: [DailyStatistics],
+        rangeStart: Date,
+        rangeEnd: Date
+    ) async -> CorrelationBundle? {
+        guard intelligence.isReady else { return nil }
+        guard let card else { return nil }
+        let dayInputs: [TagCorrelator.DayInput] = card.days.compactMap { day in
+            guard let stat = day.stats, stat.hasUsage,
+                  stat.date >= rangeStart, stat.date <= rangeEnd,
+                  let folder = day.files.first?.url.deletingLastPathComponent()
+            else { return nil }
+            let note = DailyNotesCache.load(for: folder)
+            let tags = note?.extractedTags ?? []
+            return TagCorrelator.DayInput(
+                tags: Set(tags),
+                stats: stat
+            )
+        }
+        let observations = TagCorrelator.correlate(days: dayInputs)
+        guard !observations.isEmpty else { return nil }
+        let truncated = Array(observations.prefix(6))
+        let input = CorrelationNarrativeInput(
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            sampleSize: dayInputs.count,
+            observations: truncated
+        )
+        do {
+            let output = try await narration.correlationNarrative(input)
+            return CorrelationBundle(observations: truncated, narration: output)
+        } catch {
+            return nil
         }
     }
 

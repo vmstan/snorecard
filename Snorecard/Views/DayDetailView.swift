@@ -12,6 +12,9 @@ struct DayDetailView: View {
     @State private var loadError: String?
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
+    /// Which metric the user tapped to explain, if any. When
+    /// non-nil a sheet presents the on-device explanation.
+    @State private var explainingMetric: ExplainableMetric?
 
     var body: some View {
         ScrollView {
@@ -114,6 +117,18 @@ struct DayDetailView: View {
         .task(id: day.id) {
             await loadAllSessions()
         }
+        .sheet(item: $explainingMetric) { metric in
+            MetricExplainSheet(
+                day: day,
+                metric: metric,
+                displayLabel: Self.displayLabel(for: metric),
+                displayValue: displayValue(for: metric)
+            )
+            #if os(iOS)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            #endif
+        }
     }
 
     /// Device name pulled from the currently-loaded card so the daily
@@ -173,6 +188,10 @@ struct DayDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 EventDonutView(stats: stats)
 
+                if library.intelligence.isReady {
+                    NightSummaryCard(day: day)
+                }
+
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 170), spacing: 12)],
                     alignment: .leading,
@@ -197,7 +216,8 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Glasgow Index",
                             value: String(format: "%.2f", gi),
-                            tint: glasgowColor(gi)
+                            tint: glasgowColor(gi),
+                            onTap: explainTap(.glasgowIndex)
                         )
                     }
 
@@ -206,7 +226,8 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Pressure (95%)",
                             value: String(format: "%.1f cmH₂O", epap),
-                            subtitle: support.map { String(format: "Support %.1f", $0) }
+                            subtitle: support.map { String(format: "Support %.1f", $0) },
+                            onTap: explainTap(.pressure95)
                         )
                     }
                     if let fl = stats.flowLimit95 {
@@ -221,14 +242,16 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Tidal Volume (Median)",
                             value: String(format: "%.0f mL", mL),
-                            tint: tidalVolumeColor(mL)
+                            tint: tidalVolumeColor(mL),
+                            onTap: explainTap(.tidalVolume)
                         )
                     }
                     if let leak = stats.leak95LPerMin {
                         StatCard(
                             label: "Leak (95%)",
                             value: String(format: "%.0f L/min", leak),
-                            tint: leakColor(leak)
+                            tint: leakColor(leak),
+                            onTap: explainTap(.leak95)
                         )
                     }
                     if let largeLeak = stats.largeLeakSeconds {
@@ -238,7 +261,8 @@ struct DayDetailView: View {
                             label: "Large Leak",
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
-                            tint: percent < 0.5 ? .severityGood : .severityHigh
+                            tint: percent < 0.5 ? .severityGood : .severityHigh,
+                            onTap: explainTap(.largeLeak)
                         )
                     }
                 }
@@ -266,6 +290,51 @@ struct DayDetailView: View {
             Text("No summary data available for this day.")
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 12)
+        }
+    }
+
+    /// Return a tap handler for an explainable metric when Apple
+    /// Intelligence is available on this device, `nil` otherwise.
+    /// `StatCard` switches to button rendering only when a closure
+    /// is supplied, so this both gates the affordance and wires
+    /// the sheet trigger in one place.
+    private func explainTap(_ metric: ExplainableMetric) -> (() -> Void)? {
+        guard library.intelligence.isReady else { return nil }
+        return { explainingMetric = metric }
+    }
+
+    static func displayLabel(for metric: ExplainableMetric) -> String {
+        switch metric {
+        case .ahi:          return "AHI"
+        case .glasgowIndex: return "Glasgow Index"
+        case .pressure95:   return "Pressure (95%)"
+        case .epr:          return "Pressure Support"
+        case .leak95:       return "Leak (95%)"
+        case .largeLeak:    return "Large Leak"
+        case .tidalVolume:  return "Tidal Volume"
+        }
+    }
+
+    private func displayValue(for metric: ExplainableMetric) -> String {
+        guard let stats = day.stats else { return "—" }
+        switch metric {
+        case .ahi:          return String(format: "%.1f", stats.ahi)
+        case .glasgowIndex:
+            return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
+        case .pressure95:
+            return stats.pressure95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
+        case .epr:
+            guard let ipap = stats.ipap95, let epap = stats.epap95 else { return "—" }
+            return String(format: "%.1f cmH₂O", max(0, ipap - epap))
+        case .leak95:
+            return stats.leak95LPerMin.map { String(format: "%.0f L/min", $0) } ?? "—"
+        case .largeLeak:
+            guard let seconds = stats.largeLeakSeconds, stats.usageMinutes > 0
+            else { return "—" }
+            let pct = seconds / (stats.usageMinutes * 60) * 100
+            return String(format: "%.0f%%", pct)
+        case .tidalVolume:
+            return stats.tidalVolume50.map { String(format: "%.0f mL", $0 * 1000) } ?? "—"
         }
     }
 
