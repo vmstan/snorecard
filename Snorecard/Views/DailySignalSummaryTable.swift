@@ -49,8 +49,13 @@ struct DailySignalSummaryTable: View {
                     .navigationTitle("Detailed Statistics")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { isShowingSheet = false }
+                        // Use the shared X-glyph close control so this
+                        // read-only stats sheet matches the dismissal
+                        // affordance on Backup & Restore, Sleep Journal
+                        // and Therapy Details — sheets without a
+                        // confirmation action all share one pattern.
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton { isShowingSheet = false }
                         }
                     }
                 }
@@ -120,5 +125,14 @@ struct DetailedStatisticsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        #if os(macOS)
+        // Populates the macOS title bar so the floating window
+        // reads as "Detailed Statistics" instead of inheriting the
+        // generic app name. Subtitle carries the night the table
+        // covers, so a stack of these windows is distinguishable
+        // at a glance from Mission Control.
+        .navigationTitle("Detailed Statistics")
+        .navigationSubtitle(Text(payload.dayDate, format: .dateTime.weekday(.wide).month(.wide).day()))
+        #endif
     }
 }

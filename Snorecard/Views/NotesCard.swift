@@ -23,13 +23,13 @@ struct NotesCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    // Title bakes in the night being edited so a
-                    // user looking at the popover/sheet on its own
-                    // (without the surrounding date in the nav
-                    // bar) still knows which night they're
-                    // annotating — e.g. "Sleep Journal for
-                    // Wednesday, April 17".
-                    Text("Sleep Journal for \(day.date, format: .dateTime.weekday(.wide).month(.wide).day())")
+                    // Date alone — the surrounding chrome (iOS sheet
+                    // title, macOS inspector title) already says
+                    // "Sleep Journal", so duplicating that word here
+                    // would only repeat itself. The date carries the
+                    // night-specific context so the user knows which
+                    // entry they're editing.
+                    Text(day.date, format: .dateTime.weekday(.wide).month(.wide).day())
                         .font(.headline)
                     #if os(macOS)
                     // AppKit's NSTextField submits on a plain
