@@ -7,7 +7,9 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    public static let templateVersion = 1
+    // v2: pressure95 now sourced from stats.epap95 (matches the
+    // DayDetailView "Pressure (95%)" card) instead of mask pressure.
+    public static let templateVersion = 2
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe ResMed

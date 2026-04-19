@@ -1,7 +1,10 @@
 import Foundation
 
 public enum MetricExplainPrompt {
-    public static let templateVersion = 1
+    // v2: .pressure95 now sourced from stats.epap95 (target EPAP,
+    // matching the DayDetailView card) with a clarified norms
+    // description.
+    public static let templateVersion = 2
 
     public static let systemInstructions: String = """
     You are Snorecard's metric explainer. You help the user

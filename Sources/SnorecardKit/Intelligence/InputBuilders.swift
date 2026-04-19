@@ -20,7 +20,13 @@ public enum IntelligenceInputBuilder {
         let usageHours = PromptRounding.round1(stats.usageHours)
         let ahi = PromptRounding.round1(stats.ahi)
         let glasgowIndex = stats.glasgowIndex.map(PromptRounding.round2)
-        let pressure95 = stats.pressure95.map(PromptRounding.round1)
+        // `DayDetailView`'s "Pressure (95%)" card renders `epap95`
+        // (target EPAP) with an IPAP−EPAP "Support" subtitle, and
+        // is hidden entirely when `epap95` is nil. Mirror that
+        // exactly so the night summary only mentions pressure when
+        // the card is visible and the number the model sees matches
+        // the number on screen.
+        let pressure95 = stats.epap95.map(PromptRounding.round1)
 
         let eprSupport: Double? = {
             guard let ipap = stats.ipap95, let epap = stats.epap95 else { return nil }
@@ -284,7 +290,7 @@ public enum IntelligenceInputBuilder {
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "The 95th-percentile mask pressure shows the top end of the pressure the device delivered. Typical auto-titrating therapy ranges from 6 to 14 cmH₂O."
+                description: "Snorecard's Pressure (95%) card shows the 95th-percentile target EPAP — the top end of the expiratory pressure the device aimed to hold. The Support subtitle (IPAP minus EPAP) is extra pressure on inhalation. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
             )
         case .epr:
             return MetricExplainInput.Norms(
@@ -344,7 +350,11 @@ public enum IntelligenceInputBuilder {
         switch metric {
         case .ahi:              return stats.ahi
         case .glasgowIndex:     return stats.glasgowIndex
-        case .pressure95:       return stats.pressure95
+        // `DayDetailView`'s "Pressure (95%)" card sources `epap95`
+        // (target EPAP), not `pressure95` (measured mask P95).
+        // Feed the explain sheet the same value so the number at
+        // the top of the sheet matches the card the user tapped.
+        case .pressure95:       return stats.epap95
         case .epr:
             guard let ipap = stats.ipap95, let epap = stats.epap95 else { return nil }
             return max(0, ipap - epap)
