@@ -322,7 +322,9 @@ struct DayDetailView: View {
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .pressure95:
-            return stats.pressure95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
+            // Matches the "Pressure (95%)" StatCard — sourced from
+            // `epap95`, not `pressure95`. See DayDetailView.header.
+            return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .epr:
             guard let ipap = stats.ipap95, let epap = stats.epap95 else { return "—" }
             return String(format: "%.1f cmH₂O", max(0, ipap - epap))
