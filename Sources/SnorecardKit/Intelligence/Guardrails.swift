@@ -25,24 +25,33 @@ public enum Guardrails {
 
     /// Whole-word banned tokens — matched case-insensitively at
     /// word boundaries so "cause" in "because" doesn't double-trip,
-    /// but "should" inside "You should" does. Covers tense
-    /// variants of each root so past-tense slips don't sneak past
-    /// the filter.
+    /// but "should" inside "You should" does.
+    ///
+    /// We previously listed every tense ("increase", "increased",
+    /// "increasing", …) which caused the guardrail to reject
+    /// perfectly descriptive narration ("AHI increased slightly")
+    /// and the night summary card to disappear intermittently.
+    /// Now we list only imperative / bare-verb forms; the word-
+    /// boundary check means past-tense and gerund variants
+    /// ("increased", "trying") pass through naturally because the
+    /// needle is immediately followed by another letter.
     private static let prescriptiveWords: [String] = [
         "should", "must", "need to", "needs to", "ought to",
         "recommend", "recommends", "recommended",
         "suggest", "suggests", "suggested",
-        "try", "tries", "trying", "tried",
-        "increase", "increases", "increasing", "increased",
-        "decrease", "decreases", "decreasing", "decreased",
-        "adjust", "adjusts", "adjusting", "adjusted",
-        "advise", "advises", "advised"
+        "advise", "advises", "advised",
+        "try",
+        "increase", "decrease", "adjust"
     ]
 
+    /// Causal-claim words. "makes"/"made" were removed because
+    /// they're ambiguous in descriptive prose ("this made the
+    /// week's data look noisy") and kept false-tripping otherwise
+    /// fine summaries. The remaining list still catches every
+    /// concrete causal claim form the model tends to produce.
     private static let causalWords: [String] = [
         "caused", "causes", "causing",
         "leads to", "led to",
-        "makes", "made",
         "because", "due to",
         "triggered", "triggers"
     ]
