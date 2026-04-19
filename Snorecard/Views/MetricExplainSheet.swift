@@ -22,24 +22,41 @@ struct MetricExplainSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow
-                    if let explanation {
-                        Text(explanation.whatItMeans)
-                            .font(.callout)
-                        Divider()
-                        Text(explanation.howYoursLooks)
-                            .font(.callout)
-                    } else if failed {
-                        Text("An explanation isn't available right now.")
-                            .foregroundStyle(.secondary)
-                    } else if isLoading {
-                        placeholder
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Every dynamic state (loading, loaded, failed)
+                    // is wrapped in the same leading-aligned max-
+                    // width frame so the text column width doesn't
+                    // shift when content arrives.
+                    Group {
+                        if let explanation {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text(explanation.whatItMeans)
+                                    .font(.callout)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Divider()
+                                Text(explanation.howYoursLooks)
+                                    .font(.callout)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        } else if failed {
+                            Text("An explanation isn't available right now.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            placeholder
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     Spacer(minLength: 8)
                     Text("Summary only — not medical advice.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(displayLabel)
             #if os(iOS)
@@ -94,6 +111,7 @@ struct MetricExplainSheet: View {
             for: day,
             trailing: trailing
         )
+        if Task.isCancelled { return }
         if result == nil {
             failed = true
         } else {

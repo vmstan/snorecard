@@ -13,28 +13,38 @@ struct NightSummaryCard: View {
     @State private var failed = false
 
     var body: some View {
-        Group {
-            if let summary {
-                content(summary)
-            } else if isLoading {
-                placeholder
-            } else if failed {
-                // Generation failed or was rejected by guardrails —
-                // hide the card entirely rather than surfacing an
-                // error, which is the explicit product decision
-                // for AI-backed surfaces on this screen.
-                EmptyView()
-            } else {
-                placeholder
-            }
-        }
-        .task(id: day.id) {
-            await load()
+        // `failed` hides the card entirely (no placeholder, no
+        // error surface) per the product decision for AI-backed
+        // surfaces. Every other state renders through the same
+        // shared chrome (frame / padding / background) so the
+        // card doesn't re-measure when switching between
+        // placeholder and final content — keeping the width and
+        // leading edge locked across the load lifecycle.
+        if !failed {
+            innerView
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    Color.primary.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .task(id: day.id) {
+                    await load()
+                }
         }
     }
 
     @ViewBuilder
-    private func content(_ summary: NightSummaryOutput) -> some View {
+    private var innerView: some View {
+        if let summary {
+            loadedContent(summary)
+        } else {
+            placeholderContent
+        }
+    }
+
+    @ViewBuilder
+    private func loadedContent(_ summary: NightSummaryOutput) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "sparkles")
@@ -49,23 +59,20 @@ struct NightSummaryCard: View {
                     .padding(.vertical, 2)
                     .background(Color.primary.opacity(0.08), in: Capsule())
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text(summary.paragraph)
                 .font(.callout)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("Summary only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
-    private var placeholder: some View {
+    private var placeholderContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .foregroundStyle(.tint)
@@ -76,11 +83,6 @@ struct NightSummaryCard: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.04),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
     private func load() async {
@@ -89,6 +91,13 @@ struct NightSummaryCard: View {
         isLoading = true
         defer { isLoading = false }
         let result = await library.nightSummary(for: day)
+        // `.task(id:)` cancellation during navigation throws
+        // through the service; Library surfaces it as `nil` which
+        // we treat the same as an unrecoverable failure from the
+        // view's perspective — the card hides. A successful run
+        // on the destination day will re-render with the new
+        // summary after `.task` re-fires.
+        if Task.isCancelled { return }
         if result == nil {
             failed = true
         } else {

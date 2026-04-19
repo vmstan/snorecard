@@ -17,19 +17,23 @@ struct CorrelationHintsCard: View {
     @State private var hidden = false
 
     var body: some View {
-        Group {
-            if hidden {
-                EmptyView()
-            } else if let bundle {
-                content(bundle)
-            } else if isLoading {
-                placeholder
-            } else {
-                EmptyView()
-            }
-        }
-        .task(id: reloadKey) {
-            await load()
+        // `hidden` means either Apple Intelligence is unavailable,
+        // thresholds aren't met, or generation failed — in every
+        // case we render nothing. While visible, both the
+        // placeholder and the final bullets share the same
+        // chrome so the card's width and leading edge stay fixed
+        // across the load lifecycle.
+        if !hidden {
+            innerView
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    Color.primary.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .task(id: reloadKey) {
+                    await load()
+                }
         }
     }
 
@@ -38,7 +42,16 @@ struct CorrelationHintsCard: View {
     }
 
     @ViewBuilder
-    private func content(_ bundle: Library.CorrelationBundle) -> some View {
+    private var innerView: some View {
+        if let bundle {
+            loadedContent(bundle)
+        } else {
+            placeholderContent
+        }
+    }
+
+    @ViewBuilder
+    private func loadedContent(_ bundle: Library.CorrelationBundle) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "sparkles")
@@ -53,9 +66,12 @@ struct CorrelationHintsCard: View {
                     .padding(.vertical, 2)
                     .background(Color.primary.opacity(0.08), in: Capsule())
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text(bundle.narration.intro)
                 .font(.callout)
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(bundle.narration.bullets.prefix(3).enumerated()), id: \.offset) { _, bullet in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -63,22 +79,20 @@ struct CorrelationHintsCard: View {
                             .foregroundStyle(.secondary)
                         Text(bullet)
                             .font(.callout)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text("Observations only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
-    private var placeholder: some View {
+    private var placeholderContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .foregroundStyle(.tint)
@@ -89,11 +103,6 @@ struct CorrelationHintsCard: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.04),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
     private func load() async {
@@ -106,6 +115,7 @@ struct CorrelationHintsCard: View {
             rangeStart: rangeStart,
             rangeEnd: rangeEnd
         )
+        if Task.isCancelled { return }
         if let result {
             bundle = result
         } else {

@@ -56,6 +56,11 @@ public struct FoundationNarrationService: NarrationService {
             let output = response.content
             try enforce(Guardrails.evaluateAll([output.headline, output.paragraph]))
             return output
+        } catch is CancellationError {
+            // Task cancellation is expected when the user navigates
+            // between days mid-generation — re-throw silently
+            // rather than logging as a session failure.
+            throw CancellationError()
         } catch let error as NarrationError {
             throw error
         } catch {
@@ -81,6 +86,8 @@ public struct FoundationNarrationService: NarrationService {
                 [output.paragraph, output.highlight ?? ""].filter { !$0.isEmpty }
             ))
             return output
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as NarrationError {
             throw error
         } catch {
@@ -104,6 +111,8 @@ public struct FoundationNarrationService: NarrationService {
             let output = response.content
             try enforce(Guardrails.evaluateAll([output.whatItMeans, output.howYoursLooks]))
             return output
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as NarrationError {
             throw error
         } catch {
@@ -126,6 +135,8 @@ public struct FoundationNarrationService: NarrationService {
             )
             let tags = Array(response.content.tags.prefix(NoteTagTaxonomy.maxTagsPerNote))
             return NoteTagsOutput(tags: tags)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             log.error("extractNoteTags session failed: \(String(describing: error), privacy: .public)")
             throw NarrationError.sessionFailed(String(describing: error))
@@ -147,6 +158,8 @@ public struct FoundationNarrationService: NarrationService {
             let output = response.content
             try enforce(Guardrails.evaluateAll([output.intro] + output.bullets))
             return output
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as NarrationError {
             throw error
         } catch {

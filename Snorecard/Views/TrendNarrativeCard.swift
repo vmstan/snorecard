@@ -15,26 +15,21 @@ struct TrendNarrativeCard: View {
     @State private var failed = false
 
     var body: some View {
-        Group {
-            if let narrative {
-                content(narrative)
-            } else if isLoading {
-                placeholder
-            } else if failed {
-                EmptyView()
-            } else {
-                placeholder
-            }
-        }
-        .task(id: reloadKey) {
-            await load()
+        if !failed {
+            innerView
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    Color.primary.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+                .task(id: reloadKey) {
+                    await load()
+                }
         }
     }
 
     private var reloadKey: String {
-        // Include range + sample size + a fingerprint of the AHI
-        // sequence so we reload only when the underlying aggregate
-        // actually changed.
         let ahiDigest = stats
             .map { String(format: "%.2f", $0.ahi) }
             .joined(separator: ",")
@@ -42,7 +37,16 @@ struct TrendNarrativeCard: View {
     }
 
     @ViewBuilder
-    private func content(_ narrative: OverviewNarrativeOutput) -> some View {
+    private var innerView: some View {
+        if let narrative {
+            loadedContent(narrative)
+        } else {
+            placeholderContent
+        }
+    }
+
+    @ViewBuilder
+    private func loadedContent(_ narrative: OverviewNarrativeOutput) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "sparkles")
@@ -57,26 +61,25 @@ struct TrendNarrativeCard: View {
                     .padding(.vertical, 2)
                     .background(Color.primary.opacity(0.08), in: Capsule())
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let highlight = narrative.highlight, !highlight.isEmpty {
                 Text(highlight)
                     .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             Text(narrative.paragraph)
                 .font(.callout)
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text("Summary only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
-    private var placeholder: some View {
+    private var placeholderContent: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .foregroundStyle(.tint)
@@ -87,11 +90,6 @@ struct TrendNarrativeCard: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            Color.primary.opacity(0.04),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
     private func load() async {
@@ -104,6 +102,7 @@ struct TrendNarrativeCard: View {
             rangeStart: rangeStart,
             rangeEnd: rangeEnd
         )
+        if Task.isCancelled { return }
         if result == nil {
             failed = true
         } else {
