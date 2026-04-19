@@ -284,7 +284,7 @@ public enum IntelligenceInputBuilder {
             return MetricExplainInput.Norms(
                 goodMax: 2.0,
                 elevatedMax: 3.0,
-                description: "Lower is better. Snorecard flags scores above 2 as elevated and above 3 as high."
+                description: "The Glasgow Index is a breath-quality score derived from the flow-rate signal on the ResMed SD card. Each inspiration is rated against nine characteristics associated with flow limitation — each scoring 0 to 1 — so the overall nightly index can in theory range from 0 to 9. Per the Fort Aspen reference (fortaspen.com/sleep), 0 to 0.2 indicates clean, unobstructed breathing; a value around 3 indicates significant flow-limitation problems. Snorecard treats scores above 2 as elevated and above 3 as high on its severity palette. The Glasgow Index is informational only and is not a medical diagnostic."
             )
         case .pressure95:
             return MetricExplainInput.Norms(
