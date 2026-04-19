@@ -111,7 +111,6 @@ struct MetricExplainSheet: View {
             for: day,
             trailing: trailing
         )
-        if Task.isCancelled { return }
         if result == nil {
             failed = true
         } else {

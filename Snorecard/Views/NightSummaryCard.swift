@@ -91,13 +91,14 @@ struct NightSummaryCard: View {
         isLoading = true
         defer { isLoading = false }
         let result = await library.nightSummary(for: day)
-        // `.task(id:)` cancellation during navigation throws
-        // through the service; Library surfaces it as `nil` which
-        // we treat the same as an unrecoverable failure from the
-        // view's perspective — the card hides. A successful run
-        // on the destination day will re-render with the new
-        // summary after `.task` re-fires.
-        if Task.isCancelled { return }
+        // Intentionally no `Task.isCancelled` bail here. If the
+        // task gets cancelled mid-flight the view typically also
+        // unmounts (so the state write is a no-op), and if it
+        // doesn't — e.g. Foundation Models cancels a session
+        // because a previous one hasn't finished cleanup —
+        // setting `failed` hides the card cleanly instead of
+        // leaving the placeholder visible forever. A fresh view
+        // instance on re-navigation will try again.
         if result == nil {
             failed = true
         } else {

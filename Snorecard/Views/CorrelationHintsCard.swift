@@ -115,7 +115,6 @@ struct CorrelationHintsCard: View {
             rangeStart: rangeStart,
             rangeEnd: rangeEnd
         )
-        if Task.isCancelled { return }
         if let result {
             bundle = result
         } else {

@@ -102,7 +102,6 @@ struct TrendNarrativeCard: View {
             rangeStart: rangeStart,
             rangeEnd: rangeEnd
         )
-        if Task.isCancelled { return }
         if result == nil {
             failed = true
         } else {
