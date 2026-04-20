@@ -203,7 +203,13 @@ struct OverviewView: View {
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgApnea = averaging(\.timeInApneaSeconds)
-        let avgP95 = averaging(\.pressure95)
+        // Source from `epap95` (target EPAP) so the Overview card
+        // aligns with the EPAP card on the Daily view. The raw
+        // `pressure95` field (measured mask pressure) still backs
+        // the pressureChart trend below, where the clinical framing
+        // is "what the mask actually held".
+        let avgEPAP = averaging(\.epap95)
+        let avgIPAP = averaging(\.ipap95)
         let avgFlow = averaging(\.flowLimit95)
         let avgLeak = averaging(\.leak95LPerMin)
         let avgLargeLeakPct = avgLargeLeakPercent()
@@ -293,14 +299,15 @@ struct OverviewView: View {
                     )
                 )
             }
-            if let p95 = avgP95 {
+            if let epap = avgEPAP {
                 card(
-                    "Avg pressure 95th",
-                    value: String(format: "%.1f cmH₂O", p95),
+                    "Avg EPAP",
+                    value: String(format: "%.1f cmH₂O", epap),
+                    subtitle: avgIpapSubtitle(epap: epap, ipap: avgIPAP),
                     explain: OverviewExplainContext(
                         metric: .pressure95,
-                        displayValue: String(format: "%.1f cmH₂O", p95),
-                        averageValue: p95
+                        displayValue: String(format: "%.1f cmH₂O", epap),
+                        averageValue: epap
                     )
                 )
             }
@@ -413,8 +420,8 @@ struct OverviewView: View {
         switch metric {
         case .ahi:              return "Avg AHI"
         case .glasgowIndex:     return "Avg Glasgow Index"
-        case .pressure95:       return "Avg Pressure (95%)"
-        case .epr:              return "Avg Pressure Support"
+        case .pressure95:       return "Avg EPAP"
+        case .epr:              return "Avg IPAP"
         case .leak95:           return "Avg Leak (95%)"
         case .largeLeak:        return "Avg Large Leak"
         case .tidalVolume:      return "Avg Tidal Volume"
@@ -849,6 +856,15 @@ struct OverviewView: View {
         case ..<3.0: .severityLow
         default: .severityHigh
         }
+    }
+
+    /// Format the optional Avg IPAP subtitle on the EPAP card —
+    /// nil means no subtitle. Same suppression rule as the Daily
+    /// view: hide when average IPAP matches average EPAP (CPAP
+    /// therapy / EPR off).
+    private func avgIpapSubtitle(epap: Double, ipap: Double?) -> String? {
+        guard let ipap, ipap > epap + 0.05 else { return nil }
+        return String(format: "Avg IPAP %.1f", ipap)
     }
 
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),

@@ -33,7 +33,7 @@ struct TrendNarrativeCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 8)
-            Text("Summary only — not medical advice.")
+            Text("Summary only — not medical advice. Generated using on-device intelligence.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

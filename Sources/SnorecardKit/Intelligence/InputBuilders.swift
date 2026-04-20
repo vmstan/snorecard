@@ -20,9 +20,9 @@ public enum IntelligenceInputBuilder {
         let usageHours = PromptRounding.round1(stats.usageHours)
         let ahi = PromptRounding.round1(stats.ahi)
         let glasgowIndex = stats.glasgowIndex.map(PromptRounding.round2)
-        // `DayDetailView`'s "Pressure (95%)" card renders `epap95`
-        // (target EPAP) with an IPAP−EPAP "Support" subtitle, and
-        // is hidden entirely when `epap95` is nil. Mirror that
+        // `DayDetailView`'s EPAP card renders `epap95` with an
+        // optional IPAP subtitle (shown only when IPAP > EPAP),
+        // and is hidden entirely when `epap95` is nil. Mirror that
         // exactly so the night summary only mentions pressure when
         // the card is visible and the number the model sees matches
         // the number on screen.
@@ -299,19 +299,19 @@ public enum IntelligenceInputBuilder {
             return MetricExplainInput.Norms(
                 goodMax: 2.0,
                 elevatedMax: 3.0,
-                description: "The Glasgow Index is a breath-quality score derived from the flow-rate signal on the ResMed SD card. Each inspiration is rated against nine characteristics associated with flow limitation — each scoring 0 to 1 — so the overall nightly index can in theory range from 0 to 9. Per the Fort Aspen reference (fortaspen.com/sleep), 0 to 0.2 indicates clean, unobstructed breathing; a value around 3 indicates significant flow-limitation problems. Snorecard treats scores above 2 as elevated and above 3 as high on its severity palette. The Glasgow Index is informational only and is not a medical diagnostic."
+                description: "The Glasgow Index is a breath-quality score derived from the flow-rate signal. Each inspiration is rated against nine characteristics associated with flow limitation — each scoring 0 to 1 — so the overall nightly index can in theory range from 0 to 9. This index is informational only and is not a medical diagnostic tool."
             )
         case .pressure95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "Snorecard's Pressure (95%) card shows the 95th-percentile target EPAP — the top end of the expiratory pressure the device aimed to hold. The Support subtitle (IPAP minus EPAP) is extra pressure on inhalation. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
+                description: "EPAP stands for Expiratory Positive Airway Pressure — the cushion of air the CPAP holds against the user's exhalation to keep the upper airway from collapsing. The value shown is the 95th-percentile target: the pressure the device held for all but the top 5% of the night. The optional IPAP subtitle, when present, is the matching 95th-percentile inspiratory pressure; on plain CPAP therapy IPAP equals EPAP so the card hides it. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
             )
         case .epr:
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "Pressure support (IPAP minus EPAP) indicates how much extra pressure the device delivers on inhalation. Values above 0 cmH₂O indicate EPR or bilevel therapy."
+                description: "IPAP stands for Inspiratory Positive Airway Pressure — the pressure the CPAP delivers while the user is breathing in, making inhalation feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. IPAP equals EPAP on plain CPAP therapy and sits above it when EPR (Expiratory Pressure Relief) or bilevel therapy is active; the IPAP−EPAP gap is the extra pressure delivered on inhalation."
             )
         case .leak95:
             return MetricExplainInput.Norms(
@@ -401,14 +401,12 @@ public enum IntelligenceInputBuilder {
         switch metric {
         case .ahi:              return stats.ahi
         case .glasgowIndex:     return stats.glasgowIndex
-        // `DayDetailView`'s "Pressure (95%)" card sources `epap95`
-        // (target EPAP), not `pressure95` (measured mask P95).
-        // Feed the explain sheet the same value so the number at
-        // the top of the sheet matches the card the user tapped.
+        // `DayDetailView`'s EPAP card sources `epap95` (target
+        // EPAP), not `pressure95` (measured mask P95). Feed the
+        // explain sheet the same value so the number at the top
+        // of the sheet matches the card the user tapped.
         case .pressure95:       return stats.epap95
-        case .epr:
-            guard let ipap = stats.ipap95, let epap = stats.epap95 else { return nil }
-            return max(0, ipap - epap)
+        case .epr:              return stats.ipap95
         case .leak95:           return stats.leak95LPerMin
         case .largeLeak:
             guard let seconds = stats.largeLeakSeconds,

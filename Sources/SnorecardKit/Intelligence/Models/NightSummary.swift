@@ -88,11 +88,18 @@ extension NightSummaryInput {
         if let gi = glasgowIndex {
             lines.append("Glasgow Index: \(formatTwoDp(gi))")
         }
-        if let p = pressure95 {
-            lines.append("Pressure (95th percentile, target EPAP): \(formatOneDp(p)) cmH₂O")
-        }
-        if let support = eprSupport {
-            lines.append("Pressure support (IPAP − EPAP): \(formatOneDp(support)) cmH₂O")
+        if let epap = pressure95 {
+            lines.append("EPAP (95th percentile target): \(formatOneDp(epap)) cmH₂O")
+            // Derive IPAP from the EPAP baseline + the stored
+            // support delta so the model sees both sides of the
+            // breath cycle separately. Suppress the IPAP line
+            // when the delta is negligible (CPAP therapy / EPR
+            // off) — the UI card hides its IPAP subtitle in that
+            // case and the prompt should match.
+            if let support = eprSupport, support > 0.05 {
+                let ipap = epap + support
+                lines.append("IPAP (95th percentile target): \(formatOneDp(ipap)) cmH₂O")
+            }
         }
         if let leak = leak95LPerMin {
             lines.append("Leak (95th percentile): \(leak) L/min")

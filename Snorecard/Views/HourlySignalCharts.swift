@@ -261,7 +261,7 @@ struct PressureHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Pressure by Hour", subtitle: "average · cmH₂O") {
+        HourlyChartCard(title: "Mask Pressure by Hour", subtitle: "average · cmH₂O") {
             Chart(plottedBuckets) { bucket in
                 LineMark(
                     x: .value("Hour", bucket.clockLabel),

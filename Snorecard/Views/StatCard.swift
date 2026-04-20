@@ -41,9 +41,12 @@ struct StatCard: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 if onTap != nil {
+                    // Muted instead of accent-tinted so the cue
+                    // reads as a subtle hint, not a highlight
+                    // competing with the metric value.
                     Image(systemName: "sparkles")
                         .font(.caption2)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
             }
@@ -52,12 +55,18 @@ struct StatCard: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            // Always render the subtitle row — hidden when nil —
+            // so the primary value lands at the same vertical
+            // offset across every card in the grid. Without this
+            // reservation, a subtitle-less card like EPAP-on-CPAP
+            // has its value float up while its neighbours sit
+            // lower, making the row look ragged.
+            Text(subtitle ?? " ")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .opacity(subtitle == nil ? 0 : 1)
+                .accessibilityHidden(subtitle == nil)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: StatCard.cardHeight, alignment: .topLeading)

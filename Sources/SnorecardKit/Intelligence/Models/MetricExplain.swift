@@ -145,8 +145,8 @@ extension ExplainableMetric {
         switch self {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .pressure95:       return "Pressure (95th percentile target EPAP)"
-        case .epr:              return "Pressure support (IPAP − EPAP)"
+        case .pressure95:       return "EPAP (95th percentile target)"
+        case .epr:              return "IPAP (95th percentile target)"
         case .leak95:           return "Leak (95th percentile)"
         case .largeLeak:        return "Large leak (percent of usage)"
         case .tidalVolume:      return "Tidal volume (median)"

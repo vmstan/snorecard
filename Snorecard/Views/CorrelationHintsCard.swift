@@ -85,7 +85,7 @@ struct CorrelationHintsCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text("Observations only — not medical advice.")
+            Text("Observations only — not medical advice. Generated using on-device intelligence.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

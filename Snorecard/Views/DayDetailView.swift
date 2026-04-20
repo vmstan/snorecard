@@ -240,11 +240,15 @@ struct DayDetailView: View {
                     }
 
                     if let epap = stats.epap95 {
-                        let support = stats.ipap95.map { max(0, $0 - epap) }
+                        // Show IPAP as a subtitle only when the
+                        // device actually delivers extra inspiratory
+                        // pressure (EPR / bilevel). On CPAP therapy
+                        // IPAP equals EPAP and the subtitle adds no
+                        // information, so we suppress it.
                         StatCard(
-                            label: "Pressure (95%)",
+                            label: "EPAP",
                             value: String(format: "%.1f cmH₂O", epap),
-                            subtitle: support.map { String(format: "Support %.1f", $0) },
+                            subtitle: ipapSubtitle(epap: epap, ipap: stats.ipap95),
                             onTap: explainTap(.pressure95)
                         )
                     }
@@ -412,8 +416,8 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .pressure95:       return "Pressure (95%)"
-        case .epr:              return "Pressure Support"
+        case .pressure95:       return "EPAP"
+        case .epr:              return "IPAP"
         case .leak95:           return "Leak (95%)"
         case .largeLeak:        return "Large Leak"
         case .tidalVolume:      return "Tidal Volume"
@@ -436,12 +440,14 @@ struct DayDetailView: View {
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .pressure95:
-            // Matches the "Pressure (95%)" StatCard — sourced from
-            // `epap95`, not `pressure95`. See DayDetailView.header.
+            // Matches the EPAP StatCard — sourced from `epap95`,
+            // not `pressure95`. See DayDetailView.header.
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .epr:
-            guard let ipap = stats.ipap95, let epap = stats.epap95 else { return "—" }
-            return String(format: "%.1f cmH₂O", max(0, ipap - epap))
+            // Previously showed the IPAP−EPAP delta as "Pressure
+            // Support"; now named IPAP on the card and here, so
+            // we return the raw IPAP value instead of the delta.
+            return stats.ipap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .leak95:
             return stats.leak95LPerMin.map { String(format: "%.0f L/min", $0) } ?? "—"
         case .largeLeak:
@@ -543,6 +549,15 @@ struct DayDetailView: View {
         case ..<3.0: .severityLow
         default: .severityHigh
         }
+    }
+
+    /// Format the optional IPAP subtitle shown on the EPAP card —
+    /// nil means the card renders without a subtitle. We hide the
+    /// line when IPAP matches EPAP (CPAP therapy / EPR off) since
+    /// repeating the same number adds no information.
+    private func ipapSubtitle(epap: Double, ipap: Double?) -> String? {
+        guard let ipap, ipap > epap + 0.05 else { return nil }
+        return String(format: "IPAP %.1f", ipap)
     }
 
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
