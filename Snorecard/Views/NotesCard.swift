@@ -62,6 +62,14 @@ struct NotesCard: View {
             // typing. Combined with `maxHeight: .infinity` the
             // field fills the sheet/popover it's hosted in and
             // grows with content up to the container's bounds.
+            // Negative horizontal padding cancels part of the
+            // caller's `.padding(16)` so the editor's rounded
+            // rectangle sits closer to the inspector column edges,
+            // matching the wider horizontal span of the grouped
+            // Form sections on Therapy Details. The header keeps
+            // its full 16pt shared pane margin; only the writing
+            // surface widens to line up with the other inspector
+            // pane's table width.
             TextField(
                 "How did you sleep? Add any context about last night…",
                 text: $text,
@@ -75,6 +83,7 @@ struct NotesCard: View {
                 Color.primary.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 10)
             )
+            .padding(.horizontal, -4)
         }
         .task(id: day.id) {
             // When the viewed day changes, flush any pending save

@@ -53,13 +53,19 @@ struct DailySettingsInspector: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let date {
+                // Match the 16pt inset used by `NotesCard` /
+                // `NightSummaryCard` so the Therapy Details header
+                // lines up with the other daily-inspector panes
+                // when the user flips between them. The Form below
+                // keeps its natural edge-to-edge grouped layout,
+                // so only the header gets padded here.
                 InspectorPaneHeader(
                     title: "Therapy Details",
                     caption: date.formatted(.dateTime.weekday(.wide).day().month(.wide))
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 16)
             }
             if let settings, settings.hasAnyValue {
                 settingsForm(for: settings)
