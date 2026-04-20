@@ -331,6 +331,24 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 700,
                 description: "Median tidal volume. A typical adult sits between 420 and 600 mL; values outside that window warrant attention."
             )
+        case .usage:
+            return MetricExplainInput.Norms(
+                goodMax: 7.0,
+                elevatedMax: 9.0,
+                description: "Total hours the mask was on and delivering therapy last night. The standard CPAP-compliance threshold used by insurers and sleep clinics is 4 hours. 7 to 9 hours is the typical healthy-adult sleep window. Values below 4 hours are short usage; above 10 hours often reflects wearing the mask while awake or napping."
+            )
+        case .timeInApnea:
+            return MetricExplainInput.Norms(
+                goodMax: 1.0,
+                elevatedMax: 3.0,
+                description: "Percentage of usage time spent inside obstructive, central, or hypopnea events. Snorecard treats under 1% as healthy, 1–3% as elevated, and above 3% as high. This is a tighter read than the AHI bands because it weighs event duration, not just count."
+            )
+        case .flowLimit:
+            return MetricExplainInput.Norms(
+                goodMax: 0.05,
+                elevatedMax: 0.10,
+                description: "95th-percentile flow-limitation score on a 0 to 1 scale, derived from inspiratory flow-waveform shape. 0 means smooth unobstructed breaths; values approaching 1 mean most inspirations showed flattening or shape distortion. Under 0.05 is good, 0.05–0.10 is elevated, above 0.10 commonly indicates upper-airway resistance that therapy hasn't fully resolved."
+            )
         }
     }
 
@@ -380,6 +398,12 @@ public enum IntelligenceInputBuilder {
             return seconds / (stats.usageMinutes * 60) * 100
         case .tidalVolume:
             return stats.tidalVolume50.map { $0 * 1000 }
+        case .usage:            return stats.usageHours
+        case .timeInApnea:
+            guard let seconds = stats.timeInApneaSeconds,
+                  stats.usageMinutes > 0 else { return nil }
+            return seconds / (stats.usageMinutes * 60) * 100
+        case .flowLimit:        return stats.flowLimit95
         }
     }
 
@@ -392,6 +416,9 @@ public enum IntelligenceInputBuilder {
         case .leak95:       return "L/min"
         case .largeLeak:    return "percent of usage"
         case .tidalVolume:  return "mL"
+        case .usage:        return "hours"
+        case .timeInApnea:  return "percent of usage"
+        case .flowLimit:    return "score (0–1)"
         }
     }
 

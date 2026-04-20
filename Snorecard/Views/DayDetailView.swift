@@ -201,7 +201,8 @@ struct DayDetailView: View {
                         label: "Usage",
                         value: formatHours(stats.usageHours),
                         subtitle: sessionCountLabel,
-                        tint: usageColor(stats.usageHours)
+                        tint: usageColor(stats.usageHours),
+                        onTap: explainTap(.usage)
                     )
                     if let apneaSeconds = stats.timeInApneaSeconds {
                         let percent = apneaSeconds / (stats.usageMinutes * 60) * 100
@@ -209,7 +210,8 @@ struct DayDetailView: View {
                             label: "Time in Apnea",
                             value: formatDurationShort(apneaSeconds),
                             subtitle: String(format: "%.2f%% of usage", percent),
-                            tint: apneaColor(percent)
+                            tint: apneaColor(percent),
+                            onTap: explainTap(.timeInApnea)
                         )
                     }
                     if let gi = stats.glasgowIndex {
@@ -234,7 +236,8 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Flow Limit (95%)",
                             value: String(format: "%.2f", fl),
-                            tint: flowLimitColor(fl)
+                            tint: flowLimitColor(fl),
+                            onTap: explainTap(.flowLimit)
                         )
                     }
                     if let tv = stats.tidalVolume50 {
@@ -312,6 +315,9 @@ struct DayDetailView: View {
         case .leak95:       return "Leak (95%)"
         case .largeLeak:    return "Large Leak"
         case .tidalVolume:  return "Tidal Volume"
+        case .usage:        return "Usage"
+        case .timeInApnea:  return "Time in Apnea"
+        case .flowLimit:    return "Flow Limit (95%)"
         }
     }
 
@@ -337,6 +343,15 @@ struct DayDetailView: View {
             return String(format: "%.0f%%", pct)
         case .tidalVolume:
             return stats.tidalVolume50.map { String(format: "%.0f mL", $0 * 1000) } ?? "—"
+        case .usage:
+            return formatHours(stats.usageHours)
+        case .timeInApnea:
+            guard let seconds = stats.timeInApneaSeconds, stats.usageMinutes > 0
+            else { return "—" }
+            let pct = seconds / (stats.usageMinutes * 60) * 100
+            return String(format: "%.2f%% of usage", pct)
+        case .flowLimit:
+            return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
         }
     }
 

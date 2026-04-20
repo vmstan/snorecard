@@ -12,6 +12,9 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case leak95
     case largeLeak
     case tidalVolume
+    case usage
+    case timeInApnea
+    case flowLimit
 
     public var id: String { rawValue }
 }
@@ -107,6 +110,9 @@ extension ExplainableMetric {
         case .leak95:       return "Leak (95th percentile)"
         case .largeLeak:    return "Large leak (percent of usage)"
         case .tidalVolume:  return "Tidal volume (median)"
+        case .usage:        return "Usage hours"
+        case .timeInApnea:  return "Time in apnea (percent of usage)"
+        case .flowLimit:    return "Flow limit (95th percentile)"
         }
     }
 }
