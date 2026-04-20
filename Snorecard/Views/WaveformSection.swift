@@ -301,7 +301,11 @@ struct WaveformBundle: Sendable {
         let useMaskFilter = !onTherapyMask.isEmpty
 
         struct SpecEntry {
-            let prefix: String
+            /// Candidate prefixes, tried in order. ResMed firmwares
+            /// disagree on naming (`Ti.2s` vs `Ti`, `RespEvt.2s` vs
+            /// `RespEvent`, …) so each logical row can source from
+            /// any of a small set. First non-empty one wins.
+            let prefixes: [String]
             let label: String
             let unit: String
             let scale: Double
@@ -315,26 +319,42 @@ struct WaveformBundle: Sendable {
 
         // Order mirrors the waveform charts below the table:
         // Pressure (IPAP+EPAP) → Leak → Flow Limit → Tidal Volume
-        // → Snore. Minute Vent and Resp Rate aren't charted so
-        // they tail the list.
+        // → Snore. The breath-timing and respiratory-event signals
+        // tail the list because nothing charts them.
+        //
+        // The trailing dot on `Ti.` / `Te.` stops the prefix from
+        // matching `TidVol.*` or other unrelated signals. Rows that
+        // the current firmware doesn't emit are skipped silently via
+        // the `compactMap` below.
         let specs: [SpecEntry] = [
-            .init(prefix: "EprPress", label: "EPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
-            .init(prefix: "Press.", label: "IPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
-            .init(prefix: "Leak", label: "Leak Rate", unit: "L/min", scale: 60, format: oneDecimalFmt),
-            .init(prefix: "FlowLim", label: "Flow Limit", unit: "index 0–1", scale: 1, format: twoDecimalFmt),
+            .init(prefixes: ["EprPress"], label: "EPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
+            .init(prefixes: ["Press."], label: "IPAP", unit: "cmH₂O", scale: 1, format: pressureFmt),
+            .init(prefixes: ["Leak"], label: "Leak Rate", unit: "L/min", scale: 60, format: oneDecimalFmt),
+            .init(prefixes: ["FlowLim"], label: "Flow Limit", unit: "index 0–1", scale: 1, format: twoDecimalFmt),
             // Tidal volume is stored in litres; multiply on the way
             // into the table so the displayed units stay millilitres
             // — matches the daily-stat card and clinical convention.
-            .init(prefix: "TidVol", label: "Tidal Volume", unit: "mL", scale: 1000, format: intFmt),
-            .init(prefix: "Snore", label: "Snore", unit: "index 0–5", scale: 1, format: oneDecimalFmt),
-            .init(prefix: "MinVent", label: "Minute Ventilation", unit: "L/min", scale: 1, format: twoDecimalFmt),
-            .init(prefix: "RespRate", label: "Respiration Rate", unit: "bpm", scale: 1, format: oneDecimalFmt),
+            .init(prefixes: ["TidVol"], label: "Tidal Volume", unit: "mL", scale: 1000, format: intFmt),
+            .init(prefixes: ["Snore"], label: "Snore", unit: "index 0–5", scale: 1, format: oneDecimalFmt),
+            .init(prefixes: ["MinVent"], label: "Minute Ventilation", unit: "L/min", scale: 1, format: twoDecimalFmt),
+            .init(prefixes: ["RespRate"], label: "Respiratory Rate", unit: "bpm", scale: 1, format: oneDecimalFmt),
+            .init(prefixes: ["Ti."], label: "Inspiration Time", unit: "seconds", scale: 1, format: twoDecimalFmt),
+            .init(prefixes: ["Te."], label: "Expiration Time", unit: "seconds", scale: 1, format: twoDecimalFmt),
+            .init(prefixes: ["I:E"], label: "I:E Ratio", unit: "ratio", scale: 1, format: twoDecimalFmt),
+            .init(prefixes: ["RespEvent", "RespEvt"], label: "Respiratory Event", unit: "events", scale: 1, format: twoDecimalFmt),
         ]
 
         return specs.compactMap { spec -> SignalSummaryRow? in
-            guard let raw = rawByPrefix[spec.prefix], !raw.isEmpty else {
+            // First candidate prefix that actually has captured
+            // samples wins. Firmware-specific naming (`RespEvent`
+            // vs `RespEvt`, …) is handled at this layer so the
+            // downstream percentile logic stays single-source.
+            guard let matched = spec.prefixes.first(where: { key in
+                !(rawByPrefix[key] ?? []).isEmpty
+            }), let raw = rawByPrefix[matched] else {
                 return nil
             }
+            let matchedPrefix = matched
             // Apply on-therapy filter when we have one and the
             // sample arrays line up. Some signals (Tidal Volume
             // for example) sample at the same rate as MaskPress
@@ -355,7 +375,7 @@ struct WaveformBundle: Sendable {
             let p95 = percentileValue(filtered, 95)
             let p99_5 = percentileValue(filtered, 99.5)
             return SignalSummaryRow(
-                id: spec.prefix,
+                id: matchedPrefix,
                 label: spec.label,
                 unit: spec.unit,
                 displayMin: spec.format(minV),
@@ -438,6 +458,13 @@ private func decodePLD(
 ) -> PLDDecoded {
     var out = PLDDecoded()
 
+    // One-time dump of the PLD signal labels we see. Cheap (a few
+    // hundred bytes) and logged at debug level, but gives ground
+    // truth when a firmware uses a different name for breath-timing
+    // or respiratory-event signals than we expected.
+    let labelList = pld.signals.map(\.label).joined(separator: ", ")
+    bundleLog.debug("PLD signals: \(labelList, privacy: .public)")
+
     func points(
         prefix: String,
         scale: Double = 1,
@@ -491,6 +518,22 @@ private func decodePLD(
     // "EprPress" and "MaskPress".
     out.ipap = points(prefix: "Press.")
     out.epap = points(prefix: "EprPress")
+
+    // Detailed-Statistics-only signals. We don't chart these, but the
+    // percentile table exposes them when the firmware emits them.
+    // `targetPoints: 1` skips the downsample cost — the returned
+    // points are discarded and only `rawSamples[prefix]` is used.
+    //
+    // Trailing dot on `Ti.` / `Te.` stops the prefix from matching
+    // `TidVol.*` / `Test.*` / etc. (AirSense 10 ships `Ti.2s` and
+    // `Te.2s`, so the dot is also what the firmware actually uses.)
+    // `RespEvt` / `RespEvent` cover the two spellings ResMed uses
+    // for the respiratory-event indicator across firmware lines.
+    _ = points(prefix: "Ti.", targetPoints: 1)
+    _ = points(prefix: "Te.", targetPoints: 1)
+    _ = points(prefix: "RespEvent", targetPoints: 1)
+    _ = points(prefix: "RespEvt", targetPoints: 1)
+    _ = points(prefix: "I:E", targetPoints: 1)
     return out
 }
 
