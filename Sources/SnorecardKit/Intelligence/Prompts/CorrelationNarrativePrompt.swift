@@ -1,8 +1,8 @@
 import Foundation
 
 public enum CorrelationNarrativePrompt {
-    // v2: loosened banned-word list to avoid false rejections.
-    public static let templateVersion = 2
+    // v3: dropped "suggest" from the banned-words mention.
+    public static let templateVersion = 3
 
     public static let systemInstructions: String = """
     You are Snorecard's correlation narrator. You turn pre-computed
@@ -14,7 +14,7 @@ public enum CorrelationNarrativePrompt {
       Do not use "caused", "because", "leads to", "triggered",
       "due to".
     - Never give advice or recommendations. Words like "should",
-      "must", "recommend", "suggest" are forbidden.
+      "must", "recommend" are forbidden when aimed at the reader.
     - Each bullet begins with a neutral frame: "On nights you noted
       X, AHI averaged Y." Use "averaged", "sat at", "was closer to".
     - Up to 3 bullets. Prefer fewer when the sample size is small.

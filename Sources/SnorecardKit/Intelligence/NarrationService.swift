@@ -41,83 +41,127 @@ public protocol NarrationService: Sendable {
 public struct FoundationNarrationService: NarrationService {
     public init() {}
 
+    /// Maximum attempts per feature before we give up on a
+    /// guardrail-rejected generation. The on-device model is
+    /// stochastic, so a fresh session with the same prompt often
+    /// produces different wording on the next try — this gives
+    /// an output that happens to hit a banned word one chance
+    /// to be replaced by clean narration, without looping
+    /// indefinitely and stalling the view.
+    private static let maxRejectionRetries = 3
+
+    /// Run `generate` up to `Self.maxRejectionRetries` times,
+    /// retrying only on `NarrationError.rejected`. Every other
+    /// error — cancellation, session failure, model unavailable
+    /// — propagates immediately. After the final attempt still
+    /// rejects, the last rejection is re-thrown so the caller
+    /// can hide the surface.
+    private func withRejectionRetries<T>(
+        feature: StaticString,
+        _ generate: () async throws -> T
+    ) async throws -> T {
+        var lastRejection: NarrationError?
+        for attempt in 1...Self.maxRejectionRetries {
+            do {
+                return try await generate()
+            } catch let error as NarrationError {
+                if case .rejected = error {
+                    lastRejection = error
+                    log.info("\(feature, privacy: .public): guardrail rejected on attempt \(attempt, privacy: .public)/\(Self.maxRejectionRetries, privacy: .public), retrying")
+                    continue
+                }
+                throw error
+            }
+            // Other errors (CancellationError, arbitrary catch)
+            // are re-thrown by the inner method's own handling
+            // before we get here.
+        }
+        throw lastRejection ?? NarrationError.sessionFailed("exhausted retries")
+    }
+
     public func nightSummary(
         _ input: NightSummaryInput
     ) async throws -> NightSummaryOutput {
-        let session = LanguageModelSession(
-            instructions: Instructions(NightSummaryPrompt.systemInstructions)
-        )
         let prompt = NightSummaryPrompt.buildPrompt(input: input)
-        do {
-            let response = try await session.respond(
-                to: Prompt(prompt),
-                generating: NightSummaryOutput.self
+        return try await withRejectionRetries(feature: "nightSummary") {
+            let session = LanguageModelSession(
+                instructions: Instructions(NightSummaryPrompt.systemInstructions)
             )
-            let output = response.content
-            try enforce(Guardrails.evaluateAll([output.headline, output.paragraph]))
-            return output
-        } catch is CancellationError {
-            // Task cancellation is expected when the user navigates
-            // between days mid-generation — re-throw silently
-            // rather than logging as a session failure.
-            throw CancellationError()
-        } catch let error as NarrationError {
-            throw error
-        } catch {
-            log.error("nightSummary session failed: \(String(describing: error), privacy: .public)")
-            throw NarrationError.sessionFailed(String(describing: error))
+            do {
+                let response = try await session.respond(
+                    to: Prompt(prompt),
+                    generating: NightSummaryOutput.self
+                )
+                let output = response.content
+                try enforce(Guardrails.evaluateAll([output.headline, output.paragraph]))
+                return output
+            } catch is CancellationError {
+                // Task cancellation is expected when the user navigates
+                // between days mid-generation — re-throw silently
+                // rather than logging as a session failure.
+                throw CancellationError()
+            } catch let error as NarrationError {
+                throw error
+            } catch {
+                log.error("nightSummary session failed: \(String(describing: error), privacy: .public)")
+                throw NarrationError.sessionFailed(String(describing: error))
+            }
         }
     }
 
     public func overviewNarrative(
         _ input: OverviewNarrativeInput
     ) async throws -> OverviewNarrativeOutput {
-        let session = LanguageModelSession(
-            instructions: Instructions(OverviewNarrativePrompt.systemInstructions)
-        )
         let prompt = OverviewNarrativePrompt.buildPrompt(input: input)
-        do {
-            let response = try await session.respond(
-                to: Prompt(prompt),
-                generating: OverviewNarrativeOutput.self
+        return try await withRejectionRetries(feature: "overviewNarrative") {
+            let session = LanguageModelSession(
+                instructions: Instructions(OverviewNarrativePrompt.systemInstructions)
             )
-            let output = response.content
-            try enforce(Guardrails.evaluateAll(
-                [output.paragraph, output.highlight ?? ""].filter { !$0.isEmpty }
-            ))
-            return output
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as NarrationError {
-            throw error
-        } catch {
-            log.error("overviewNarrative session failed: \(String(describing: error), privacy: .public)")
-            throw NarrationError.sessionFailed(String(describing: error))
+            do {
+                let response = try await session.respond(
+                    to: Prompt(prompt),
+                    generating: OverviewNarrativeOutput.self
+                )
+                let output = response.content
+                try enforce(Guardrails.evaluateAll(
+                    [output.paragraph, output.highlight ?? ""].filter { !$0.isEmpty }
+                ))
+                return output
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as NarrationError {
+                throw error
+            } catch {
+                log.error("overviewNarrative session failed: \(String(describing: error), privacy: .public)")
+                throw NarrationError.sessionFailed(String(describing: error))
+            }
         }
     }
 
     public func explainMetric(
         _ input: MetricExplainInput
     ) async throws -> MetricExplainOutput {
-        let session = LanguageModelSession(
-            instructions: Instructions(MetricExplainPrompt.systemInstructions)
-        )
         let prompt = MetricExplainPrompt.buildPrompt(input: input)
-        do {
-            let response = try await session.respond(
-                to: Prompt(prompt),
-                generating: MetricExplainOutput.self
+        return try await withRejectionRetries(feature: "explainMetric") {
+            let session = LanguageModelSession(
+                instructions: Instructions(MetricExplainPrompt.systemInstructions)
             )
-            let output = response.content
-            try enforce(Guardrails.evaluateAll([output.whatItMeans, output.howYoursLooks]))
-            return output
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as NarrationError {
-            throw error
-        } catch {
-            log.error("explainMetric session failed: \(String(describing: error), privacy: .public)")
-            throw NarrationError.sessionFailed(String(describing: error))
+            do {
+                let response = try await session.respond(
+                    to: Prompt(prompt),
+                    generating: MetricExplainOutput.self
+                )
+                let output = response.content
+                try enforce(Guardrails.evaluateAll([output.whatItMeans, output.howYoursLooks]))
+                return output
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as NarrationError {
+                throw error
+            } catch {
+                log.error("explainMetric session failed: \(String(describing: error), privacy: .public)")
+                throw NarrationError.sessionFailed(String(describing: error))
+            }
         }
     }
 
@@ -146,25 +190,27 @@ public struct FoundationNarrationService: NarrationService {
     public func correlationNarrative(
         _ input: CorrelationNarrativeInput
     ) async throws -> CorrelationNarrativeOutput {
-        let session = LanguageModelSession(
-            instructions: Instructions(CorrelationNarrativePrompt.systemInstructions)
-        )
         let prompt = CorrelationNarrativePrompt.buildPrompt(input: input)
-        do {
-            let response = try await session.respond(
-                to: Prompt(prompt),
-                generating: CorrelationNarrativeOutput.self
+        return try await withRejectionRetries(feature: "correlationNarrative") {
+            let session = LanguageModelSession(
+                instructions: Instructions(CorrelationNarrativePrompt.systemInstructions)
             )
-            let output = response.content
-            try enforce(Guardrails.evaluateAll([output.intro] + output.bullets))
-            return output
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as NarrationError {
-            throw error
-        } catch {
-            log.error("correlationNarrative session failed: \(String(describing: error), privacy: .public)")
-            throw NarrationError.sessionFailed(String(describing: error))
+            do {
+                let response = try await session.respond(
+                    to: Prompt(prompt),
+                    generating: CorrelationNarrativeOutput.self
+                )
+                let output = response.content
+                try enforce(Guardrails.evaluateAll([output.intro] + output.bullets))
+                return output
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as NarrationError {
+                throw error
+            } catch {
+                log.error("correlationNarrative session failed: \(String(describing: error), privacy: .public)")
+                throw NarrationError.sessionFailed(String(describing: error))
+            }
         }
     }
 

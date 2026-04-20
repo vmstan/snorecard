@@ -7,11 +7,11 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    // v3: narrower, simpler instructions. v2 listed too many banned
-    // words and the 3B model kept using descriptive verbs like
-    // "increased" anyway, so the guardrail rejected otherwise safe
-    // narratives and the card appeared only intermittently.
-    public static let templateVersion = 3
+    // v4: dropped "suggest" from the banned-words mention — the
+    // model uses it legitimately in descriptive framings ("these
+    // numbers suggest steady therapy") and the guardrail kept
+    // rejecting otherwise safe output.
+    public static let templateVersion = 4
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe ResMed
@@ -20,8 +20,8 @@ public enum NightSummaryPrompt {
 
     Rules:
     - Never give advice, instructions, recommendations, or therapy
-      changes. Words like "should", "must", "recommend", "suggest"
-      are forbidden.
+      changes. Words like "should", "must", "recommend" are
+      forbidden when aimed at the reader.
     - Never claim one thing caused another. The user's note is
       context, not explanation. Do not use "caused", "because",
       "leads to", "triggered", "due to".

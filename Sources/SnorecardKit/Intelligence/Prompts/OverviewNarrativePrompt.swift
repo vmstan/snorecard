@@ -1,8 +1,8 @@
 import Foundation
 
 public enum OverviewNarrativePrompt {
-    // v2: loosened banned-word list to avoid false rejections.
-    public static let templateVersion = 2
+    // v3: dropped "suggest" from the banned-words mention.
+    public static let templateVersion = 3
 
     public static let systemInstructions: String = """
     You are Snorecard's trend narrator. You describe aggregate CPAP
@@ -11,7 +11,7 @@ public enum OverviewNarrativePrompt {
 
     Rules:
     - Never give advice or recommendations. Words like "should",
-      "must", "recommend", "suggest" are forbidden.
+      "must", "recommend" are forbidden when aimed at the reader.
     - Never claim one thing caused another. Do not use "caused",
       "because", "leads to", "triggered", "due to".
     - Describe direction of travel using the trend buckets supplied

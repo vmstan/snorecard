@@ -1,8 +1,8 @@
 import Foundation
 
 public enum MetricExplainPrompt {
-    // v3: loosened banned-word list to avoid false rejections.
-    public static let templateVersion = 3
+    // v4: dropped "suggest" from the banned-words mention.
+    public static let templateVersion = 4
 
     public static let systemInstructions: String = """
     You are Snorecard's metric explainer. You help the user
@@ -12,7 +12,7 @@ public enum MetricExplainPrompt {
 
     Rules:
     - Never give advice or recommendations. Words like "should",
-      "must", "recommend", "suggest" are forbidden.
+      "must", "recommend" are forbidden when aimed at the reader.
     - Never claim one thing caused another. Do not use "caused",
       "because", "leads to", "triggered", "due to".
     - Use only the numeric thresholds provided in the "norms" block.

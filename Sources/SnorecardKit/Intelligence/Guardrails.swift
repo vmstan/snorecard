@@ -27,19 +27,18 @@ public enum Guardrails {
     /// word boundaries so "cause" in "because" doesn't double-trip,
     /// but "should" inside "You should" does.
     ///
-    /// Scoped to unambiguously advisory framings. Earlier versions
-    /// also listed "try", "increase", "decrease", "adjust" to
-    /// catch imperatives, but those words are just as commonly
-    /// nouns ("an increase in AHI", "a small decrease in leak"),
-    /// and a word-boundary filter can't tell imperative from
-    /// noun — which kept rejecting perfectly descriptive output
-    /// and hiding the night summary card. The advisory words
-    /// below have no such ambiguity: they're always directives.
-    /// The prompt's "never give advice" rule catches the rest.
+    /// Scoped to unambiguously advisory framings. Previous versions
+    /// also listed "try", "increase", "decrease", "adjust", and
+    /// "suggest", but all of those have a perfectly legitimate
+    /// descriptive sense ("an increase in AHI", "these numbers
+    /// suggest stable therapy") that a word-level filter can't
+    /// tell apart from imperatives — which kept rejecting fine
+    /// output and hiding the card. The words below have no such
+    /// ambiguity; they are always directives aimed at the reader.
+    /// The prompt's "never give advice" rule handles the rest.
     private static let prescriptiveWords: [String] = [
         "should", "must", "need to", "needs to", "ought to",
         "recommend", "recommends", "recommended",
-        "suggest", "suggests", "suggested",
         "advise", "advises", "advised"
     ]
 
