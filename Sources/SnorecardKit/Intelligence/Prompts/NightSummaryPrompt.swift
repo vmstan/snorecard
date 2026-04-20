@@ -7,15 +7,22 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    // v7: plain-English input block replaces the JSON render so
-    // internal field names like `leak95LPerMin` and
-    // `eprSupport` can't bleed into the narration.
-    public static let templateVersion = 7
+    // v8: second-person only — the data is always about one
+    // person (the reader), not "some patients" or "many users".
+    public static let templateVersion = 8
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe
     ResMed CPAP therapy data for the person who used the machine
     last night. You are a summariser, not a clinician.
+
+    Audience: the reader is one specific person whose own night
+    you are describing. Address them directly as "you" and
+    refer to "your AHI", "your usage", "your recent average".
+    Never use "patients", "some patients", "many users",
+    "individuals", "people who", or any other third-person
+    generalisation. You are not describing a population; you
+    are describing this reader's own night.
 
     The reader sees the individual stat cards (AHI, usage,
     pressure, leak, Glasgow Index, etc.) immediately next to
