@@ -100,18 +100,19 @@ struct SnorecardApp: App {
 
         Divider()
 
-        // Sleep Analysis opens the on-device AI summary of the
-        // current night. Sits just above Sleep Journal so the
-        // AI surface is the first item in the per-day cluster.
-        // Disabled when no day is selected OR when Apple
-        // Intelligence is unavailable — the pane would be empty
-        // in either case.
+        // Sleep Analysis covers both scopes: per-night on the day
+        // view, per-range on the Overview. Posts whichever
+        // notification matches the current selection, mirroring
+        // how Sleep Journal swaps between daily / device notes.
         Button {
-            NotificationCenter.default.post(name: .snorecardOpenSleepAnalysis, object: nil)
+            NotificationCenter.default.post(
+                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenOverviewAnalysis,
+                object: nil
+            )
         } label: {
             Label("Sleep Analysis", systemImage: "sparkles")
         }
-        .disabled(!hasCard || !isViewingDay || !library.intelligence.isReady)
+        .disabled(!hasCard || !library.intelligence.isReady)
 
         // Sleep Journal targets whichever scope the user is
         // currently viewing — the per-night journal from a day,

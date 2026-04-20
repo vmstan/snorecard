@@ -80,17 +80,6 @@ struct OverviewView: View {
                         )
                         .frame(maxWidth: .infinity, minHeight: 160)
                     } else {
-                        // Trend narrative sits above the summary
-                        // cards to match `DayDetailView`, where the
-                        // "Sleep Analysis" card sits above its own
-                        // stat grid.
-                        if library.intelligence.isReady {
-                            TrendNarrativeCard(
-                                stats: stats,
-                                rangeStart: rangeStart,
-                                rangeEnd: rangeEnd
-                            )
-                        }
                         summaryCards
                         if library.intelligence.isReady {
                             CorrelationHintsCard(
@@ -127,6 +116,21 @@ struct OverviewView: View {
         // state and the third column stays the one surface
         // hosting accessory views.
         .toolbar {
+            if library.intelligence.isReady {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+                            stats: stats,
+                            rangeStart: rangeStart,
+                            rangeEnd: rangeEnd
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                    .disabled(stats.isEmpty)
+                    .help("On-device AI summary of this range")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(
@@ -140,6 +144,18 @@ struct OverviewView: View {
             }
         }
         #endif
+        // iOS + macOS: listen for Sleep Analysis requests posted
+        // from the shared Options menu / File menu. macOS routes
+        // through `library.pendingOverviewAnalysis`; iOS does the
+        // same, and the sheet binding at ContentView picks it up.
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenOverviewAnalysis)) { _ in
+            guard !stats.isEmpty else { return }
+            library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+                stats: stats,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd
+            )
+        }
     }
 
     /// Segmented preset picker plus optional custom date-range pickers.

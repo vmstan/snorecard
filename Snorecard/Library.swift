@@ -59,6 +59,13 @@ final class Library {
     /// sheet/inspector when it closes.
     var pendingExplain: ExplainRequest? = nil
 
+    /// Non-nil while the user has opened the Overview's Sleep
+    /// Analysis from the toolbar / menu. Carries the stats,
+    /// range bounds, and filtered day list so
+    /// `TrendNarrativeCard` can render without needing
+    /// `OverviewView`'s local range state.
+    var pendingOverviewAnalysis: OverviewAnalysisRequest? = nil
+
     /// Serial number → per-day tag-extraction task. Tracked here
     /// so a rapid note edit (750 ms autosave churning) cancels
     /// the in-flight extraction and reschedules rather than
