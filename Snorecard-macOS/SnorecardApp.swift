@@ -59,6 +59,18 @@ struct SnorecardApp: App {
             }
         }
         .windowResizability(.contentSize)
+
+        // Advanced Charting window — high-resolution breath
+        // waveforms + session-timeline scrubber. Keyed on day
+        // date (same convention as Detailed Statistics) so
+        // opening the same night twice reuses the window
+        // instead of stacking duplicates.
+        WindowGroup(for: AdvancedChartingPayload.self) { $payload in
+            if let payload {
+                AdvancedChartingView(payload: payload)
+                    .frame(minWidth: 960, minHeight: 640)
+            }
+        }
     }
 
     /// Full File-menu command stack — mirrors the in-app Actions

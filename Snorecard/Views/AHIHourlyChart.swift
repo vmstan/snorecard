@@ -10,10 +10,13 @@ import SnorecardKit
 struct AHIHourlyChart: View {
     let events: [TimedEvent]
     let dayStart: Date
+    /// Total night duration in seconds. Drives the bucket range so
+    /// every hourly chart on the day view shares the same x axis —
+    /// quiet signals (few events, no leak, etc.) still span the
+    /// full night instead of collapsing to a narrower plot.
+    let totalDuration: TimeInterval
 
     private var buckets: [HourBucket] {
-        guard !events.isEmpty else { return [] }
-
         let calendar = Calendar.current
         // Snap the first bucket to the hour boundary at or before dayStart so
         // a 22:39 session bucket starts at 22:00 rather than 22:39.
@@ -22,13 +25,12 @@ struct AHIHourlyChart: View {
             of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
         ) ?? dayStart
 
-        let minOffset = 0.0
-        let maxOffset = events.map(\.offset).max() ?? 0
-        let lastHour = Int((maxOffset / 3600).rounded(.down))
-        let firstHour = Int((minOffset / 3600).rounded(.down))
+        let lastHour = Int((max(totalDuration, 1) / 3600).rounded(.up)) - 1
+        guard lastHour >= 0 else { return [] }
 
         var out: [HourBucket] = []
-        for hour in firstHour...lastHour {
+        out.reserveCapacity(lastHour + 1)
+        for hour in 0...lastHour {
             let start = TimeInterval(hour) * 3600
             let end = start + 3600
             var ob = 0
@@ -96,6 +98,7 @@ struct AHIHourlyChart: View {
                 "Hypopnea": Color.eventHypopnea
             ])
             .chartLegend(.hidden)
+            .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: 0 ... max(peakEventCount, 1))
             .chartYAxis {
                 AxisMarks(

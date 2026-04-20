@@ -22,11 +22,13 @@ struct DayDetailView: View {
                 if let error = loadError {
                     Text(error)
                         .foregroundStyle(.red)
-                } else if let bundle = loadedWaveform {
-                    Divider()
-                        .padding(.vertical, 4)
-                    WaveformSection(bundle: bundle)
-                } else {
+                } else if loadedWaveform == nil {
+                    // Placeholder only while the bundle is still
+                    // decoding — once it lands the summary cards,
+                    // hourly charts, and Advanced Charting button
+                    // are all the user needs inline. The high-
+                    // resolution waveform + session timeline now
+                    // live behind that button, not here.
                     waveformLoadingPlaceholder
                 }
             }
@@ -284,23 +286,49 @@ struct DayDetailView: View {
                     }
                 }
 
-                // Per-hour event chart sits below the stat grid
-                // now so the cards aren't pushed offscreen by it.
+                // Per-hour breakdowns sit below the stat grid so
+                // the cards aren't pushed offscreen by them. Order
+                // — events, leak, flow limit, pressure — goes from
+                // the most-diagnostic metric (events) to the
+                // trajectory one (pressure) so a scan down the
+                // column reads most-important-first.
                 if let bundle = loadedWaveform, !bundle.events.isEmpty {
                     AHIHourlyChart(
                         events: bundle.events,
-                        dayStart: bundle.dayStart
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                if let bundle = loadedWaveform, !bundle.flatLeak.isEmpty {
+                    LeakHourlyChart(
+                        leak: bundle.flatLeak,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                if let bundle = loadedWaveform, !bundle.flatFlowLimitation.isEmpty {
+                    FlowLimitHourlyChart(
+                        flowLimit: bundle.flatFlowLimitation,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                if let bundle = loadedWaveform, !bundle.flatPressure.isEmpty {
+                    PressureHourlyChart(
+                        pressure: bundle.flatPressure,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
                     )
                 }
 
-                if let bundle = loadedWaveform, !bundle.signalSummary.isEmpty {
-                    DailySignalSummaryTable(
-                        payload: DetailedStatisticsPayload(
-                            dayDate: day.date,
-                            deviceName: library.card.map { library.displayName(for: $0) },
-                            rows: bundle.signalSummary
-                        )
-                    )
+                // Detailed Statistics + Advanced Charting both
+                // spawn a secondary window (macOS) or sheet (iOS)
+                // so the day view itself stays focused on metrics
+                // and hourly charts. macOS lays them out side-by-
+                // side because there's room; iOS stacks them to
+                // keep the labels readable on narrow screens.
+                if loadedWaveform != nil {
+                    summaryActionButtons
                 }
             }
         } else if !day.files.isEmpty {
@@ -308,6 +336,47 @@ struct DayDetailView: View {
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 12)
         }
+    }
+
+    /// Detailed Statistics + Advanced Charting action row. macOS
+    /// places them side-by-side because there's plenty of toolbar
+    /// width; iOS stacks them vertically so the labels stay
+    /// readable on a phone-width screen.
+    @ViewBuilder
+    private var summaryActionButtons: some View {
+        let summaryTable: DailySignalSummaryTable? = {
+            guard let bundle = loadedWaveform, !bundle.signalSummary.isEmpty else {
+                return nil
+            }
+            return DailySignalSummaryTable(
+                payload: DetailedStatisticsPayload(
+                    dayDate: day.date,
+                    deviceName: library.card.map { library.displayName(for: $0) },
+                    rows: bundle.signalSummary
+                )
+            )
+        }()
+        let advancedChartingButton = AdvancedChartingButton(
+            payload: AdvancedChartingPayload(
+                dayDate: day.date,
+                deviceName: library.card.map { library.displayName(for: $0) },
+                brpURLs: day.files(of: .breath).map(\.url),
+                pldURLs: day.files(of: .physiological).map(\.url),
+                eveURLs: day.files(of: .events).map(\.url)
+            )
+        )
+
+        #if os(iOS)
+        VStack(alignment: .leading, spacing: 10) {
+            summaryTable
+            advancedChartingButton
+        }
+        #else
+        HStack(spacing: 10) {
+            summaryTable
+            advancedChartingButton
+        }
+        #endif
     }
 
     /// Return a tap handler for an explainable metric when Apple
