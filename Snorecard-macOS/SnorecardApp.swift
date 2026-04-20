@@ -35,7 +35,7 @@ struct SnorecardApp: App {
                 .environment(library)
                 .frame(minWidth: 900, minHeight: 600)
                 .task {
-                    library.loadLastOpenedIfPossible()
+                    await library.loadLastOpenedIfPossible()
                 }
         }
         .windowResizability(.contentSize)

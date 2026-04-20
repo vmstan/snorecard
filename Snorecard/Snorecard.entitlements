@@ -6,6 +6,20 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!--
+	Foundation Models probes the system model catalog via an XPC
+	service (`com.apple.modelcatalog.catalog`) whenever anything
+	touches `SystemLanguageModel.default.availability` — including
+	on Macs that don't support Apple Intelligence. The App Sandbox
+	blocks the mach-lookup by default and the framework logs a
+	noisy "connection error ... Sandbox restriction" even though
+	the probe correctly falls through to `.unavailable`. Grant the
+	lookup so the probe completes without the warning.
+	-->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.modelcatalog.catalog</string>
+	</array>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.com.vmstan.Snorecard</string>

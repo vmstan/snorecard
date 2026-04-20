@@ -16,5 +16,20 @@
 	</array>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)com.vmstan.Snorecard</string>
+	<!--
+	Foundation Models probes the system model catalog via an XPC
+	service (`com.apple.modelcatalog.catalog`) whenever anything
+	touches `SystemLanguageModel.default.availability` — including
+	on iPads and iPhones that don't support Apple Intelligence.
+	The sandbox blocks the mach-lookup by default and the
+	framework logs a noisy "connection error ... Sandbox
+	restriction" even though the probe correctly falls through to
+	`.unavailable`. Grant the lookup so the probe completes
+	without the warning.
+	-->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.modelcatalog.catalog</string>
+	</array>
 </dict>
 </plist>

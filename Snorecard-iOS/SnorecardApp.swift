@@ -30,7 +30,7 @@ struct SnorecardApp: App {
             ContentView()
                 .environment(library)
                 .task {
-                    library.loadLastOpenedIfPossible()
+                    await library.loadLastOpenedIfPossible()
                 }
         }
     }

@@ -32,6 +32,13 @@ final class Library {
 
     var state: LoadState = .empty
     var selection: SidebarSelection? = nil
+    /// `true` while the initial launch probe is deciding what to
+    /// open. Stays `true` until `loadLastOpenedIfPossible()`
+    /// finishes its iCloud + snapshot + local-fallback sweep, so
+    /// the UI can show a "Opening Snorecard…" splash instead of
+    /// flashing the empty-state "No SD Card" screen before the
+    /// probe has had a chance to pick a folder.
+    var isInitialProbing: Bool = true
     /// Map of CPAP serial number → custom display name. Backed by
     /// `NSUbiquitousKeyValueStore` so the override syncs automatically
     /// across all of the user's Macs and iOS devices.
@@ -601,20 +608,46 @@ final class Library {
     /// the user across Macs and iPhones). Falls back to the most
     /// recently modified iCloud folder, and finally to whatever was
     /// last opened locally.
-    func loadLastOpenedIfPossible() {
-        guard case .empty = state else { return }
+    func loadLastOpenedIfPossible() async {
+        guard case .empty = state else {
+            isInitialProbing = false
+            return
+        }
+        // Make sure the probe flag is cleared no matter which arm
+        // of the logic below runs.
+        defer { isInitialProbing = false }
 
+        // Fast path — an iCloud folder is already visible locally.
         if let url = Self.preferredICloudDeviceFolder() {
-            // Seed from the on-disk snapshot (keyed on serial, which
-            // is the iCloud folder's last path component) so the
-            // sidebar appears instantly — the subsequent `load` pass
-            // refreshes days as they finish aggregating.
             let serial = url.lastPathComponent
             if let snapshot = CardSnapshot.load(forSerial: serial) {
                 state = .hydrating(snapshot)
             }
             load(url)
             return
+        }
+
+        // Fresh-install rescue. On a brand-new iPad/iPhone the
+        // iCloud container's backup root may not have been
+        // materialized locally yet, so `iCloudDeviceFolders()`
+        // returns empty even though the source device's data is
+        // already in the account. Poll for a few seconds while the
+        // UI shows an "Opening Snorecard…" splash, then fall
+        // through to the UserDefaults fallback if nothing surfaces.
+        //
+        // 6 × 500 ms = 3 s, enough to cover the common "iCloud just
+        // hasn't indexed yet" case without making a genuinely empty
+        // install wait forever.
+        for _ in 0..<6 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let url = Self.preferredICloudDeviceFolder() {
+                let serial = url.lastPathComponent
+                if let snapshot = CardSnapshot.load(forSerial: serial) {
+                    state = .hydrating(snapshot)
+                }
+                load(url)
+                return
+            }
         }
 
         // Last resort — whatever path we stashed in UserDefaults
@@ -781,7 +814,35 @@ final class Library {
             do {
                 // Phase 1 — quick structure-only scan. Gives us the
                 // day list and any sidecar-cached stats immediately.
-                let structure = try SDCardImporter.scanStructure(url)
+                var structure = try SDCardImporter.scanStructure(url)
+
+                // Fresh-install rescue. On a brand-new iPad/iPhone,
+                // iCloud often surfaces the device folder before its
+                // DATALOG subfolders — `scanStructure` returns zero
+                // days even though the source device's data is
+                // already in the container. Ask iCloud to materialize
+                // the tree (queries for *.edf and triggers their
+                // download, which pulls day-folder metadata with
+                // them), wait briefly for directory listings to
+                // populate, and re-scan. A few short passes give
+                // iCloud time to deliver the metadata without
+                // pushing the user into a multi-minute wall of
+                // nothing.
+                if source == .iCloud && structure.days.isEmpty {
+                    for attempt in 0..<3 where structure.days.isEmpty {
+                        await CloudPrefetcher.materializeDeviceTree(in: url)
+                        // Linear backoff — 1 s, 2 s, 3 s. Bigger
+                        // than 500 ms polls because iCloud metadata
+                        // updates land on their own cadence, and
+                        // smaller intervals just churn.
+                        try? await Task.sleep(
+                            nanoseconds: UInt64(attempt + 1) * 1_000_000_000
+                        )
+                        if let rescan = try? SDCardImporter.scanStructure(url) {
+                            structure = rescan
+                        }
+                    }
+                }
 
                 // For SD card imports, merge new day folders into
                 // iCloud first, then use the iCloud folder as the

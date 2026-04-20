@@ -38,7 +38,10 @@ public enum CloudPrefetcher {
         // Ask iCloud's server-side index for every sidecar under the
         // device folder — including entries iOS hasn't materialized
         // in its local directory listings yet.
-        let discovered = await SidecarDiscovery.run(in: deviceFolder)
+        let discovered = await MetadataDiscovery.run(
+            in: deviceFolder,
+            fsNameLike: DailyStatsCache.filename
+        )
 
         let fm = FileManager.default
         var pending: [URL] = []
@@ -139,29 +142,61 @@ public enum CloudPrefetcher {
     }
 }
 
-/// Wraps `NSMetadataQuery` to enumerate every sidecar URL under a
-/// specific device folder. The query runs on the main actor because
-/// `NSMetadataQuery` requires a live run loop and posts its
-/// notifications on `OperationQueue.main`.
+extension CloudPrefetcher {
+
+    /// Fresh-install rescue path. When a user installs Snorecard on
+    /// a new iPad/iPhone, the device folder may show up in
+    /// `iCloudDeviceFolders` (the backup root itself has synced)
+    /// while the DATALOG subfolders have not — `contentsOfDirectory`
+    /// returns empty and `scanStructure` finishes with zero days.
+    ///
+    /// Query iCloud's index for raw `.edf` files under the device
+    /// folder and trigger their download. That surfaces each day
+    /// folder in local directory listings so a follow-up
+    /// `scanStructure` pass picks them up. Non-blocking — we fire
+    /// off `startDownloadingUbiquitousItem` for each match and let
+    /// iCloud stream content in the background.
+    public static func materializeDeviceTree(in deviceFolder: URL) async {
+        let edfs = await MetadataDiscovery.run(
+            in: deviceFolder,
+            fsNameLike: "*.edf"
+        )
+        let fm = FileManager.default
+        for url in edfs {
+            try? fm.startDownloadingUbiquitousItem(at: url)
+        }
+    }
+}
+
+/// Wraps `NSMetadataQuery` to enumerate file URLs under a specific
+/// device folder that match a filename predicate. The query runs on
+/// the main actor because `NSMetadataQuery` requires a live run
+/// loop and posts its notifications on `OperationQueue.main`.
 @MainActor
-private final class SidecarDiscovery {
+private final class MetadataDiscovery {
     private let query = NSMetadataQuery()
     private var observer: NSObjectProtocol?
     private var continuation: CheckedContinuation<[URL], Never>?
     private let deviceFolderPath: String
+    private let fsNameLike: String
 
-    private init(deviceFolderPath: String) {
+    private init(deviceFolderPath: String, fsNameLike: String) {
         self.deviceFolderPath = deviceFolderPath
+        self.fsNameLike = fsNameLike
     }
 
-    /// Return every sidecar URL iCloud knows about inside the device
-    /// folder. Waits up to 30 s for the initial metadata gather, plus
-    /// a short settle window to catch late arrivals, before returning.
-    static func run(in deviceFolder: URL) async -> [URL] {
+    /// Return every URL iCloud knows about inside the device folder
+    /// whose filename matches `fsNameLike` (supports `*` wildcards).
+    /// Waits up to 30 s for the initial metadata gather, plus a
+    /// short settle window to catch late arrivals.
+    static func run(in deviceFolder: URL, fsNameLike: String) async -> [URL] {
         // Resolve symlinks so path-prefix matching works even when
         // iCloud reports the container under its canonical path.
         let path = deviceFolder.resolvingSymlinksInPath().path
-        return await SidecarDiscovery(deviceFolderPath: path).start()
+        return await MetadataDiscovery(
+            deviceFolderPath: path,
+            fsNameLike: fsNameLike
+        ).start()
     }
 
     private func start() async -> [URL] {
@@ -169,9 +204,9 @@ private final class SidecarDiscovery {
             self.continuation = cont
 
             query.predicate = NSPredicate(
-                format: "%K == %@",
+                format: "%K LIKE[cd] %@",
                 NSMetadataItemFSNameKey,
-                DailyStatsCache.filename
+                fsNameLike
             )
             #if os(iOS) || os(tvOS) || os(watchOS)
             query.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]

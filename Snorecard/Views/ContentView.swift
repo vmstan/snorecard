@@ -717,6 +717,13 @@ struct ContentView: View {
 
         Group {
             switch library.state {
+            case .empty where library.isInitialProbing:
+                // Initial launch splash — keeps the column from
+                // flashing the "No SD Card" empty state before the
+                // probe has had a chance to pick a folder (common
+                // on fresh iPads where iCloud is still delivering
+                // metadata for the backup root).
+                initialProbeSplash
             case .empty:
                 ContentUnavailableView {
                     Label("No SD Card", systemImage: "externaldrive")
@@ -785,6 +792,8 @@ struct ContentView: View {
                         description: Text("Pick something from the sidebar.")
                     )
                 }
+            } else if library.isInitialProbing {
+                initialProbeSplash
             } else {
                 Color.clear
             }
@@ -792,5 +801,29 @@ struct ContentView: View {
         #if os(iOS)
         .toolbar { detailToolbarButtonsForiOS }
         #endif
+    }
+
+    /// Matching splash used in both the sidebar and the detail
+    /// pane during the initial launch probe. Generic enough that
+    /// neither column needs to know what the probe is actually
+    /// doing — "opening" covers the iCloud-check, snapshot-load,
+    /// and UserDefaults-fallback paths alike.
+    private var initialProbeSplash: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "moon.zzz.fill")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(.tint)
+                .symbolEffect(.pulse, options: .repeating)
+            VStack(spacing: 4) {
+                Text("Opening Snorecard")
+                    .font(.headline)
+                Text("Checking iCloud for your CPAP data…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
