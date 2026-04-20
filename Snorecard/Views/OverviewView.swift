@@ -290,7 +290,7 @@ struct OverviewView: View {
             }
             if let epap = avgEPAP {
                 card(
-                    "Avg EPAP",
+                    "Avg EPAP (95%)",
                     value: String(format: "%.1f cmH₂O", epap),
                     explain: OverviewExplainContext(
                         metric: .epap95,
@@ -309,7 +309,7 @@ struct OverviewView: View {
                ipap > epap + 0.05
             {
                 card(
-                    "Avg IPAP",
+                    "Avg IPAP (95%)",
                     value: String(format: "%.1f cmH₂O", ipap),
                     explain: OverviewExplainContext(
                         metric: .ipap95,
@@ -451,8 +451,8 @@ struct OverviewView: View {
         switch metric {
         case .ahi:              return "Avg AHI"
         case .glasgowIndex:     return "Avg Glasgow Index"
-        case .epap95:           return "Avg EPAP"
-        case .ipap95:           return "Avg IPAP"
+        case .epap95:           return "Avg EPAP (95%)"
+        case .ipap95:           return "Avg IPAP (95%)"
         case .leak95:           return "Avg Leak (95%)"
         case .largeLeak:        return "Avg Large Leak"
         case .tidalVolume:      return "Avg Tidal Volume"

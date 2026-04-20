@@ -273,7 +273,7 @@ struct ContentView: View {
         }
         #endif
         .alert(
-            "Rebuild Statistics?",
+            "Rebuild Analysis?",
             isPresented: $isConfirmingRebuild
         ) {
             // Order matters — on iOS alerts place Cancel leading
@@ -284,11 +284,11 @@ struct ContentView: View {
             // message grew past a few lines).
             Button("Cancel", role: .cancel) { }
                 .keyboardShortcut(.cancelAction)
-            Button("Rebuild Statistics", role: .destructive) {
-                library.invalidateStatsCacheAndReload()
+            Button("Rebuild Analysis", role: .destructive) {
+                library.rebuildAnalysis()
             }
         } message: {
-            Text(rebuildStatisticsWarning)
+            Text(rebuildAnalysisWarning)
         }
         .task(id: library.card?.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
@@ -303,7 +303,7 @@ struct ContentView: View {
                 toggleInspector(.rename)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildStatistics)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildAnalysis)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 isConfirmingRebuild = true
             }
@@ -492,7 +492,7 @@ struct ContentView: View {
     /// dialog. Mentions the concrete consequences (cache wiped, iCloud
     /// re-sync, time cost) so the user can make an informed call
     /// rather than treating it as a trivial refresh button.
-    private var rebuildStatisticsWarning: String {
+    private var rebuildAnalysisWarning: String {
         let dayCount = library.card?.days.count ?? 0
         let scope: String
         if dayCount == 0 {
@@ -504,12 +504,12 @@ struct ContentView: View {
         }
 
         return """
-        This will recompute every metric for \(scope) from the raw EDF files and replace the current summary data in iCloud.
-        
-        Use this if your statistic numbers look wrong — if you're missing full nights because you just imported data on another device, use Refresh instead.
+        This will recompute every metric for \(scope) from the raw EDF files and replace the current summary data in iCloud. All AI-generated Sleep Analysis and Explain summaries are cleared at the same time, so the next time you open one it's regenerated against the fresh numbers.
 
-        While charting, AHI, computed percentiles and other scoring data will still be available, any therapy settings for nights your CPAP no longer keeps in its rolling summary may be lost.
-        
+        Your sleep journal entries are never touched.
+
+        While charting, AHI, computed percentiles and other scoring data will still be available, the Therapy Details for nights your PAP-device no longer keeps in its rolling summary, may be lost.
+
         Based on your dataset this process may take \(estimatedRebuildDuration(dayCount: dayCount)).
         """
     }
@@ -685,7 +685,7 @@ struct ContentView: View {
                 Button(role: .destructive) {
                     isConfirmingRebuild = true
                 } label: {
-                    Label("Rebuild Statistics", systemImage: "hammer")
+                    Label("Rebuild Analysis", systemImage: "hammer")
                 }
             }
         } label: {

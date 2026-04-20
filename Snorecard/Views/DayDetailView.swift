@@ -232,7 +232,7 @@ struct DayDetailView: View {
                     }
                     if let epap = stats.epap95 {
                         StatCard(
-                            label: "EPAP",
+                            label: "EPAP (95%)",
                             value: String(format: "%.1f cmH₂O", epap),
                             onTap: explainTap(.epap95)
                         )
@@ -247,7 +247,7 @@ struct DayDetailView: View {
                        ipap > epap + 0.05
                     {
                         StatCard(
-                            label: "IPAP",
+                            label: "IPAP (95%)",
                             value: String(format: "%.1f cmH₂O", ipap),
                             onTap: explainTap(.ipap95)
                         )
@@ -432,8 +432,8 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .epap95:           return "EPAP"
-        case .ipap95:           return "IPAP"
+        case .epap95:           return "EPAP (95%)"
+        case .ipap95:           return "IPAP (95%)"
         case .leak95:           return "Leak (95%)"
         case .largeLeak:        return "Large Leak"
         case .tidalVolume:      return "Tidal Volume"

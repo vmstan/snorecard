@@ -17,7 +17,7 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
 /// flat and avoids leaking UI state up into `SnorecardApp`.
 extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
-    static let snorecardRebuildStatistics = Notification.Name("Snorecard.RebuildStatistics")
+    static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
     // Sleep Analysis is declared in the shared ContentView
     // notification set so both platforms reference the same name;
@@ -183,9 +183,9 @@ struct SnorecardApp: App {
         .disabled(!hasCard)
 
         Button(role: .destructive) {
-            NotificationCenter.default.post(name: .snorecardRebuildStatistics, object: nil)
+            NotificationCenter.default.post(name: .snorecardRebuildAnalysis, object: nil)
         } label: {
-            Label("Rebuild Statistics", systemImage: "hammer")
+            Label("Rebuild Analysis", systemImage: "hammer")
         }
         .disabled(!hasCard)
     }

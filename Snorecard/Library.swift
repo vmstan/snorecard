@@ -192,11 +192,23 @@ final class Library {
     /// the computation logic has changed or a day's cache got out of
     /// sync with the raw data.
     ///
-    /// **Intentionally narrow:** this only removes files matching
-    /// `DailyStatsCache.filename`. User-authored notes
-    /// (`DailyNotesCache.filename`) must never be deleted by a
-    /// rebuild — they aren't derived data and can't be recomputed.
-    func invalidateStatsCacheAndReload() {
+    /// Clears two classes of derived data and triggers a fresh
+    /// stats rebuild from the raw EDF files:
+    ///   1. `DailyStatsCache.filename` sidecars inside each day
+    ///      folder — these get recomputed by the reload that
+    ///      follows.
+    ///   2. `IntelligenceCache.dayFilename` sidecars (per-night AI
+    ///      narratives + metric-explain LRUs) and the device-level
+    ///      `IntelligenceCache.deviceFilename` (Overview narratives,
+    ///      Overview metric-explain LRUs). AI caches are *cleared
+    ///      but not regenerated* — they rebuild lazily on demand
+    ///      the next time the user opens a Sleep Analysis / Explain
+    ///      surface.
+    ///
+    /// **User-authored notes (`DailyNotesCache.filename`,
+    /// `DeviceNotesCache.filename`) are never touched** — they
+    /// aren't derived data and can't be recomputed.
+    func rebuildAnalysis() {
         guard let url = card?.rootURL else { return }
         let datalog = url.appendingPathComponent("DATALOG", isDirectory: true)
         let fm = FileManager.default
@@ -206,10 +218,14 @@ final class Library {
             options: [.skipsHiddenFiles]
         ) {
             for dir in dayDirs {
-                let sidecar = dir.appendingPathComponent(DailyStatsCache.filename)
-                try? fm.removeItem(at: sidecar)
+                try? fm.removeItem(at: dir.appendingPathComponent(DailyStatsCache.filename))
+                try? fm.removeItem(at: dir.appendingPathComponent(IntelligenceCache.dayFilename))
             }
         }
+        // Device-level intelligence sidecar (Overview narratives +
+        // Overview metric-explain LRUs) lives at the device root,
+        // not inside DATALOG.
+        try? fm.removeItem(at: url.appendingPathComponent(IntelligenceCache.deviceFilename))
         load(url)
     }
 
