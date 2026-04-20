@@ -9,40 +9,55 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 **Each night**
 
 - Your AHI for the night, broken down into obstructive apnea, hypopnea, and central apnea
-- Quick-glance cards for usage hours, time spent in apnea, pressure, leak, flow limitation, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
+- Quick-glance cards for usage hours, time spent in apnea, EPAP, IPAP, leak, flow limitation, snore, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
 - A bar chart showing when events happened hour by hour
-- Detailed percentile statistics for every signal your machine recorded
-- The full waveform of breathing, mask pressure, leak, snore, and tidal volume — with a draggable scrubber that focuses any window of the night
+- Hourly charts for leak, flow limitation, and pressure
+- Detailed percentile statistics for every signal your machine recorded, including breath timing and a per-event breakdown
+- An Advanced Charting window with the full waveform of breathing, mask pressure, leak, snore, and tidal volume — with a draggable scrubber that focuses any window of the night
 - Your machine's exact therapy settings for that specific night — pressure, mode, EPR, ramp, humidifier, mask type, and more
-- A space to write your own notes about the night
+- A Sleep Journal entry for writing your own notes about the night
 
 **Across all your nights**
 
-- Compliance, average AHI, average usage, and other long-running averages
+- Compliance, average AHI (with obstructive / hypopnea / central breakdown), average usage, and other long-running averages
 - A [Glasgow Index](https://www.fortaspen.com/sleep/Intro.html) score for breath quality
 - Trend charts you can filter to the last 7 / 14 / 30 days or a custom range
 - Tap any chart to jump straight to that day
+- A device-wide Sleep Journal for notes that span more than one night
 
 **Across all your devices**
 
 - Switch between multiple ResMed machines if you have more than one
 - Give each device a friendly name that follows you to your other Apple devices
 - Everything syncs through your iCloud account — import once on your Mac, see it on your iPhone
+- Pick from six app-icon variants built in Icon Composer
 
 **Backup**
 
 - One-click backups of an entire device's data into your iCloud Drive
 - Restore from any backup, including across devices
 
+## On-device sleep analysis
+
+Snorecard uses Apple Intelligence to turn your raw therapy data into plain-English narratives — entirely on-device. Nothing about your nights ever leaves your Mac or iPhone.
+
+- **Sleep Analysis** — a narrative read on how your recent nights are trending, available from the Overview
+- **Explain this metric** — tap any card (AHI, usage, pressure, Glasgow Index, flow limitation, time in apnea, and more) for a contextual interpretation grounded in *your* numbers, not a generic definition
+- **Per-night summaries** — a short recap of how a specific night went and how it compared to the ones around it
+- **Correlation hints** — patterns the app notices between your therapy data and your Sleep Journal entries
+
+If your device doesn't support Apple Intelligence, or you've turned it off, these surfaces simply don't appear — the rest of the app works exactly the same.
+
 ## Requirements
 
 - macOS 26 or iOS 26
 - An iCloud account (used for sync between your devices)
 - A ResMed AirSense or AirCurve SD card
+- Apple Intelligence is optional — used only for the on-device narratives above
 
 ## Privacy
 
-Snorecard is a viewer — it doesn't send your data anywhere except your own iCloud account, which is what keeps your nights synced between your Mac and iPhone. There are no third-party accounts, no tracking, no analytics.
+Snorecard is a viewer — it doesn't send your data anywhere except your own iCloud account, which is what keeps your nights synced between your Mac and iPhone. There are no third-party accounts, no tracking, and no analytics. The Apple Intelligence narratives run on Apple's on-device Foundation Models; your therapy data is never sent to a server.
 
 ## A note on accuracy
 
