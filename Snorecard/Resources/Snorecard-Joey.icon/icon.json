@@ -1,6 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "srgb:0.58188,0.21569,1.00000,1.00000",
+    "automatic-gradient" : "display-p3:0.80543,0.29125,0.60434,1.00000",
     "orientation" : {
       "start" : {
         "x" : 0.5,
@@ -17,7 +17,7 @@
       "layers" : [
         {
           "fill" : {
-            "solid" : "extended-gray:1.00000,1.00000"
+            "solid" : "display-p3:0.47330,0.25304,0.88424,1.00000"
           },
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",

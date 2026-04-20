@@ -30,6 +30,7 @@ struct SnorecardApp: App {
             ContentView()
                 .environment(library)
                 .task {
+                    AppIconController.applyStoredOnLaunch()
                     await library.loadLastOpenedIfPossible()
                 }
         }

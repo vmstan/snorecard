@@ -19,6 +19,7 @@ extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
+    static let snorecardShowAppIcon = Notification.Name("Snorecard.ShowAppIcon")
     // Sleep Analysis is declared in the shared ContentView
     // notification set so both platforms reference the same name;
     // this extension only adds commands that are macOS-only.
@@ -35,6 +36,12 @@ struct SnorecardApp: App {
                 .environment(library)
                 .frame(minWidth: 900, minHeight: 600)
                 .task {
+                    // Re-apply the last-selected alternate icon so
+                    // the Dock picks it up on cold launch instead
+                    // of flashing the primary icon and then
+                    // swapping — UserDefaults is read synchronously
+                    // so the swap happens before the first layout.
+                    AppIconController.applyStoredOnLaunch()
                     await library.loadLastOpenedIfPossible()
                 }
         }
@@ -188,6 +195,14 @@ struct SnorecardApp: App {
             Label("Rebuild Analysis", systemImage: "hammer")
         }
         .disabled(!hasCard)
+
+        Divider()
+
+        Button {
+            NotificationCenter.default.post(name: .snorecardShowAppIcon, object: nil)
+        } label: {
+            Label("App Icon", systemImage: "app.badge")
+        }
     }
 
     /// Alias-aware label for the Switch Device submenu — mirrors

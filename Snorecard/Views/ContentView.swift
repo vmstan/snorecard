@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var isRenamingDevice = false
     @State private var isConfirmingRebuild = false
     @State private var isShowingBackups = false
+    @State private var isShowingAppIcon = false
     @State private var knownDevices: [Library.DeviceFolder] = []
 
     #if os(macOS)
@@ -34,7 +35,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case rename, backups, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
+    enum InspectorPane { case rename, backups, appIcon, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -200,6 +201,9 @@ struct ContentView: View {
                 )
             }
         }
+        .sheet(isPresented: $isShowingAppIcon) {
+            IconPickerSheet(onClose: { isShowingAppIcon = false })
+        }
         .sheet(isPresented: $isShowingDeviceNotes) {
             NavigationStack {
                 DeviceNotesCard()
@@ -313,6 +317,9 @@ struct ContentView: View {
                 toggleInspector(.backups)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardShowAppIcon)) { _ in
+            toggleInspector(.appIcon)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
             if case .day = library.selection {
                 toggleInspector(.notes)
@@ -374,6 +381,12 @@ struct ContentView: View {
                 }
             })
                 .environment(library)
+        case .appIcon:
+            IconPickerSheet(onClose: {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                }
+            })
         case .notes:
             if let day = library.selectedDay {
                 NotesCard(day: day)
@@ -687,6 +700,17 @@ struct ContentView: View {
                 } label: {
                     Label("Rebuild Analysis", systemImage: "hammer")
                 }
+            }
+
+            Divider()
+            Button {
+                #if os(macOS)
+                toggleInspector(.appIcon)
+                #else
+                isShowingAppIcon = true
+                #endif
+            } label: {
+                Label("App Icon", systemImage: "app.badge")
             }
         } label: {
             Label("Actions", systemImage: "ellipsis")
