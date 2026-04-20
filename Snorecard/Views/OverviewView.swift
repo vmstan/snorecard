@@ -623,19 +623,26 @@ struct OverviewView: View {
         }
     }
 
+    /// Card chrome matching `HourlyChartCard` / `AHIHourlyChart` on
+    /// the Daily view — small uppercase caption title, tertiary
+    /// subtitle, and an inset-plate background so the trend charts
+    /// read as part of the same visual set as the day view's
+    /// hourly breakdowns.
     @ViewBuilder
     private func chartSection<C: View>(
         title: String,
         subtitle: String,
         @ViewBuilder content: () -> C
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             content()
                 .frame(height: 180)
@@ -655,6 +662,11 @@ struct OverviewView: View {
                     chartTapOverlay(proxy: proxy)
                 }
         }
+        .padding(14)
+        .background(
+            Color.primary.opacity(0.05),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
     }
 
     /// Transparent tap-catcher layered over every chart — translates a
