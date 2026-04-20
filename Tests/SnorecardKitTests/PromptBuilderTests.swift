@@ -23,17 +23,21 @@ final class PromptBuilderTests: XCTestCase {
             userNote: "Felt congested, allergy meds at 9pm"
         )
         let prompt = NightSummaryPrompt.buildPrompt(input: input)
-        XCTAssertTrue(prompt.contains("\"ahi\""))
-        XCTAssertTrue(prompt.contains("\"usageHours\""))
+        // The prompt is now a plain-English block, not JSON, so
+        // internal field names like `leak95LPerMin` and
+        // `usageHours` can't bleed into the narration. The
+        // content still mentions each metric by a human label.
+        XCTAssertTrue(prompt.contains("AHI"))
+        XCTAssertTrue(prompt.contains("Usage"))
         XCTAssertTrue(prompt.contains("congested"))
-        // Headline is no longer part of the output schema — the
-        // card renders a fixed "Sleep Analysis" title and the
-        // model only produces the paragraph.
+        XCTAssertFalse(prompt.contains("leak95LPerMin"))
+        XCTAssertFalse(prompt.contains("usageHours"))
+        XCTAssertFalse(prompt.contains("eprSupport"))
         XCTAssertFalse(prompt.contains("headline"))
         XCTAssertTrue(prompt.contains("paragraph"))
     }
 
-    func testNightSummaryPromptOmitsNilMetricsInJSON() {
+    func testNightSummaryPromptOmitsNilMetrics() {
         let input = NightSummaryInput(
             date: Date(timeIntervalSince1970: 1_700_000_000),
             usageHours: 6.5,
@@ -49,9 +53,12 @@ final class PromptBuilderTests: XCTestCase {
             userNote: nil
         )
         let prompt = NightSummaryPrompt.buildPrompt(input: input)
-        XCTAssertFalse(prompt.contains("\"glasgowIndex\""))
-        XCTAssertFalse(prompt.contains("\"pressure95\""))
-        XCTAssertFalse(prompt.contains("\"userNote\""))
+        // Missing metrics produce no line at all in the
+        // plain-English block, so neither the human label nor
+        // any numeric value leaks through.
+        XCTAssertFalse(prompt.contains("Glasgow Index:"))
+        XCTAssertFalse(prompt.contains("Pressure (95th percentile"))
+        XCTAssertFalse(prompt.contains("journal entry"))
     }
 
     func testSystemInstructionsForbidAdvisoryLanguage() {

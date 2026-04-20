@@ -1,8 +1,8 @@
 import Foundation
 
 public enum CorrelationNarrativePrompt {
-    // v4: dates render in human-readable British English.
-    public static let templateVersion = 4
+    // v5: plain-English input block replaces the JSON render.
+    public static let templateVersion = 5
 
     public static let systemInstructions: String = """
     You are Snorecard's correlation narrator. You turn pre-computed
@@ -25,16 +25,21 @@ public enum CorrelationNarrativePrompt {
 
     public static func buildPrompt(input: CorrelationNarrativeInput) -> String {
         """
-        Narrate the observations described by the JSON below as a
-        short intro plus up to 3 bullets.
+        Narrate the observations described below as a short intro
+        plus up to 3 bullets.
 
-        Input:
-        \(PromptJSON.render(input))
+        Data:
+        \(input.promptDescription)
 
         Produce:
         - intro: one sentence framing the bullets as observations.
         - bullets: up to 3 strings, each starting with
           "On nights you noted …". Report only what the numbers say.
+
+        Refer to tags by their plain-English label above (e.g.
+        "congestion", "alcohol"). Never echo internal variable
+        names, dictionary keys, or camelCase/snake_case
+        identifiers.
         """
     }
 }

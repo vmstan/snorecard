@@ -7,10 +7,10 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    // v6: qualitative framing — don't restate numbers that are
-    // already visible on the stat cards next to the summary,
-    // and render dates in human-readable British English.
-    public static let templateVersion = 6
+    // v7: plain-English input block replaces the JSON render so
+    // internal field names like `leak95LPerMin` and
+    // `eprSupport` can't bleed into the narration.
+    public static let templateVersion = 7
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe
@@ -45,18 +45,22 @@ public enum NightSummaryPrompt {
     /// JSON so field names stay stable across model updates.
     public static func buildPrompt(input: NightSummaryInput) -> String {
         """
-        Summarise last night's therapy data using the JSON below.
-        The reader sees the stat cards with the raw numbers next to
-        this summary — do NOT restate those numbers; describe the
-        night's overall character instead.
+        Summarise last night's therapy data using the information
+        below. The reader sees the stat cards with the raw
+        numbers next to this summary — do NOT restate those
+        numbers; describe the night's overall character instead.
 
-        Input:
-        \(PromptJSON.render(input))
+        Data:
+        \(input.promptDescription)
 
         Produce a single paragraph (2 to 4 sentences) describing
-        the shape of the night — how it compares to the baseline,
-        whether it looks steady or unusual, which metrics stand
-        out qualitatively. Do not give advice. Do not list values.
+        the shape of the night — how it compares to the recent
+        average, whether it looks steady or unusual, which
+        metrics stand out qualitatively. Refer to metrics by
+        their plain-English name (AHI, usage, pressure, leak,
+        Glasgow Index). Never echo internal variable names,
+        dictionary keys, or snake_case/camelCase identifiers.
+        Do not give advice. Do not list numeric values.
         """
     }
 }

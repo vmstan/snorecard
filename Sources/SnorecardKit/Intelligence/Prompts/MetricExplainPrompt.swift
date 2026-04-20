@@ -1,8 +1,8 @@
 import Foundation
 
 public enum MetricExplainPrompt {
-    // v4: dropped "suggest" from the banned-words mention.
-    public static let templateVersion = 4
+    // v5: plain-English input block replaces the JSON render.
+    public static let templateVersion = 5
 
     public static let systemInstructions: String = """
     You are Snorecard's metric explainer. You help the user
@@ -28,16 +28,21 @@ public enum MetricExplainPrompt {
 
     public static func buildPrompt(input: MetricExplainInput) -> String {
         """
-        Explain the metric described by the JSON below.
+        Explain the metric described below.
 
-        Input:
-        \(PromptJSON.render(input))
+        Data:
+        \(input.promptDescription)
 
         Produce:
-        - whatItMeans: 1 or 2 sentences defining the metric.
+        - whatItMeans: 1 or 2 sentences defining the metric
+          using the context paragraph supplied.
         - howYoursLooks: 1 or 2 sentences placing the user's
-          current value in context using the provided norms and
-          recent-mean anchors. No advice.
+          current value in context against the boundaries and
+          recent-mean anchors above. No advice.
+
+        Refer to the metric by the plain-English label above.
+        Never echo internal variable names, dictionary keys, or
+        camelCase/snake_case identifiers.
         """
     }
 }

@@ -60,6 +60,64 @@ public enum CorrelatedMetric: String, Codable, Hashable, Sendable {
     case glasgowIndex
 }
 
+extension CorrelationNarrativeInput {
+    /// Plain-English rendering for embedding in the prompt.
+    public var promptDescription: String {
+        var lines: [String] = []
+        lines.append("Range: \(Self.rangeFormatter.string(from: rangeStart)) to \(Self.rangeFormatter.string(from: rangeEnd))")
+        lines.append("Sample size: \(sampleSize) nights with data")
+        var body = lines.map { "- \($0)" }.joined(separator: "\n")
+        body += "\n\nObservations (already computed — narrate these, do not invent new ones):"
+        for obs in observations {
+            let taggedFmt = Self.formatValue(obs.taggedMean, metric: obs.metric)
+            let untaggedFmt = Self.formatValue(obs.untaggedMean, metric: obs.metric)
+            let unit = Self.unit(for: obs.metric)
+            body += """
+
+            - Tag: \(obs.tag.displayLabel)
+              Metric: \(Self.metricLabel(obs.metric))
+              On \(obs.taggedNights) tagged night(s), average \(taggedFmt)\(unit)
+              On \(obs.untaggedNights) untagged night(s), average \(untaggedFmt)\(unit)
+            """
+        }
+        return body
+    }
+
+    private static let rangeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.dateFormat = "d MMMM yyyy"
+        return formatter
+    }()
+
+    private static func formatValue(_ value: Double, metric: CorrelatedMetric) -> String {
+        switch metric {
+        case .ahi:              return String(format: "%.1f", value)
+        case .usageHours:       return String(format: "%.1f", value)
+        case .leak95LPerMin:    return String(format: "%.0f", value)
+        case .glasgowIndex:     return String(format: "%.2f", value)
+        }
+    }
+
+    private static func unit(for metric: CorrelatedMetric) -> String {
+        switch metric {
+        case .ahi:              return " events/hr"
+        case .usageHours:       return " hours"
+        case .leak95LPerMin:    return " L/min"
+        case .glasgowIndex:     return ""
+        }
+    }
+
+    private static func metricLabel(_ metric: CorrelatedMetric) -> String {
+        switch metric {
+        case .ahi:              return "AHI"
+        case .usageHours:       return "Usage hours"
+        case .leak95LPerMin:    return "Leak (95th percentile)"
+        case .glasgowIndex:     return "Glasgow Index"
+        }
+    }
+}
+
 @Generable
 public struct CorrelationNarrativeOutput: Codable, Hashable, Sendable {
     @Guide(description: "Up to 3 short bullet strings, each starting with 'On nights you noted …'. Purely observational — never say an activity 'caused', 'led to', or 'made' anything happen.")

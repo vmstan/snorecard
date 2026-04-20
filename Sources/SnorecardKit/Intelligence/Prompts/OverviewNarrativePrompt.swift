@@ -1,10 +1,9 @@
 import Foundation
 
 public enum OverviewNarrativePrompt {
-    // v4: qualitative framing — don't restate aggregate numbers
-    // that the summary cards already show, and dates render in
-    // human-readable British English.
-    public static let templateVersion = 4
+    // v5: plain-English input block replaces the JSON render so
+    // internal field names can't bleed into the narration.
+    public static let templateVersion = 5
 
     public static let systemInstructions: String = """
     You are Snorecard's trend narrator. You describe aggregate
@@ -35,20 +34,25 @@ public enum OverviewNarrativePrompt {
 
     public static func buildPrompt(input: OverviewNarrativeInput) -> String {
         """
-        Narrate the trend over the range described by the JSON
-        below. The reader sees the aggregate cards with raw
-        numbers above this summary — do NOT restate those
-        numbers; describe the shape of the period qualitatively.
+        Narrate the trend over the range described below. The
+        reader sees the aggregate cards with raw numbers above
+        this summary — do NOT restate those numbers; describe
+        the shape of the period qualitatively.
 
-        Input:
-        \(PromptJSON.render(input))
+        Data:
+        \(input.promptDescription)
 
         Produce:
         - paragraph: 3 to 5 sentences describing direction of
-          travel in qualitative terms. Use the trend buckets,
+          travel in qualitative terms. Use the trend labels,
           not the raw averages.
         - highlight: optional one-line takeaway, fewer than 12
           words, or omit when nothing meaningful stands out.
+
+        Refer to metrics by plain-English name (AHI, usage,
+        compliance, pressure, leak, Glasgow Index). Never echo
+        internal variable names, dictionary keys, or
+        camelCase/snake_case identifiers.
         """
     }
 }

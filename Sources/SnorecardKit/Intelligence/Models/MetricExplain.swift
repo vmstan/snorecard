@@ -60,6 +60,57 @@ public struct MetricExplainInput: Codable, Hashable, Sendable {
     }
 }
 
+extension MetricExplainInput {
+    /// Plain-English rendering for embedding in the prompt.
+    public var promptDescription: String {
+        var lines: [String] = []
+        lines.append("Metric: \(metric.displayLabel)")
+        lines.append("Your current value: \(Self.formatValue(currentValue, metric: metric)) \(unitLabel)")
+        if let mean = recent14DayMean {
+            lines.append("Your 14-day mean: \(Self.formatValue(mean, metric: metric)) \(unitLabel)")
+        }
+        if let p90 = recent14DayP90 {
+            lines.append("Your 14-day 90th percentile: \(Self.formatValue(p90, metric: metric)) \(unitLabel)")
+        }
+        if let goodMax = norms.goodMax {
+            lines.append("Boundary for \"good\": up to \(Self.formatValue(goodMax, metric: metric)) \(unitLabel)")
+        }
+        if let elevatedMax = norms.elevatedMax {
+            lines.append("Boundary for \"elevated\": up to \(Self.formatValue(elevatedMax, metric: metric)) \(unitLabel)")
+        }
+        var body = lines.map { "- \($0)" }.joined(separator: "\n")
+        body += "\n\nContext for the metric:\n\(norms.description)"
+        return body
+    }
+
+    private static func formatValue(_ value: Double, metric: ExplainableMetric) -> String {
+        switch metric {
+        case .largeLeak:     return String(format: "%.1f", value)
+        case .leak95:        return String(format: "%.0f", value)
+        case .tidalVolume:   return String(format: "%.0f", value)
+        case .glasgowIndex:  return String(format: "%.2f", value)
+        default:             return String(format: "%.1f", value)
+        }
+    }
+}
+
+extension ExplainableMetric {
+    /// Human-friendly label for the metric. Matches the card
+    /// titles used in `DayDetailView` so the model never sees
+    /// an enum raw value like "pressure95" in the prompt.
+    public var displayLabel: String {
+        switch self {
+        case .ahi:          return "AHI"
+        case .glasgowIndex: return "Glasgow Index"
+        case .pressure95:   return "Pressure (95th percentile target EPAP)"
+        case .epr:          return "Pressure support (IPAP − EPAP)"
+        case .leak95:       return "Leak (95th percentile)"
+        case .largeLeak:    return "Large leak (percent of usage)"
+        case .tidalVolume:  return "Tidal volume (median)"
+        }
+    }
+}
+
 @Generable
 public struct MetricExplainOutput: Codable, Hashable, Sendable {
     @Guide(description: "1 or 2 sentences defining what the metric represents. Plain English. Do not repeat the user's numeric value here.")

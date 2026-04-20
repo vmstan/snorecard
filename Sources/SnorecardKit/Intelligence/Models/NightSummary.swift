@@ -68,6 +68,94 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
     }
 }
 
+extension NightSummaryInput {
+    /// Human-readable, natural-language rendering of the input
+    /// for embedding in a prompt. JSON-style field names like
+    /// `leak95LPerMin` used to leak into the narrative when the
+    /// model echoed keys it had been shown, so the prompt now
+    /// sees plain English labels only.
+    ///
+    /// The `Codable` conformance is still used for cache hashing
+    /// in `IntelligenceCache.hash(of:)` — that encoder is
+    /// separate and keeps stable ISO-8601 / raw-key formatting
+    /// so cache identity doesn't shift when we tweak prompt
+    /// prose.
+    public var promptDescription: String {
+        var lines: [String] = []
+        lines.append("Night: \(Self.nightFormatter.string(from: date))")
+        lines.append("Usage: \(formatOneDp(usageHours)) hours")
+        lines.append("AHI: \(formatOneDp(ahi)) events per hour")
+        if let gi = glasgowIndex {
+            lines.append("Glasgow Index: \(formatTwoDp(gi))")
+        }
+        if let p = pressure95 {
+            lines.append("Pressure (95th percentile, target EPAP): \(formatOneDp(p)) cmH₂O")
+        }
+        if let support = eprSupport {
+            lines.append("Pressure support (IPAP − EPAP): \(formatOneDp(support)) cmH₂O")
+        }
+        if let leak = leak95LPerMin {
+            lines.append("Leak (95th percentile): \(leak) L/min")
+        }
+        if let large = largeLeakPercent {
+            lines.append("Time above 24 L/min leak: \(formatOneDp(large))% of usage")
+        }
+        if let apnea = timeInApneaPercent {
+            lines.append("Time in apnea events: \(formatOneDp(apnea))% of usage")
+        }
+        if let tv = tidalVolumeMedianML {
+            lines.append("Tidal volume (median): \(tv) mL")
+        }
+
+        var body = lines.map { "- \($0)" }.joined(separator: "\n")
+
+        if let diff = baselineDiff {
+            var diffLines: [String] = []
+            diffLines.append("AHI change: \(formatSignedOneDp(diff.ahiDelta)) events/hr")
+            diffLines.append("Usage change: \(formatSignedOneDp(diff.usageHoursDelta)) hours")
+            if let leakDelta = diff.leakDelta {
+                diffLines.append("Leak change: \(formatSignedOneDp(leakDelta)) L/min")
+            }
+            if let giDelta = diff.giDelta {
+                diffLines.append("Glasgow Index change: \(formatSignedTwoDp(giDelta))")
+            }
+            body += "\n\nChange versus the trailing 14-day average:\n"
+                + diffLines.map { "- \($0)" }.joined(separator: "\n")
+        }
+
+        if let note = userNote {
+            body += "\n\nUser's journal entry for the night:\n\"\(note)\""
+        }
+
+        return body
+    }
+
+    private static let nightFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.dateFormat = "EEEE, d MMMM yyyy"
+        return formatter
+    }()
+}
+
+private func formatOneDp(_ value: Double) -> String {
+    String(format: "%.1f", value)
+}
+
+private func formatTwoDp(_ value: Double) -> String {
+    String(format: "%.2f", value)
+}
+
+private func formatSignedOneDp(_ value: Double) -> String {
+    let sign = value > 0 ? "+" : (value < 0 ? "−" : "±")
+    return "\(sign)\(String(format: "%.1f", abs(value)))"
+}
+
+private func formatSignedTwoDp(_ value: Double) -> String {
+    let sign = value > 0 ? "+" : (value < 0 ? "−" : "±")
+    return "\(sign)\(String(format: "%.2f", abs(value)))"
+}
+
 /// On-device LLM output for the night-summary feature. Decoded via the
 /// `@Generable` Foundation Models pipeline.
 ///
