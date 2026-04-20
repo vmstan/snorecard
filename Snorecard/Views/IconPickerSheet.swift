@@ -36,6 +36,16 @@ enum AppIconOption: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Asset-catalog name of the pre-rendered preview PNG. Lives
+    /// in `Assets.xcassets/IconPreview-<Name>.imageset` with the
+    /// same 1024×1024 source bitmap the icon was exported from.
+    /// Using plain imagesets (not `.icon` packages) gives SwiftUI
+    /// a CGImage-backed UIImage/NSImage, so `.resizable()` is safe
+    /// on both platforms.
+    var previewAssetName: String {
+        "IconPreview-\(rawValue)"
+    }
+
     /// Base gradient colour pulled from each `.icon` package's
     /// `icon.json` — used for the picker's preview swatch.
     var backgroundColor: Color {
@@ -186,97 +196,12 @@ struct IconPickerSheet: View {
 
     @ViewBuilder
     private func preview(for option: AppIconOption) -> some View {
-        if let image = AppIconPreview.image(for: option) {
-            image
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-        } else {
-            // Fallback when Xcode hasn't surfaced the rendered
-            // icon to the runtime bundle (happens for the primary
-            // on some sim configurations) — use the icon.json
-            // gradient plus an SF-symbol waveform so the tile
-            // still reads as "Snorecard in this colour".
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        option.backgroundColor,
-                        option.backgroundColor.opacity(0.55)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                Image(systemName: "waveform.path")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(option.accentColor)
-                    .offset(y: 2)
-            }
-        }
+        // Pre-rendered PNG from the asset catalog. Plain imageset
+        // (not a `.icon` package), so SwiftUI's `.resizable()`
+        // works cleanly on both platforms.
+        Image(option.previewAssetName)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
     }
-}
-
-/// Platform-specific resolution of an `AppIconOption` to the
-/// rendered image actually shipped in the app bundle. Keeps
-/// `IconPickerSheet` free of `UIKit` / `AppKit` plumbing and
-/// gives one place to adjust if Xcode changes how it surfaces
-/// compiled `.icon` assets.
-@MainActor
-enum AppIconPreview {
-    static func image(for option: AppIconOption) -> Image? {
-        #if canImport(UIKit)
-        if let ui = loadUIImage(for: option) {
-            return Image(uiImage: ui)
-        }
-        #elseif canImport(AppKit)
-        if let ns = loadNSImage(for: option) {
-            return Image(nsImage: ns)
-        }
-        #endif
-        return nil
-    }
-
-    #if canImport(UIKit)
-    /// Walk the Info.plist's `CFBundleIcons` tree to find the
-    /// PNG filename Xcode emitted for this icon asset, then load
-    /// it via `UIImage(named:)`. Alternate-icon PNGs aren't
-    /// auto-surfaced by asset-catalog lookup on iOS, so the plist
-    /// is the authoritative source.
-    private static func loadUIImage(for option: AppIconOption) -> UIImage? {
-        let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any]
-        if let name = option.alternateIconName {
-            let alternates = icons?["CFBundleAlternateIcons"] as? [String: [String: Any]]
-            guard let files = alternates?[name]?["CFBundleIconFiles"] as? [String],
-                  let last = files.last,
-                  let image = UIImage(named: last)
-            else { return nil }
-            return image
-        }
-        // Primary — iOS stores its filename list under
-        // CFBundlePrimaryIcon. Take the last (largest) entry.
-        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
-        guard let files = primary?["CFBundleIconFiles"] as? [String],
-              let last = files.last,
-              let image = UIImage(named: last)
-        else {
-            // Last-resort: the asset name itself sometimes
-            // resolves on newer iOS when the .icon package was
-            // added to the asset catalog.
-            return UIImage(named: "Snorecard")
-        }
-        return image
-    }
-    #elseif canImport(AppKit)
-    /// macOS compiles each `.icon` package to a named image in
-    /// the asset catalog; `NSImage(named:)` looks it up directly.
-    private static func loadNSImage(for option: AppIconOption) -> NSImage? {
-        if let name = option.alternateIconName,
-           let image = NSImage(named: name) {
-            return image
-        }
-        // Primary is indexed under the app's AppIcon name
-        // (the ASSETCATALOG_COMPILER_APPICON_NAME build setting).
-        return NSImage(named: "Snorecard")
-            ?? NSApp.applicationIconImage
-    }
-    #endif
 }
