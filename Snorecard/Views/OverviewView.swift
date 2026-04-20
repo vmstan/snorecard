@@ -9,20 +9,15 @@ struct OverviewView: View {
     @State private var customStart: Date = Calendar.current
         .date(byAdding: .day, value: -6, to: Calendar.current.startOfDay(for: Date()))!
     @State private var customEnd: Date = Calendar.current.startOfDay(for: Date())
-    /// Which Overview card the user tapped to explain, if any.
-    /// The tap captures the computed average and its display
-    /// string so the sheet's header and the model prompt stay
-    /// stable even if the range changes behind the sheet.
-    @State private var explainingMetric: OverviewExplainContext?
-
-    /// One tap's worth of "explain this card" context.
-    /// `averageValue` feeds the prompt; `displayValue` renders
-    /// at the top of the sheet.
-    struct OverviewExplainContext: Identifiable {
+    /// One tap's worth of "explain this card" context used
+    /// internally while building the card grid. Only the bits
+    /// needed to populate an `ExplainRequest` live here — the
+    /// sheet/inspector itself is owned by `ContentView` via
+    /// `library.pendingExplain`.
+    struct OverviewExplainContext {
         let metric: ExplainableMetric
         let displayValue: String
         let averageValue: Double
-        var id: String { metric.rawValue }
     }
 
     /// Date ranges selectable from the Overview header.
@@ -117,30 +112,6 @@ struct OverviewView: View {
                 }
             }
             .padding(20)
-        }
-        .sheet(item: $explainingMetric) { ctx in
-            let capturedStart = rangeStart
-            let capturedEnd = rangeEnd
-            let sampleSize = stats.count
-            MetricExplainSheet(
-                metric: ctx.metric,
-                displayLabel: Self.displayLabel(for: ctx.metric),
-                displayValue: ctx.displayValue,
-                valueCaption: "Your average for this range",
-                loader: {
-                    await library.explainOverviewMetric(
-                        ctx.metric,
-                        averageValue: ctx.averageValue,
-                        rangeStart: capturedStart,
-                        rangeEnd: capturedEnd,
-                        sampleSize: sampleSize
-                    )
-                }
-            )
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            #endif
         }
         .navigationTitle("Overview")
         .navigationSubtitle(library.displayName(for: card))
@@ -392,7 +363,23 @@ struct OverviewView: View {
 
     private func explainTap(_ ctx: OverviewExplainContext?) -> (() -> Void)? {
         guard let ctx, library.intelligence.isReady else { return nil }
-        return { explainingMetric = ctx }
+        let capturedStart = rangeStart
+        let capturedEnd = rangeEnd
+        let sampleSize = stats.count
+        return {
+            library.pendingExplain = ExplainRequest(
+                metric: ctx.metric,
+                displayLabel: Self.displayLabel(for: ctx.metric),
+                displayValue: ctx.displayValue,
+                valueCaption: "Your average for this range",
+                source: .overview(
+                    averageValue: ctx.averageValue,
+                    rangeStart: capturedStart,
+                    rangeEnd: capturedEnd,
+                    sampleSize: sampleSize
+                )
+            )
+        }
     }
 
     /// Short navigation-bar title for the explain sheet. Matches

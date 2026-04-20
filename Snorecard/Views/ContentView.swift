@@ -22,12 +22,12 @@ struct ContentView: View {
     /// Which pane the shared macOS inspector is currently showing.
     /// A single third column hosts all library- and day-level
     /// accessory views (rename, backups, sleep journal, therapy
-    /// details) so they behave consistently — opening one replaces
-    /// whatever was there, and the column slides out when the
-    /// pane is nil. Matches the Finder Get Info / Mail Viewer
-    /// precedent where one inspector swaps content instead of
-    /// spawning extra windows.
-    enum InspectorPane { case rename, backups, notes, deviceNotes, settings }
+    /// details, metric explain) so they behave consistently —
+    /// opening one replaces whatever was there, and the column
+    /// slides out when the pane is nil. Matches the Finder Get
+    /// Info / Mail Viewer precedent where one inspector swaps
+    /// content instead of spawning extra windows.
+    enum InspectorPane { case rename, backups, notes, deviceNotes, settings, explainMetric }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -85,6 +85,10 @@ struct ContentView: View {
                 if !shown {
                     withAnimation(.smooth(duration: 0.32)) {
                         inspectorPane = nil
+                        // Clear the explain request too when the
+                        // user manually closes the inspector, so
+                        // re-tapping the same card opens it again.
+                        library.pendingExplain = nil
                     }
                 }
             }
@@ -106,7 +110,26 @@ struct ContentView: View {
             if case .deviceNotes = inspectorPane, case .overview = newSelection { return }
             if inspectorPane == .notes
                 || inspectorPane == .settings
-                || inspectorPane == .deviceNotes {
+                || inspectorPane == .deviceNotes
+                || inspectorPane == .explainMetric {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                    library.pendingExplain = nil
+                }
+            }
+        }
+        // Any tap on a stat card — either in DayDetailView or in
+        // OverviewView — sets `library.pendingExplain`. Open the
+        // inspector in the shared column so the metric
+        // explanation matches how Sleep Journal / Therapy Details
+        // are presented. Closing the inspector later clears the
+        // request back to nil so the same tap can re-open.
+        .onChange(of: library.pendingExplain) { _, newRequest in
+            if newRequest != nil {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = .explainMetric
+                }
+            } else if inspectorPane == .explainMetric {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                 }
@@ -143,6 +166,28 @@ struct ContentView: View {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             CloseSheetButton { isShowingDeviceNotes = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .environment(library)
+        }
+        .sheet(item: $library.pendingExplain) { request in
+            // iOS keeps the metric explanation as a sheet; macOS
+            // routes the same request through the shared
+            // inspector column instead. Binding `pendingExplain`
+            // through `$library` so dismissal clears it
+            // automatically.
+            NavigationStack {
+                MetricExplainSheet(request: request)
+                    .navigationTitle(request.displayLabel)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton {
+                                library.pendingExplain = nil
+                            }
                         }
                     }
             }
@@ -270,6 +315,14 @@ struct ContentView: View {
                     serialNumber: library.card?.identification?.serialNumber,
                     deviceAlias: deviceAliasForInspector
                 )
+            } else {
+                EmptyView()
+            }
+        case .explainMetric:
+            if let request = library.pendingExplain {
+                MetricExplainSheet(request: request)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle(request.displayLabel)
             } else {
                 EmptyView()
             }

@@ -52,6 +52,13 @@ final class Library {
     /// and the caller hides the surface.
     let narration: NarrationService
 
+    /// Non-nil while the user has opened a metric explanation
+    /// by tapping a stat card. Drives the iOS sheet and the
+    /// macOS inspector pane from a single source of truth so
+    /// both platforms share one routing path. Cleared by the
+    /// sheet/inspector when it closes.
+    var pendingExplain: ExplainRequest? = nil
+
     /// Serial number → per-day tag-extraction task. Tracked here
     /// so a rapid note edit (750 ms autosave churning) cancels
     /// the in-flight extraction and reschedules rather than
@@ -454,6 +461,42 @@ final class Library {
             return output
         } catch {
             return nil
+        }
+    }
+
+    /// Resolve an `ExplainRequest` to its on-device explanation by
+    /// dispatching to the per-day or Overview-scoped helper based
+    /// on the request's source. Hides the day-vs-range difference
+    /// from the sheet/inspector view so a single surface can
+    /// render both.
+    func resolveExplain(_ request: ExplainRequest) async -> MetricExplainOutput? {
+        switch request.source {
+        case .day(let dayID):
+            guard let card,
+                  let day = card.days.first(where: { $0.id == dayID })
+            else { return nil }
+            let calendar = Calendar.current
+            guard let windowStart = calendar.date(
+                byAdding: .day,
+                value: -14,
+                to: day.date
+            ) else { return nil }
+            let trailing = card.days
+                .compactMap(\.stats)
+                .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
+            return await explainMetric(
+                request.metric,
+                for: day,
+                trailing: trailing
+            )
+        case .overview(let averageValue, let rangeStart, let rangeEnd, let sampleSize):
+            return await explainOverviewMetric(
+                request.metric,
+                averageValue: averageValue,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd,
+                sampleSize: sampleSize
+            )
         }
     }
 

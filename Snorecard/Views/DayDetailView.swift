@@ -12,9 +12,6 @@ struct DayDetailView: View {
     @State private var loadError: String?
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
-    /// Which metric the user tapped to explain, if any. When
-    /// non-nil a sheet presents the on-device explanation.
-    @State private var explainingMetric: ExplainableMetric?
 
     var body: some View {
         ScrollView {
@@ -116,25 +113,6 @@ struct DayDetailView: View {
         #endif
         .task(id: day.id) {
             await loadAllSessions()
-        }
-        .sheet(item: $explainingMetric) { metric in
-            MetricExplainSheet(
-                metric: metric,
-                displayLabel: Self.displayLabel(for: metric),
-                displayValue: displayValue(for: metric),
-                valueCaption: "Your value for this night",
-                loader: {
-                    await library.explainMetric(
-                        metric,
-                        for: day,
-                        trailing: trailingStats()
-                    )
-                }
-            )
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            #endif
         }
     }
 
@@ -305,25 +283,20 @@ struct DayDetailView: View {
 
     /// Return a tap handler for an explainable metric when Apple
     /// Intelligence is available on this device, `nil` otherwise.
-    /// `StatCard` switches to button rendering only when a closure
-    /// is supplied, so this both gates the affordance and wires
-    /// the sheet trigger in one place.
+    /// Sets `library.pendingExplain`; `ContentView` owns the
+    /// actual presentation (sheet on iOS, inspector pane on
+    /// macOS) so both platforms share one routing path.
     private func explainTap(_ metric: ExplainableMetric) -> (() -> Void)? {
         guard library.intelligence.isReady else { return nil }
-        return { explainingMetric = metric }
-    }
-
-    /// Trailing 14 nights with usage relative to `day`, passed to
-    /// the per-day explain so the model can anchor "your recent
-    /// average" framing.
-    private func trailingStats() -> [DailyStatistics] {
-        guard let card = library.card else { return [] }
-        let calendar = Calendar.current
-        guard let windowStart = calendar.date(byAdding: .day, value: -14, to: day.date)
-        else { return [] }
-        return card.days
-            .compactMap(\.stats)
-            .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
+        return {
+            library.pendingExplain = ExplainRequest(
+                metric: metric,
+                displayLabel: Self.displayLabel(for: metric),
+                displayValue: displayValue(for: metric),
+                valueCaption: "Your value for this night",
+                source: .day(dayID: day.id)
+            )
+        }
     }
 
     static func displayLabel(for metric: ExplainableMetric) -> String {
