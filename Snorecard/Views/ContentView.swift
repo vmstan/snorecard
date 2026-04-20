@@ -505,6 +505,16 @@ struct ContentView: View {
             // proper because there's room for the extra glyphs.
             if isViewingDay {
                 Divider()
+                if library.intelligence.isReady {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenSleepAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                }
                 Button {
                     NotificationCenter.default.post(
                         name: .snorecardOpenDailyNotes,
@@ -520,16 +530,6 @@ struct ContentView: View {
                     )
                 } label: {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
-                }
-                if library.intelligence.isReady {
-                    Button {
-                        NotificationCenter.default.post(
-                            name: .snorecardOpenSleepAnalysis,
-                            object: nil
-                        )
-                    } label: {
-                        Label("Sleep Analysis", systemImage: "sparkles")
-                    }
                 }
             } else if library.card != nil {
                 // Overview-scoped journal for the whole device —
