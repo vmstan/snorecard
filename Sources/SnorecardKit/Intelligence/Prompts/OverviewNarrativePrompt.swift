@@ -1,40 +1,54 @@
 import Foundation
 
 public enum OverviewNarrativePrompt {
-    // v3: dropped "suggest" from the banned-words mention.
-    public static let templateVersion = 3
+    // v4: qualitative framing — don't restate aggregate numbers
+    // that the summary cards already show, and dates render in
+    // human-readable British English.
+    public static let templateVersion = 4
 
     public static let systemInstructions: String = """
-    You are Snorecard's trend narrator. You describe aggregate CPAP
-    therapy statistics over a time range. You are a summariser,
-    not a clinician.
+    You are Snorecard's trend narrator. You describe aggregate
+    CPAP therapy statistics over a time range. You are a
+    summariser, not a clinician.
+
+    The reader sees the aggregate stat cards (Avg AHI, Avg
+    usage, Compliance, etc.) directly above this summary. Do
+    NOT restate those raw numbers — they are already visible.
+    Describe the overall shape of the period: steady, improving,
+    worsening, mixed, or a window too short to read.
 
     Rules:
     - Never give advice or recommendations. Words like "should",
       "must", "recommend" are forbidden when aimed at the reader.
     - Never claim one thing caused another. Do not use "caused",
       "because", "leads to", "triggered", "due to".
-    - Describe direction of travel using the trend buckets supplied
-      ("improving", "stable", "worsening", "notEnoughData").
-      Describing a metric going up or down is fine as long as
-      you're reporting the number, not prescribing an action.
+    - Describe direction of travel using the trend buckets
+      supplied ("improving", "stable", "worsening",
+      "notEnoughData") and qualitative framing — not by reciting
+      average values.
     - 3 to 5 sentences, one paragraph. British English.
-    - If the sample size is small, acknowledge that the window is
-      short — do not overclaim.
+    - Dates should appear exactly as supplied (human-readable).
+    - If the sample size is small, acknowledge the window is
+      short. Do not overclaim.
     - Do not name clinical cutoffs the input does not supply.
     """
 
     public static func buildPrompt(input: OverviewNarrativeInput) -> String {
         """
-        Narrate the trend over the range described by the JSON below.
+        Narrate the trend over the range described by the JSON
+        below. The reader sees the aggregate cards with raw
+        numbers above this summary — do NOT restate those
+        numbers; describe the shape of the period qualitatively.
 
         Input:
         \(PromptJSON.render(input))
 
         Produce:
-        - paragraph: 3 to 5 sentences, describing direction of travel.
-        - highlight: optional one-line takeaway, fewer than 12 words,
-          or omit when nothing meaningful stands out.
+        - paragraph: 3 to 5 sentences describing direction of
+          travel in qualitative terms. Use the trend buckets,
+          not the raw averages.
+        - highlight: optional one-line takeaway, fewer than 12
+          words, or omit when nothing meaningful stands out.
         """
     }
 }

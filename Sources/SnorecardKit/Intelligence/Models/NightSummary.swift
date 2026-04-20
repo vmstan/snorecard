@@ -70,16 +70,17 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
 
 /// On-device LLM output for the night-summary feature. Decoded via the
 /// `@Generable` Foundation Models pipeline.
+///
+/// The card's title is a fixed string ("Sleep Analysis") on the
+/// view side, so the model only needs to produce the paragraph.
+/// Narrower output schema means less generation, less context
+/// budget, and fewer surfaces the guardrail can reject.
 @Generable
 public struct NightSummaryOutput: Codable, Hashable, Sendable {
-    @Guide(description: "Headline, 3 to 5 words, no punctuation, describes the night in neutral terms.")
-    public let headline: String
-
     @Guide(description: "One paragraph, 2 to 4 sentences, plain English, British spelling. Describe what the numbers show compared to the baseline. No advice, no recommendations, no causal claims.")
     public let paragraph: String
 
-    public init(headline: String, paragraph: String) {
-        self.headline = headline
+    public init(paragraph: String) {
         self.paragraph = paragraph
     }
 }

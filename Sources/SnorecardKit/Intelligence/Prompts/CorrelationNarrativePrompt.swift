@@ -1,8 +1,8 @@
 import Foundation
 
 public enum CorrelationNarrativePrompt {
-    // v3: dropped "suggest" from the banned-words mention.
-    public static let templateVersion = 3
+    // v4: dates render in human-readable British English.
+    public static let templateVersion = 4
 
     public static let systemInstructions: String = """
     You are Snorecard's correlation narrator. You turn pre-computed

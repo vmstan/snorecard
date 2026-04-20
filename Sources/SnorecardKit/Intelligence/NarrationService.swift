@@ -105,7 +105,7 @@ public struct FoundationNarrationService: NarrationService {
                     generating: NightSummaryOutput.self
                 )
                 let output = response.content
-                try enforce(Guardrails.evaluateAll([output.headline, output.paragraph]))
+                try enforce(Guardrails.evaluate(output.paragraph))
                 return output
             } catch is CancellationError {
                 // Task cancellation is expected when the user navigates

@@ -49,7 +49,11 @@ struct NightSummaryCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.tint)
-                Text(summary.headline)
+                // Fixed title — the model now only generates the
+                // paragraph. A stable card header reads more
+                // calmly than a freshly-invented 3-word line on
+                // every regeneration.
+                Text("Sleep Analysis")
                     .font(.headline)
                 Spacer()
                 Text("On-device")

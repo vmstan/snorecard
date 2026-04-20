@@ -6,10 +6,25 @@ import Foundation
 /// as ISO-8601; nil values are omitted (the prompt instructions
 /// tell the model to skip missing fields).
 enum PromptJSON {
+    /// Human-readable date formatter used when rendering inputs
+    /// into prompts — the model is likelier to echo whatever it
+    /// sees verbatim than to reformat an ISO-8601 string, and
+    /// we'd rather a narrative say "17 April 2026" than
+    /// "2026-04-17T05:00:00Z". British English locale to match
+    /// the prompt's spelling rule. Note: `IntelligenceCache.hash`
+    /// uses its own ISO-8601 encoder so cache keys stay stable
+    /// regardless of this formatter's output.
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.dateFormat = "d MMMM yyyy"
+        return formatter
+    }()
+
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .formatted(dateFormatter)
         return encoder
     }()
 

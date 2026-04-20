@@ -28,8 +28,7 @@ final class IntelligenceCacheTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: folder) }
 
         let output = NightSummaryOutput(
-            headline: "Steady night overall",
-            paragraph: "AHI sat at 3.1, close to your recent average."
+            paragraph: "AHI sat close to your recent average."
         )
         let hash = "fake-hash"
 
@@ -52,7 +51,7 @@ final class IntelligenceCacheTests: XCTestCase {
         let folder = try createTempFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        let output = NightSummaryOutput(headline: "a", paragraph: "b")
+        let output = NightSummaryOutput(paragraph: "b")
         IntelligenceCache.saveNightSummary(
             output,
             inputHash: "hash-a",
@@ -70,7 +69,7 @@ final class IntelligenceCacheTests: XCTestCase {
         let folder = try createTempFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        let output = NightSummaryOutput(headline: "a", paragraph: "b")
+        let output = NightSummaryOutput(paragraph: "b")
         IntelligenceCache.saveNightSummary(
             output,
             inputHash: "hash",

@@ -26,7 +26,10 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("\"ahi\""))
         XCTAssertTrue(prompt.contains("\"usageHours\""))
         XCTAssertTrue(prompt.contains("congested"))
-        XCTAssertTrue(prompt.contains("headline"))
+        // Headline is no longer part of the output schema — the
+        // card renders a fixed "Sleep Analysis" title and the
+        // model only produces the paragraph.
+        XCTAssertFalse(prompt.contains("headline"))
         XCTAssertTrue(prompt.contains("paragraph"))
     }
 
