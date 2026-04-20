@@ -106,7 +106,7 @@ struct SnorecardApp: App {
                 library.load(url)
             }
         } label: {
-            Label("Import SD Card", systemImage: "sdcard")
+            Label("Import SD Card", systemImage: "externaldrive.badge.plus")
         }
         .keyboardShortcut("o", modifiers: [.command])
 

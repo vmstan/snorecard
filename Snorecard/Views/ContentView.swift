@@ -546,7 +546,7 @@ struct ContentView: View {
                 Button {
                     openSDCard()
                 } label: {
-                    Label("Import SD Card", systemImage: "sdcard")
+                    Label("Import SD Card", systemImage: "externaldrive.badge.plus")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
                 .help("Import a ResMed SD card or DATALOG folder")
@@ -583,7 +583,7 @@ struct ContentView: View {
             Button {
                 openSDCard()
             } label: {
-                Label("Import SD Card", systemImage: "sdcard")
+                Label("Import SD Card", systemImage: "externaldrive.badge.plus")
             }
             #if os(macOS)
             .keyboardShortcut("o", modifiers: [.command])
@@ -726,7 +726,7 @@ struct ContentView: View {
                     Button {
                         openSDCard()
                     } label: {
-                        Label("Import from SD Card", systemImage: "sdcard")
+                        Label("Import from SD Card", systemImage: "externaldrive.badge.plus")
                     }
                     .buttonStyle(.borderedProminent)
                 }
