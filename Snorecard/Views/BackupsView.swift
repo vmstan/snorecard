@@ -98,7 +98,7 @@ struct BackupsView: View {
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
                 title: deviceHeaderTitle,
-                caption: "Archived CPAP data stored in iCloud Drive"
+                caption: "Archived PAP-device data stored in iCloud Drive"
             )
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -317,7 +317,7 @@ struct BackupsView: View {
         case .restore(let backup):
             let stamp = backup.createdAt.formatted(.dateTime.year().month().day().hour().minute())
             return """
-            This will replace the current data for this device with the contents of the backup from \(stamp).
+            This will replace the current data for the PAP-device with the contents of the backup from \(stamp).
 
             The current version is moved aside during the swap and discarded once the restore completes successfully.
             """

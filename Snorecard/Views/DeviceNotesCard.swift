@@ -47,7 +47,7 @@ struct DeviceNotesCard: View {
             #endif
 
             TextField(
-                "Overall notes for this device — mask changes, pressure tweaks, anything not tied to a single night…",
+                "Overall notes for this PAP-device — mask changes, pressure tweaks, anything not tied to a single night…",
                 text: $text,
                 axis: .vertical
             )
@@ -93,7 +93,7 @@ struct DeviceNotesCard: View {
                 return product
             }
         }
-        return "This Device"
+        return "This PAP-device"
     }
 
     private var deviceSerial: String {

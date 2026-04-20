@@ -381,7 +381,7 @@ struct DailySettingsInspector: View {
     private var friendlyDeviceName: String {
         if let alias = deviceAlias, !alias.isEmpty { return alias }
         if let product = productName, !product.isEmpty { return product }
-        return "CPAP"
+        return "PAP-device"
     }
 
     /// `true` when we have enough identity data to justify showing

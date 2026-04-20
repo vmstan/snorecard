@@ -140,7 +140,7 @@ struct OverviewView: View {
                 } label: {
                     Label("Sleep Journal", systemImage: "note.text")
                 }
-                .help("Add or edit overall notes for this device")
+                .help("Add or edit overall notes for this PAP-device")
             }
         }
         #endif

@@ -191,7 +191,7 @@ struct ContentView: View {
                let serial = card.identification?.serialNumber {
                 RenameDeviceSheet(
                     serial: serial,
-                    defaultName: card.identification?.productName ?? "ResMed Device",
+                    defaultName: card.identification?.productName ?? "ResMed PAP-device",
                     currentOverride: library.deviceNameOverrides[serial],
                     onSave: { newName in
                         library.setDeviceName(newName, for: serial)
@@ -455,7 +455,7 @@ struct ContentView: View {
         {
             RenameDeviceSheet(
                 serial: serial,
-                defaultName: card.identification?.productName ?? "ResMed Device",
+                defaultName: card.identification?.productName ?? "ResMed PAP-device",
                 currentOverride: library.deviceNameOverrides[serial],
                 onSave: { newName in
                     library.setDeviceName(newName, for: serial)
@@ -496,15 +496,15 @@ struct ContentView: View {
         let dayCount = library.card?.days.count ?? 0
         let scope: String
         if dayCount == 0 {
-            scope = "every day of data on this device"
+            scope = "every day of data on this PAP-device"
         } else if dayCount == 1 {
-            scope = "the one day of data on this device"
+            scope = "the one day of data on this PAP-device"
         } else {
-            scope = "all \(dayCount) days of data on this device"
+            scope = "all \(dayCount) days of data on this PAP-device"
         }
 
         return """
-        This will recompute every metric for \(scope) from the raw EDF files and replace the current summary data in iCloud. All AI-generated Sleep Analysis and Explain summaries are cleared at the same time, so the next time you open one it's regenerated against the fresh numbers.
+        This will recompute every metric for \(scope) from the raw files and replace the current summary data in iCloud. All AI-generated Sleep Analysis and Explain summaries are cleared at the same time, so the next time you open one it's regenerated against the fresh numbers.
 
         Your sleep journal entries are never touched.
 
@@ -658,7 +658,7 @@ struct ContentView: View {
                     isRenamingDevice = true
                     #endif
                 } label: {
-                    Label("Rename Device", systemImage: "pencil")
+                    Label("Rename PAP Device", systemImage: "pencil")
                 }
                 if !otherDevices.isEmpty {
                     Menu {
@@ -668,7 +668,7 @@ struct ContentView: View {
                             }
                         }
                     } label: {
-                        Label("Switch Device", systemImage: "rectangle.2.swap")
+                        Label("Switch PAP Device", systemImage: "rectangle.2.swap")
                     }
                 }
 
@@ -700,7 +700,7 @@ struct ContentView: View {
         #if os(macOS)
         if let url = presentFolderPicker(
             prompt: "Open",
-            message: "Select a ResMed SD card or DATALOG export folder"
+            message: "Select a ResMed PAP-device SD card or DATALOG export folder"
         ) {
             library.load(url)
         }
@@ -817,7 +817,7 @@ struct ContentView: View {
             VStack(spacing: 4) {
                 Text("Opening Snorecard")
                     .font(.headline)
-                Text("Checking iCloud for your CPAP data…")
+                Text("Checking iCloud for your PAP-device data…")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

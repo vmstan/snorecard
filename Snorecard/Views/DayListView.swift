@@ -408,7 +408,7 @@ struct RenameDeviceSheet: View {
         // on `.navigationTitle` bubbling up to the column's
         // chrome — matching `DailySettingsInspector`.
         formBody
-            .navigationTitle("Rename Device")
+            .navigationTitle("Rename PAP-device")
         #endif
     }
 
@@ -416,7 +416,7 @@ struct RenameDeviceSheet: View {
     private var formBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
-                title: "Rename Device",
+                title: "Rename PAP-device",
                 caption: currentCaption
             )
             .padding(.horizontal, 20)
@@ -433,12 +433,12 @@ struct RenameDeviceSheet: View {
                 }
 
                 Section {
-                    LabeledContent("Device", value: defaultName)
+                    LabeledContent("PAP-device", value: defaultName)
                     LabeledContent("Serial") {
                         Text(serial).monospaced()
                     }
                 } header: {
-                    Text("Device")
+                    Text("PAP-device")
                 }
 
                 if currentOverride != nil {

@@ -101,7 +101,7 @@ struct SnorecardApp: App {
         Button {
             if let url = presentFolderPicker(
                 prompt: "Open",
-                message: "Select a CPAP SD card or DATALOG export folder"
+                message: "Select a PAP-device SD card or DATALOG export folder"
             ) {
                 library.load(url)
             }
@@ -157,7 +157,7 @@ struct SnorecardApp: App {
         Button {
             NotificationCenter.default.post(name: .snorecardRenameDevice, object: nil)
         } label: {
-            Label("Rename Device", systemImage: "pencil")
+            Label("Rename PAP Device", systemImage: "pencil")
         }
         .disabled(!hasCard)
 
@@ -169,7 +169,7 @@ struct SnorecardApp: App {
                     }
                 }
             } label: {
-                Label("Switch Device", systemImage: "rectangle.2.swap")
+                Label("Switch PAP Device", systemImage: "rectangle.2.swap")
             }
         }
 

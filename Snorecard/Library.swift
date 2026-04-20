@@ -139,7 +139,7 @@ final class Library {
            !override.isEmpty {
             return override
         }
-        return card.identification?.productName ?? "ResMed Device"
+        return card.identification?.productName ?? "ResMed PAP-device"
     }
 
     /// Set or clear a custom name for a given serial. Passing an empty /
