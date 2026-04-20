@@ -28,8 +28,25 @@ public enum NoteTagExtractionPrompt {
 
         Note:
         \"\"\"
-        \(input.text)
+        \(truncated(input.text))
         \"\"\"
         """
+    }
+
+    /// Cap the note at 400 characters so a long journal entry
+    /// can't push the tag-extraction prompt past the on-device
+    /// model's 4096-token context window. Tags that depend on a
+    /// phrase late in a very long note are acceptable losses —
+    /// the signal we're extracting (alcohol, congestion, new
+    /// mask, etc.) almost always appears in the first few lines.
+    private static func truncated(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cap = 400
+        guard trimmed.count > cap else { return trimmed }
+        let prefix = trimmed.prefix(cap)
+        if let lastSpace = prefix.lastIndex(of: " ") {
+            return String(prefix[..<lastSpace]) + "…"
+        }
+        return String(prefix) + "…"
     }
 }

@@ -60,10 +60,25 @@ public enum IntelligenceInputBuilder {
             )
         }
 
+        // The user's free-form journal is the only unbounded
+        // input into the prompt. The on-device model has a 4096-
+        // token context window; a long journal entry alone can
+        // blow past that and the framework throws
+        // `exceededContextWindowSize`. Cap to a generous but
+        // bounded prefix so the prompt stays comfortably under
+        // the limit. Breaking on a word boundary and appending an
+        // ellipsis signals truncation to the model without
+        // confusing the narration.
         let trimmedNote: String? = {
-            guard let userNote = userNote?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !userNote.isEmpty else { return nil }
-            return userNote
+            guard let raw = userNote?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else { return nil }
+            let cap = 400
+            guard raw.count > cap else { return raw }
+            let prefix = raw.prefix(cap)
+            if let lastSpace = prefix.lastIndex(of: " ") {
+                return String(prefix[..<lastSpace]) + "…"
+            }
+            return String(prefix) + "…"
         }()
 
         return NightSummaryInput(

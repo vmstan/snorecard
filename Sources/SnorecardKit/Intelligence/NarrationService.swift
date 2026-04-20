@@ -41,49 +41,61 @@ public protocol NarrationService: Sendable {
 public struct FoundationNarrationService: NarrationService {
     public init() {}
 
-    /// Maximum attempts per feature before we give up on a
-    /// guardrail-rejected generation. The on-device model is
-    /// stochastic, so a fresh session with the same prompt often
-    /// produces different wording on the next try — this gives
-    /// an output that happens to hit a banned word one chance
-    /// to be replaced by clean narration, without looping
-    /// indefinitely and stalling the view.
-    private static let maxRejectionRetries = 3
+    /// Maximum attempts per feature before we give up. The
+    /// on-device model is stochastic, so a fresh session with
+    /// the same prompt typically produces different wording on
+    /// the next try — which often resolves a guardrail
+    /// rejection, a transient decoding failure, or similar
+    /// sampling-related hiccup without looping indefinitely and
+    /// stalling the view.
+    private static let maxRetries = 3
 
-    /// Run `generate` up to `Self.maxRejectionRetries` times,
-    /// retrying only on `NarrationError.rejected`. Every other
-    /// error — cancellation, session failure, model unavailable
-    /// — propagates immediately. After the final attempt still
-    /// rejects, the last rejection is re-thrown so the caller
-    /// can hide the surface.
-    private func withRejectionRetries<T>(
+    /// Run `generate` up to `Self.maxRetries` times, retrying on
+    /// `NarrationError.rejected` (guardrail hit clean but the
+    /// next sample might) and on `NarrationError.sessionFailed`
+    /// (the model threw something transient — decoding failure,
+    /// stream error, etc., where a fresh roll often succeeds).
+    ///
+    /// `CancellationError` is never retried — if the task was
+    /// cancelled, the caller is gone. Other errors also
+    /// propagate immediately.
+    ///
+    /// After the final attempt still fails, the last error is
+    /// re-thrown so the caller can hide the surface.
+    private func withRetries<T>(
         feature: StaticString,
         _ generate: () async throws -> T
     ) async throws -> T {
-        var lastRejection: NarrationError?
-        for attempt in 1...Self.maxRejectionRetries {
+        var lastError: NarrationError?
+        for attempt in 1...Self.maxRetries {
             do {
                 return try await generate()
             } catch let error as NarrationError {
-                if case .rejected = error {
-                    lastRejection = error
-                    log.info("\(feature, privacy: .public): guardrail rejected on attempt \(attempt, privacy: .public)/\(Self.maxRejectionRetries, privacy: .public), retrying")
+                switch error {
+                case .rejected:
+                    lastError = error
+                    log.info("\(feature, privacy: .public): guardrail rejected on attempt \(attempt, privacy: .public)/\(Self.maxRetries, privacy: .public), retrying")
                     continue
+                case .sessionFailed:
+                    lastError = error
+                    log.info("\(feature, privacy: .public): session failed on attempt \(attempt, privacy: .public)/\(Self.maxRetries, privacy: .public), retrying")
+                    continue
+                case .unavailable:
+                    throw error
                 }
-                throw error
             }
             // Other errors (CancellationError, arbitrary catch)
             // are re-thrown by the inner method's own handling
             // before we get here.
         }
-        throw lastRejection ?? NarrationError.sessionFailed("exhausted retries")
+        throw lastError ?? NarrationError.sessionFailed("exhausted retries")
     }
 
     public func nightSummary(
         _ input: NightSummaryInput
     ) async throws -> NightSummaryOutput {
         let prompt = NightSummaryPrompt.buildPrompt(input: input)
-        return try await withRejectionRetries(feature: "nightSummary") {
+        return try await withRetries(feature: "nightSummary") {
             let session = LanguageModelSession(
                 instructions: Instructions(NightSummaryPrompt.systemInstructions)
             )
@@ -113,7 +125,7 @@ public struct FoundationNarrationService: NarrationService {
         _ input: OverviewNarrativeInput
     ) async throws -> OverviewNarrativeOutput {
         let prompt = OverviewNarrativePrompt.buildPrompt(input: input)
-        return try await withRejectionRetries(feature: "overviewNarrative") {
+        return try await withRetries(feature: "overviewNarrative") {
             let session = LanguageModelSession(
                 instructions: Instructions(OverviewNarrativePrompt.systemInstructions)
             )
@@ -142,7 +154,7 @@ public struct FoundationNarrationService: NarrationService {
         _ input: MetricExplainInput
     ) async throws -> MetricExplainOutput {
         let prompt = MetricExplainPrompt.buildPrompt(input: input)
-        return try await withRejectionRetries(feature: "explainMetric") {
+        return try await withRetries(feature: "explainMetric") {
             let session = LanguageModelSession(
                 instructions: Instructions(MetricExplainPrompt.systemInstructions)
             )
@@ -191,7 +203,7 @@ public struct FoundationNarrationService: NarrationService {
         _ input: CorrelationNarrativeInput
     ) async throws -> CorrelationNarrativeOutput {
         let prompt = CorrelationNarrativePrompt.buildPrompt(input: input)
-        return try await withRejectionRetries(feature: "correlationNarrative") {
+        return try await withRetries(feature: "correlationNarrative") {
             let session = LanguageModelSession(
                 instructions: Instructions(CorrelationNarrativePrompt.systemInstructions)
             )
