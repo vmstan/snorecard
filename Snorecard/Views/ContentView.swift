@@ -9,6 +9,13 @@ extension Notification.Name {
     static let snorecardOpenDailyNotes = Notification.Name("Snorecard.OpenDailyNotes")
     static let snorecardOpenDailySettings = Notification.Name("Snorecard.OpenDailySettings")
     static let snorecardOpenDeviceNotes = Notification.Name("Snorecard.OpenDeviceNotes")
+    /// Per-night AI narrative — fired from the day view.
+    static let snorecardOpenSleepAnalysis = Notification.Name("Snorecard.OpenSleepAnalysis")
+    /// Per-range AI narrative — fired from the Overview. Routes
+    /// to `OverviewView` so it can populate the trigger state
+    /// with its current range and filtered stats before the
+    /// sheet / inspector opens.
+    static let snorecardOpenOverviewAnalysis = Notification.Name("Snorecard.OpenOverviewAnalysis")
 }
 
 struct ContentView: View {
@@ -22,12 +29,12 @@ struct ContentView: View {
     /// Which pane the shared macOS inspector is currently showing.
     /// A single third column hosts all library- and day-level
     /// accessory views (rename, backups, sleep journal, therapy
-    /// details) so they behave consistently — opening one replaces
-    /// whatever was there, and the column slides out when the
-    /// pane is nil. Matches the Finder Get Info / Mail Viewer
-    /// precedent where one inspector swaps content instead of
-    /// spawning extra windows.
-    enum InspectorPane { case rename, backups, notes, deviceNotes, settings }
+    /// details, metric explain) so they behave consistently —
+    /// opening one replaces whatever was there, and the column
+    /// slides out when the pane is nil. Matches the Finder Get
+    /// Info / Mail Viewer precedent where one inspector swaps
+    /// content instead of spawning extra windows.
+    enum InspectorPane { case rename, backups, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -85,6 +92,12 @@ struct ContentView: View {
                 if !shown {
                     withAnimation(.smooth(duration: 0.32)) {
                         inspectorPane = nil
+                        // Clear both request properties when the
+                        // user manually closes the inspector, so
+                        // re-triggering the same surface opens it
+                        // again cleanly.
+                        library.pendingExplain = nil
+                        library.pendingOverviewAnalysis = nil
                     }
                 }
             }
@@ -103,10 +116,63 @@ struct ContentView: View {
             // into a day.
             if case .notes = inspectorPane, case .day = newSelection { return }
             if case .settings = inspectorPane, case .day = newSelection { return }
+            if case .sleepAnalysis = inspectorPane, case .day = newSelection { return }
             if case .deviceNotes = inspectorPane, case .overview = newSelection { return }
+            if case .overviewAnalysis = inspectorPane, case .overview = newSelection { return }
             if inspectorPane == .notes
                 || inspectorPane == .settings
-                || inspectorPane == .deviceNotes {
+                || inspectorPane == .deviceNotes
+                || inspectorPane == .explainMetric
+                || inspectorPane == .sleepAnalysis
+                || inspectorPane == .overviewAnalysis {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                    library.pendingExplain = nil
+                    library.pendingOverviewAnalysis = nil
+                }
+            }
+        }
+        // Any tap on a stat card — either in DayDetailView or in
+        // OverviewView — sets `library.pendingExplain`. Open the
+        // inspector in the shared column so the metric
+        // explanation matches how Sleep Journal / Therapy Details
+        // are presented. Closing the inspector later clears the
+        // request back to nil so the same tap can re-open.
+        //
+        // Clearing `pendingOverviewAnalysis` here prevents stale
+        // state from the other surface making the per-card
+        // toggle check (`pendingExplain == newRequest`) look
+        // wrong on the next tap — without this, tapping a card
+        // after switching from Sleep Analysis to the explain
+        // pane would silently reset the request and only open
+        // on the *second* tap.
+        .onChange(of: library.pendingExplain) { _, newRequest in
+            if newRequest != nil {
+                if library.pendingOverviewAnalysis != nil {
+                    library.pendingOverviewAnalysis = nil
+                }
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = .explainMetric
+                }
+            } else if inspectorPane == .explainMetric {
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = nil
+                }
+            }
+        }
+        // OverviewView sets `pendingOverviewAnalysis` when the
+        // user triggers Sleep Analysis from the Overview. Same
+        // cross-clearing so a pending explain doesn't persist
+        // past a swap to Sleep Analysis.
+        .onChange(of: library.pendingOverviewAnalysis) { _, newRequest in
+            if newRequest != nil {
+                if library.pendingExplain != nil {
+                    library.pendingExplain = nil
+                }
+                withAnimation(.smooth(duration: 0.32)) {
+                    inspectorPane = .overviewAnalysis
+                }
+            } else if inspectorPane == .overviewAnalysis {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                 }
@@ -138,13 +204,63 @@ struct ContentView: View {
             NavigationStack {
                 DeviceNotesCard()
                     .padding(20)
-                    .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             CloseSheetButton { isShowingDeviceNotes = false }
                         }
                     }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .environment(library)
+        }
+        .sheet(item: $library.pendingExplain) { request in
+            // iOS keeps the metric explanation as a sheet; macOS
+            // routes the same request through the shared
+            // inspector column instead. Binding `pendingExplain`
+            // through `$library` so dismissal clears it
+            // automatically. The sheet skips `.navigationTitle`
+            // intentionally — the `InspectorPaneHeader` inside
+            // `MetricExplainSheet` already shows the value +
+            // caption, so a centered nav title on the same bar
+            // would duplicate the content.
+            NavigationStack {
+                MetricExplainSheet(request: request)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton {
+                                library.pendingExplain = nil
+                            }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .environment(library)
+        }
+        .sheet(item: $library.pendingOverviewAnalysis) { request in
+            // Same pattern as Sleep Analysis on the day view —
+            // iOS presents as a sheet here at the ContentView
+            // root so OverviewView doesn't have to host it
+            // directly.
+            NavigationStack {
+                TrendNarrativeCard(
+                    stats: request.stats,
+                    rangeStart: request.rangeStart,
+                    rangeEnd: request.rangeEnd
+                )
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        CloseSheetButton {
+                            library.pendingOverviewAnalysis = nil
+                        }
+                    }
+                }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -212,6 +328,11 @@ struct ContentView: View {
                 toggleInspector(.deviceNotes)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
+            if case .day = library.selection, library.intelligence.isReady {
+                toggleInspector(.sleepAnalysis)
+            }
+        }
         #endif
     }
 
@@ -221,9 +342,19 @@ struct ContentView: View {
     /// another swaps content in place without a close/reopen
     /// flicker. Matches the behavior the day-detail toolbar had
     /// before these panes were unified here.
+    ///
+    /// Also clears the shared explain / overview-analysis
+    /// request state whenever the pane changes. Those state
+    /// vars drive the cross-platform presentation of their own
+    /// panes, so swapping to an unrelated pane should leave no
+    /// stale request behind — otherwise the toggle check on
+    /// the next stat-card tap (`pendingExplain == newRequest`)
+    /// can resolve against outdated data and swallow the tap.
     private func toggleInspector(_ pane: InspectorPane) {
         withAnimation(.smooth(duration: 0.32)) {
             inspectorPane = (inspectorPane == pane) ? nil : pane
+            library.pendingExplain = nil
+            library.pendingOverviewAnalysis = nil
         }
     }
 
@@ -265,11 +396,42 @@ struct ContentView: View {
             if let day = library.selectedDay {
                 DailySettingsInspector(
                     settings: day.stats?.settings,
+                    date: day.date,
                     productName: day.stats?.productName
                         ?? library.card?.identification?.productName,
                     serialNumber: library.card?.identification?.serialNumber,
                     deviceAlias: deviceAliasForInspector
                 )
+            } else {
+                EmptyView()
+            }
+        case .explainMetric:
+            if let request = library.pendingExplain {
+                MetricExplainSheet(request: request)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle(request.displayLabel)
+            } else {
+                EmptyView()
+            }
+        case .sleepAnalysis:
+            if let day = library.selectedDay {
+                NightSummaryCard(day: day)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle("Sleep Analysis")
+            } else {
+                EmptyView()
+            }
+        case .overviewAnalysis:
+            if let request = library.pendingOverviewAnalysis {
+                TrendNarrativeCard(
+                    stats: request.stats,
+                    rangeStart: request.rangeStart,
+                    rangeEnd: request.rangeEnd
+                )
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .navigationTitle("Sleep Analysis")
             } else {
                 EmptyView()
             }
@@ -435,6 +597,16 @@ struct ContentView: View {
             // proper because there's room for the extra glyphs.
             if isViewingDay {
                 Divider()
+                if library.intelligence.isReady {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenSleepAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                }
                 Button {
                     NotificationCenter.default.post(
                         name: .snorecardOpenDailyNotes,
@@ -452,10 +624,20 @@ struct ContentView: View {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
                 }
             } else if library.card != nil {
-                // Overview-scoped journal for the whole device —
-                // mirrors the per-night entry but keyed on the
-                // card rather than a single day.
+                // Overview-scoped entries — Sleep Analysis leads
+                // the cluster (same ordering as the day view),
+                // followed by the device-wide Sleep Journal.
                 Divider()
+                if library.intelligence.isReady {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenOverviewAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                }
                 Button {
                     NotificationCenter.default.post(
                         name: .snorecardOpenDeviceNotes,

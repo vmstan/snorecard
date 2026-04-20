@@ -378,9 +378,11 @@ struct RenameDeviceSheet: View {
 
     var body: some View {
         #if os(iOS)
+        // `InspectorPaneHeader` inside `formBody` carries the
+        // "Rename Device" title, so we skip `.navigationTitle`
+        // on iOS to avoid duplicating it in the top bar.
         NavigationStack {
             formBody
-                .navigationTitle("Rename Device")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     // iOS keeps the standard sheet pattern: X close
@@ -412,7 +414,15 @@ struct RenameDeviceSheet: View {
 
     @ViewBuilder
     private var formBody: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            InspectorPaneHeader(
+                title: "Rename Device",
+                caption: currentCaption
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
             Form {
                 Section {
                     nameField
@@ -480,5 +490,17 @@ struct RenameDeviceSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(trimmed.isEmpty ? nil : trimmed)
         onClose()
+    }
+
+    /// Caption under the "Rename Device" header. Shows the
+    /// current override when one exists (so the user sees the
+    /// name they're about to edit) and falls back to the ResMed
+    /// product name when nothing custom has been set yet.
+    private var currentCaption: String {
+        if let override = currentOverride,
+           !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return override
+        }
+        return defaultName
     }
 }

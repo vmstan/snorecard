@@ -20,29 +20,12 @@ struct NotesCard: View {
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Date alone — the surrounding chrome (iOS sheet
-                    // title, macOS inspector title) already says
-                    // "Sleep Journal", so duplicating that word here
-                    // would only repeat itself. The date carries the
-                    // night-specific context so the user knows which
-                    // entry they're editing.
-                    Text(day.date, format: .dateTime.weekday(.wide).month(.wide).day())
-                        .font(.headline)
-                    #if os(macOS)
-                    // AppKit's NSTextField submits on a plain
-                    // Return; ⌥+↩ inserts a line break. Surfacing
-                    // the hint under the title (instead of under
-                    // the field) keeps it in the user's line of
-                    // sight and out of the way of the text input.
-                    Text("Press ⌥ + ↩ for a new line")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
-                }
-                Spacer()
+                InspectorPaneHeader(
+                    title: "Sleep Journal",
+                    caption: dateCaption
+                )
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -56,6 +39,16 @@ struct NotesCard: View {
                     .help("Clear this night's journal entry")
                 }
             }
+
+            #if os(macOS)
+            // AppKit's NSTextField submits on a plain Return;
+            // ⌥+↩ inserts a line break. Keep the hint visible on
+            // its own row just above the editor so the shortcut
+            // stays discoverable without crowding the header.
+            Text("Press ⌥ + ↩ for a new line")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            #endif
 
             // Multi-line TextField (vertical axis) has native
             // placeholder rendering — the first glyph you type
@@ -101,6 +94,12 @@ struct NotesCard: View {
             saveTask?.cancel()
             flushIfChanged(text)
         }
+    }
+
+    /// Date caption below the "Sleep Journal" title — same
+    /// formatting used everywhere else in the inspector set.
+    private var dateCaption: String {
+        day.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 
     /// Cancel any queued autosave and schedule a fresh one for 750 ms

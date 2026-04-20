@@ -20,18 +20,12 @@ struct DeviceNotesCard: View {
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(deviceHeader)
-                        .font(.headline)
-                    #if os(macOS)
-                    Text("Press ⌥ + ↩ for a new line")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
-                }
-                Spacer()
+                InspectorPaneHeader(
+                    title: "Sleep Journal",
+                    caption: deviceHeader
+                )
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -45,6 +39,12 @@ struct DeviceNotesCard: View {
                     .help("Clear the device-wide journal entry")
                 }
             }
+
+            #if os(macOS)
+            Text("Press ⌥ + ↩ for a new line")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            #endif
 
             TextField(
                 "Overall notes for this device — mask changes, pressure tweaks, anything not tied to a single night…",

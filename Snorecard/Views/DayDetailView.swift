@@ -12,6 +12,7 @@ struct DayDetailView: View {
     @State private var loadError: String?
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
+    @State private var isShowingSleepAnalysis = false
 
     var body: some View {
         ScrollView {
@@ -47,6 +48,19 @@ struct DayDetailView: View {
         // shared inspector in `ContentView` owns the display
         // state; this view just announces intent.
         .toolbar {
+            if library.intelligence.isReady {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenSleepAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                    .help("On-device AI summary of this night")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(
@@ -76,7 +90,6 @@ struct DayDetailView: View {
             NavigationStack {
                 NotesCard(day: day)
                     .padding(20)
-                    .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -93,6 +106,7 @@ struct DayDetailView: View {
             // so settings also presents as a sheet on iPhone.
             DailySettingsInspector(
                 settings: day.stats?.settings,
+                date: day.date,
                 productName: day.stats?.productName
                     ?? library.card?.identification?.productName,
                 serialNumber: library.card?.identification?.serialNumber,
@@ -101,14 +115,33 @@ struct DayDetailView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $isShowingSleepAnalysis) {
+            NavigationStack {
+                NightSummaryCard(day: day)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton { isShowingSleepAnalysis = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         // Bridges from the shared Options menu's daily entries —
-        // ContentView posts these whenever the user picks Notes
-        // or Device Settings out of the iOS ellipsis menu.
+        // ContentView posts these whenever the user picks Notes,
+        // Sleep Analysis, or Device Settings out of the iOS
+        // ellipsis menu.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
             isShowingNotes = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
             isShowingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
+            isShowingSleepAnalysis = true
         }
         #endif
         .task(id: day.id) {
@@ -182,7 +215,8 @@ struct DayDetailView: View {
                         label: "Usage",
                         value: formatHours(stats.usageHours),
                         subtitle: sessionCountLabel,
-                        tint: usageColor(stats.usageHours)
+                        tint: usageColor(stats.usageHours),
+                        onTap: explainTap(.usage)
                     )
                     if let apneaSeconds = stats.timeInApneaSeconds {
                         let percent = apneaSeconds / (stats.usageMinutes * 60) * 100
@@ -190,14 +224,16 @@ struct DayDetailView: View {
                             label: "Time in Apnea",
                             value: formatDurationShort(apneaSeconds),
                             subtitle: String(format: "%.2f%% of usage", percent),
-                            tint: apneaColor(percent)
+                            tint: apneaColor(percent),
+                            onTap: explainTap(.timeInApnea)
                         )
                     }
                     if let gi = stats.glasgowIndex {
                         StatCard(
                             label: "Glasgow Index",
                             value: String(format: "%.2f", gi),
-                            tint: glasgowColor(gi)
+                            tint: glasgowColor(gi),
+                            onTap: explainTap(.glasgowIndex)
                         )
                     }
 
@@ -206,14 +242,16 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Pressure (95%)",
                             value: String(format: "%.1f cmH₂O", epap),
-                            subtitle: support.map { String(format: "Support %.1f", $0) }
+                            subtitle: support.map { String(format: "Support %.1f", $0) },
+                            onTap: explainTap(.pressure95)
                         )
                     }
                     if let fl = stats.flowLimit95 {
                         StatCard(
                             label: "Flow Limit (95%)",
                             value: String(format: "%.2f", fl),
-                            tint: flowLimitColor(fl)
+                            tint: flowLimitColor(fl),
+                            onTap: explainTap(.flowLimit)
                         )
                     }
                     if let tv = stats.tidalVolume50 {
@@ -221,14 +259,16 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Tidal Volume (Median)",
                             value: String(format: "%.0f mL", mL),
-                            tint: tidalVolumeColor(mL)
+                            tint: tidalVolumeColor(mL),
+                            onTap: explainTap(.tidalVolume)
                         )
                     }
                     if let leak = stats.leak95LPerMin {
                         StatCard(
                             label: "Leak (95%)",
                             value: String(format: "%.0f L/min", leak),
-                            tint: leakColor(leak)
+                            tint: leakColor(leak),
+                            onTap: explainTap(.leak95)
                         )
                     }
                     if let largeLeak = stats.largeLeakSeconds {
@@ -238,7 +278,8 @@ struct DayDetailView: View {
                             label: "Large Leak",
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
-                            tint: percent < 0.5 ? .severityGood : .severityHigh
+                            tint: percent < 0.5 ? .severityGood : .severityHigh,
+                            onTap: explainTap(.largeLeak)
                         )
                     }
                 }
@@ -266,6 +307,95 @@ struct DayDetailView: View {
             Text("No summary data available for this day.")
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 12)
+        }
+    }
+
+    /// Return a tap handler for an explainable metric when Apple
+    /// Intelligence is available on this device, `nil` otherwise.
+    /// Sets `library.pendingExplain`; `ContentView` owns the
+    /// actual presentation (sheet on iOS, inspector pane on
+    /// macOS) so both platforms share one routing path.
+    ///
+    /// Toggle behaviour: tapping the card that is already
+    /// showing in the inspector dismisses it, matching how the
+    /// other inspector panes (notes, settings, …) already work
+    /// via `toggleInspector`. Tapping a different card swaps
+    /// content in place.
+    private func explainTap(_ metric: ExplainableMetric) -> (() -> Void)? {
+        guard library.intelligence.isReady else { return nil }
+        return {
+            let request = ExplainRequest(
+                metric: metric,
+                displayLabel: Self.displayLabel(for: metric),
+                displayValue: displayValue(for: metric),
+                valueCaption: "Your value for this night",
+                source: .day(dayID: day.id)
+            )
+            if library.pendingExplain == request {
+                library.pendingExplain = nil
+            } else {
+                library.pendingExplain = request
+            }
+        }
+    }
+
+    static func displayLabel(for metric: ExplainableMetric) -> String {
+        switch metric {
+        case .ahi:              return "AHI"
+        case .glasgowIndex:     return "Glasgow Index"
+        case .pressure95:       return "Pressure (95%)"
+        case .epr:              return "Pressure Support"
+        case .leak95:           return "Leak (95%)"
+        case .largeLeak:        return "Large Leak"
+        case .tidalVolume:      return "Tidal Volume"
+        case .usage:            return "Usage"
+        case .timeInApnea:      return "Time in Apnea"
+        case .flowLimit:        return "Flow Limit (95%)"
+        // Overview-only metrics fall back to their enum label —
+        // the daily view never opens the sheet for these, but
+        // the switch has to be exhaustive.
+        case .compliance:       return "Compliance"
+        case .daysWithData:     return "Days with Data"
+        case .sessionsPerNight: return "Sessions / Night"
+        }
+    }
+
+    private func displayValue(for metric: ExplainableMetric) -> String {
+        guard let stats = day.stats else { return "—" }
+        switch metric {
+        case .ahi:          return String(format: "%.1f", stats.ahi)
+        case .glasgowIndex:
+            return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
+        case .pressure95:
+            // Matches the "Pressure (95%)" StatCard — sourced from
+            // `epap95`, not `pressure95`. See DayDetailView.header.
+            return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
+        case .epr:
+            guard let ipap = stats.ipap95, let epap = stats.epap95 else { return "—" }
+            return String(format: "%.1f cmH₂O", max(0, ipap - epap))
+        case .leak95:
+            return stats.leak95LPerMin.map { String(format: "%.0f L/min", $0) } ?? "—"
+        case .largeLeak:
+            guard let seconds = stats.largeLeakSeconds, stats.usageMinutes > 0
+            else { return "—" }
+            let pct = seconds / (stats.usageMinutes * 60) * 100
+            return String(format: "%.0f%%", pct)
+        case .tidalVolume:
+            return stats.tidalVolume50.map { String(format: "%.0f mL", $0 * 1000) } ?? "—"
+        case .usage:
+            return formatHours(stats.usageHours)
+        case .timeInApnea:
+            guard let seconds = stats.timeInApneaSeconds, stats.usageMinutes > 0
+            else { return "—" }
+            let pct = seconds / (stats.usageMinutes * 60) * 100
+            return String(format: "%.2f%% of usage", pct)
+        case .flowLimit:
+            return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
+        // Overview-only metrics have no per-day value — the sheet
+        // path on DayDetailView never hits these cases, but
+        // exhaustive switching still requires them.
+        case .compliance, .daysWithData, .sessionsPerNight:
+            return "—"
         }
     }
 

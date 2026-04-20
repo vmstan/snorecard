@@ -20,6 +20,11 @@ let package = Package(
             name: "SnorecardProbe",
             dependencies: ["SnorecardKit"],
             path: "Sources/SnorecardProbe"
+        ),
+        .testTarget(
+            name: "SnorecardKitTests",
+            dependencies: ["SnorecardKit"],
+            path: "Tests/SnorecardKitTests"
         )
     ]
 )

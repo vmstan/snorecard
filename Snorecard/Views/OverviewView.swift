@@ -9,6 +9,16 @@ struct OverviewView: View {
     @State private var customStart: Date = Calendar.current
         .date(byAdding: .day, value: -6, to: Calendar.current.startOfDay(for: Date()))!
     @State private var customEnd: Date = Calendar.current.startOfDay(for: Date())
+    /// One tap's worth of "explain this card" context used
+    /// internally while building the card grid. Only the bits
+    /// needed to populate an `ExplainRequest` live here — the
+    /// sheet/inspector itself is owned by `ContentView` via
+    /// `library.pendingExplain`.
+    struct OverviewExplainContext {
+        let metric: ExplainableMetric
+        let displayValue: String
+        let averageValue: Double
+    }
 
     /// Date ranges selectable from the Overview header.
     enum RangeKind: Hashable {
@@ -71,6 +81,13 @@ struct OverviewView: View {
                         .frame(maxWidth: .infinity, minHeight: 160)
                     } else {
                         summaryCards
+                        if library.intelligence.isReady {
+                            CorrelationHintsCard(
+                                stats: stats,
+                                rangeStart: rangeStart,
+                                rangeEnd: rangeEnd
+                            )
+                        }
                         ahiChart
                         usageChart
                         glasgowChart
@@ -99,6 +116,21 @@ struct OverviewView: View {
         // state and the third column stays the one surface
         // hosting accessory views.
         .toolbar {
+            if library.intelligence.isReady {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+                            stats: stats,
+                            rangeStart: rangeStart,
+                            rangeEnd: rangeEnd
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                    .disabled(stats.isEmpty)
+                    .help("On-device AI summary of this range")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(
@@ -112,6 +144,18 @@ struct OverviewView: View {
             }
         }
         #endif
+        // iOS + macOS: listen for Sleep Analysis requests posted
+        // from the shared Options menu / File menu. macOS routes
+        // through `library.pendingOverviewAnalysis`; iOS does the
+        // same, and the sheet binding at ContentView picks it up.
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenOverviewAnalysis)) { _ in
+            guard !stats.isEmpty else { return }
+            library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+                stats: stats,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd
+            )
+        }
     }
 
     /// Segmented preset picker plus optional custom date-range pickers.
@@ -170,34 +214,69 @@ struct OverviewView: View {
             alignment: .leading,
             spacing: 12
         ) {
-            card("Days with data", value: "\(days)", subtitle: dateRangeLabel)
+            card(
+                "Days with data",
+                value: "\(days)",
+                subtitle: dateRangeLabel,
+                explain: OverviewExplainContext(
+                    metric: .daysWithData,
+                    displayValue: "\(days) night\(days == 1 ? "" : "s")",
+                    averageValue: Double(days)
+                )
+            )
+            let compliancePct = (compliance * 100).rounded()
             card(
                 "Compliance",
-                value: "\(Int((compliance * 100).rounded()))%",
+                value: "\(Int(compliancePct))%",
                 subtitle: "\(compliantDays) of \(days) days ≥ 4h",
-                tint: compliance >= 0.7 ? .severityGood : .severityMedium
+                tint: compliance >= 0.7 ? .severityGood : .severityMedium,
+                explain: OverviewExplainContext(
+                    metric: .compliance,
+                    displayValue: "\(Int(compliancePct))% of nights ≥ 4h",
+                    averageValue: compliancePct
+                )
             )
             card(
                 "Avg usage / night",
                 value: formatMinutes(avgUsageMinutes),
-                tint: usageColor(avgUsageMinutes / 60)
+                tint: usageColor(avgUsageMinutes / 60),
+                explain: OverviewExplainContext(
+                    metric: .usage,
+                    displayValue: formatMinutes(avgUsageMinutes),
+                    averageValue: avgUsageMinutes / 60
+                )
             )
             if let avgSessions {
                 card(
                     "Avg sessions / night",
-                    value: String(format: "%.1f", avgSessions)
+                    value: String(format: "%.1f", avgSessions),
+                    explain: OverviewExplainContext(
+                        metric: .sessionsPerNight,
+                        displayValue: String(format: "%.1f per night", avgSessions),
+                        averageValue: avgSessions
+                    )
                 )
             }
             card(
                 "Avg AHI",
                 value: String(format: "%.1f", avgAHI),
-                tint: ahiColor(avgAHI)
+                tint: ahiColor(avgAHI),
+                explain: OverviewExplainContext(
+                    metric: .ahi,
+                    displayValue: String(format: "%.1f events/hr", avgAHI),
+                    averageValue: avgAHI
+                )
             )
             if let gi = avgGI {
                 card(
                     "Avg Glasgow Index",
                     value: String(format: "%.2f", gi),
-                    tint: glasgowColor(gi)
+                    tint: glasgowColor(gi),
+                    explain: OverviewExplainContext(
+                        metric: .glasgowIndex,
+                        displayValue: String(format: "%.2f", gi),
+                        averageValue: gi
+                    )
                 )
             }
             if let apnea = avgApnea {
@@ -206,17 +285,35 @@ struct OverviewView: View {
                     "Avg time in apnea",
                     value: formatDurationShort(apnea),
                     subtitle: "per night",
-                    tint: apneaColor(pct)
+                    tint: apneaColor(pct),
+                    explain: OverviewExplainContext(
+                        metric: .timeInApnea,
+                        displayValue: String(format: "%.2f%% of usage", pct),
+                        averageValue: pct
+                    )
                 )
             }
             if let p95 = avgP95 {
-                card("Avg pressure 95th", value: String(format: "%.1f cmH₂O", p95))
+                card(
+                    "Avg pressure 95th",
+                    value: String(format: "%.1f cmH₂O", p95),
+                    explain: OverviewExplainContext(
+                        metric: .pressure95,
+                        displayValue: String(format: "%.1f cmH₂O", p95),
+                        averageValue: p95
+                    )
+                )
             }
             if let flow = avgFlow {
                 card(
                     "Avg flow limit 95th",
                     value: String(format: "%.2f", flow),
-                    tint: flowLimitColor(flow)
+                    tint: flowLimitColor(flow),
+                    explain: OverviewExplainContext(
+                        metric: .flowLimit,
+                        displayValue: String(format: "%.2f", flow),
+                        averageValue: flow
+                    )
                 )
             }
             if let tidal = avgTidal {
@@ -224,14 +321,24 @@ struct OverviewView: View {
                 card(
                     "Avg tidal volume",
                     value: String(format: "%.0f mL", mL),
-                    tint: tidalVolumeColor(mL)
+                    tint: tidalVolumeColor(mL),
+                    explain: OverviewExplainContext(
+                        metric: .tidalVolume,
+                        displayValue: String(format: "%.0f mL", mL),
+                        averageValue: mL
+                    )
                 )
             }
             if let leak = avgLeak {
                 card(
                     "Avg leak 95th",
                     value: String(format: "%.0f L/min", leak),
-                    tint: leakColor(leak)
+                    tint: leakColor(leak),
+                    explain: OverviewExplainContext(
+                        metric: .leak95,
+                        displayValue: String(format: "%.0f L/min", leak),
+                        averageValue: leak
+                    )
                 )
             }
             if let largeLeak = avgLargeLeakPct {
@@ -239,7 +346,12 @@ struct OverviewView: View {
                     "Avg large leak",
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
-                    tint: largeLeak < 0.5 ? .severityGood : .severityHigh
+                    tint: largeLeak < 0.5 ? .severityGood : .severityHigh,
+                    explain: OverviewExplainContext(
+                        metric: .largeLeak,
+                        displayValue: String(format: "%.1f%% of usage", largeLeak),
+                        averageValue: largeLeak
+                    )
                 )
             }
         }
@@ -247,13 +359,72 @@ struct OverviewView: View {
 
     /// Thin wrapper around `StatCard` so the Overview grid shares the
     /// same visual treatment and vertical alignment as the daily view.
+    /// Passing an `explain` context wires the card up as a button
+    /// that opens `MetricExplainSheet` with the range-scoped loader.
     private func card(
         _ label: String,
         value: String,
         subtitle: String? = nil,
-        tint: Color = .primary
+        tint: Color = .primary,
+        explain: OverviewExplainContext? = nil
     ) -> some View {
-        StatCard(label: label, value: value, subtitle: subtitle, tint: tint)
+        StatCard(
+            label: label,
+            value: value,
+            subtitle: subtitle,
+            tint: tint,
+            onTap: explainTap(explain)
+        )
+    }
+
+    /// Toggle behaviour: tapping the card that is already
+    /// showing dismisses the inspector (matching how other
+    /// inspector panes already toggle on re-tap).
+    private func explainTap(_ ctx: OverviewExplainContext?) -> (() -> Void)? {
+        guard let ctx, library.intelligence.isReady else { return nil }
+        let capturedStart = rangeStart
+        let capturedEnd = rangeEnd
+        let sampleSize = stats.count
+        return {
+            let request = ExplainRequest(
+                metric: ctx.metric,
+                displayLabel: Self.displayLabel(for: ctx.metric),
+                displayValue: ctx.displayValue,
+                valueCaption: "Your average for this range",
+                source: .overview(
+                    averageValue: ctx.averageValue,
+                    rangeStart: capturedStart,
+                    rangeEnd: capturedEnd,
+                    sampleSize: sampleSize
+                )
+            )
+            if library.pendingExplain == request {
+                library.pendingExplain = nil
+            } else {
+                library.pendingExplain = request
+            }
+        }
+    }
+
+    /// Short navigation-bar title for the explain sheet. Matches
+    /// the on-card wording rather than the longer clinical label
+    /// that goes into the prompt.
+    static func displayLabel(for metric: ExplainableMetric) -> String {
+        switch metric {
+        case .ahi:              return "Avg AHI"
+        case .glasgowIndex:     return "Avg Glasgow Index"
+        case .pressure95:       return "Avg Pressure (95%)"
+        case .epr:              return "Avg Pressure Support"
+        case .leak95:           return "Avg Leak (95%)"
+        case .largeLeak:        return "Avg Large Leak"
+        case .tidalVolume:      return "Avg Tidal Volume"
+        case .usage:            return "Avg Usage"
+        case .timeInApnea:      return "Avg Time in Apnea"
+        case .flowLimit:        return "Avg Flow Limit (95%)"
+        case .compliance:       return "Compliance"
+        case .daysWithData:     return "Days with Data"
+        case .sessionsPerNight: return "Avg Sessions / Night"
+        }
     }
 
     // MARK: - Charts

@@ -15,10 +15,31 @@ public struct DailyNote: Codable, Sendable, Equatable {
     /// enough for a single-user flow) but recorded so we can
     /// surface it in the UI later ("edited 3 days ago").
     public var updatedAt: Date
+    /// Tags extracted from `text` by the on-device note tag
+    /// extractor. `nil` when extraction hasn't run yet;
+    /// `[]` is a legitimate result and distinct from `nil`.
+    public var extractedTags: [NoteTag]?
+    /// SHA-256 of `text` at the moment `extractedTags` was
+    /// generated. Lets the reader invalidate tags when the note
+    /// has been edited since.
+    public var tagsInputHash: String?
+    /// `NoteTagTaxonomy.version` at the moment `extractedTags`
+    /// was generated. Bumping the taxonomy version triggers bulk
+    /// re-extraction on next read.
+    public var taxonomyVersion: Int?
 
-    public init(text: String, updatedAt: Date = Date()) {
+    public init(
+        text: String,
+        updatedAt: Date = Date(),
+        extractedTags: [NoteTag]? = nil,
+        tagsInputHash: String? = nil,
+        taxonomyVersion: Int? = nil
+    ) {
         self.text = text
         self.updatedAt = updatedAt
+        self.extractedTags = extractedTags
+        self.tagsInputHash = tagsInputHash
+        self.taxonomyVersion = taxonomyVersion
     }
 }
 

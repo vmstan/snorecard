@@ -14,13 +14,39 @@ struct StatCard: View {
     let value: String
     var subtitle: String? = nil
     var tint: Color = .primary
+    /// Optional tap handler — when set, the card renders as a
+    /// button (with a subtle hint chip) so it's obvious the metric
+    /// is interactive. Used by `DayDetailView` to open the
+    /// on-device "Explain this metric" sheet.
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
+        if let onTap {
+            Button(action: onTap) {
+                content
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Explain this metric")
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(label)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                if onTap != nil {
+                    Image(systemName: "sparkles")
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .accessibilityHidden(true)
+                }
+            }
             Text(value)
                 .font(.title2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.primary)

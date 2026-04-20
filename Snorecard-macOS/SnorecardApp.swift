@@ -19,6 +19,9 @@ extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardRebuildStatistics = Notification.Name("Snorecard.RebuildStatistics")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
+    // Sleep Analysis is declared in the shared ContentView
+    // notification set so both platforms reference the same name;
+    // this extension only adds commands that are macOS-only.
 }
 
 @main
@@ -96,6 +99,20 @@ struct SnorecardApp: App {
         .keyboardShortcut("o", modifiers: [.command])
 
         Divider()
+
+        // Sleep Analysis covers both scopes: per-night on the day
+        // view, per-range on the Overview. Posts whichever
+        // notification matches the current selection, mirroring
+        // how Sleep Journal swaps between daily / device notes.
+        Button {
+            NotificationCenter.default.post(
+                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenOverviewAnalysis,
+                object: nil
+            )
+        } label: {
+            Label("Sleep Analysis", systemImage: "sparkles")
+        }
+        .disabled(!hasCard || !library.intelligence.isReady)
 
         // Sleep Journal targets whichever scope the user is
         // currently viewing — the per-night journal from a day,
