@@ -90,7 +90,6 @@ struct DayDetailView: View {
             NavigationStack {
                 NotesCard(day: day)
                     .padding(20)
-                    .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -121,7 +120,6 @@ struct DayDetailView: View {
                 NightSummaryCard(day: day)
                     .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .navigationTitle("Sleep Analysis")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {

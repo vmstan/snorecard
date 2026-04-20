@@ -378,9 +378,11 @@ struct RenameDeviceSheet: View {
 
     var body: some View {
         #if os(iOS)
+        // `InspectorPaneHeader` inside `formBody` carries the
+        // "Rename Device" title, so we skip `.navigationTitle`
+        // on iOS to avoid duplicating it in the top bar.
         NavigationStack {
             formBody
-                .navigationTitle("Rename Device")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     // iOS keeps the standard sheet pattern: X close

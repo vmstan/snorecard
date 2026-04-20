@@ -204,7 +204,6 @@ struct ContentView: View {
             NavigationStack {
                 DeviceNotesCard()
                     .padding(20)
-                    .navigationTitle("Sleep Journal")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -221,10 +220,13 @@ struct ContentView: View {
             // routes the same request through the shared
             // inspector column instead. Binding `pendingExplain`
             // through `$library` so dismissal clears it
-            // automatically.
+            // automatically. The sheet skips `.navigationTitle`
+            // intentionally — the `InspectorPaneHeader` inside
+            // `MetricExplainSheet` already shows the value +
+            // caption, so a centered nav title on the same bar
+            // would duplicate the content.
             NavigationStack {
                 MetricExplainSheet(request: request)
-                    .navigationTitle(request.displayLabel)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -251,7 +253,6 @@ struct ContentView: View {
                 )
                 .padding(20)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .navigationTitle("Sleep Analysis")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {

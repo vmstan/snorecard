@@ -28,13 +28,14 @@ struct DailySettingsInspector: View {
 
     var body: some View {
         #if os(iOS)
-        // On iPhone the inspector collapses into the parent navigation
-        // stack, which caused its `navigationTitle("Settings")` to
-        // bleed out and replace the day's date in the header. Wrap in
-        // a fresh `NavigationStack` so the title stays scoped here.
+        // Fresh NavigationStack so this sheet's own toolbar /
+        // dismiss don't bleed up into the day-detail header.
+        // The `InspectorPaneHeader` at the top of `content`
+        // already shows the pane label and date; we
+        // intentionally skip `.navigationTitle` on iOS so the
+        // inline top bar only carries the Close button.
         NavigationStack {
             content
-                .navigationTitle("Therapy Details")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {

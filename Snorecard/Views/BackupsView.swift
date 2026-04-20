@@ -61,9 +61,11 @@ struct BackupsView: View {
 
     var body: some View {
         #if os(iOS)
+        // `InspectorPaneHeader` inside `formBody` supplies the
+        // pane title, so iOS skips `.navigationTitle` to avoid
+        // stacking a duplicate in the top bar.
         NavigationStack {
             formBody
-                .navigationTitle("Backup & Restore")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
