@@ -19,6 +19,8 @@
 		1C90FCA1000000000000ABC3 /* HourlySignalCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C90FCA1000000000000ABC1 /* HourlySignalCharts.swift */; };
 		1CAD5CEA000000000000ABC2 /* AdvancedChartingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CAD5CEA000000000000ABC1 /* AdvancedChartingView.swift */; };
 		1CAD5CEA000000000000ABC3 /* AdvancedChartingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CAD5CEA000000000000ABC1 /* AdvancedChartingView.swift */; };
+		1CCAAA4A000000000000ABC2 /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCAAA4A000000000000ABC1 /* CanvasWaveformCharts.swift */; };
+		1CCAAA4A000000000000ABC3 /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CCAAA4A000000000000ABC1 /* CanvasWaveformCharts.swift */; };
 		212BC53294F451B0D0EF5EA7 /* WindowControlAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */; };
 		27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F85425A6C4E977C75813A1E /* LoadingView.swift */; };
 		2BAA884B6AD33FB08FBB46D4 /* SnorecardKit in Frameworks */ = {isa = PBXBuildFile; productRef = DDDC85A59813C7B5309429E2 /* SnorecardKit */; };
@@ -101,6 +103,7 @@
 		755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AHIHourlyChart.swift; sourceTree = "<group>"; };
 		1C90FCA1000000000000ABC1 /* HourlySignalCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HourlySignalCharts.swift; sourceTree = "<group>"; };
 		1CAD5CEA000000000000ABC1 /* AdvancedChartingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedChartingView.swift; sourceTree = "<group>"; };
+		1CCAAA4A000000000000ABC1 /* CanvasWaveformCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasWaveformCharts.swift; sourceTree = "<group>"; };
 		7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowControlAccessor.swift; sourceTree = "<group>"; };
 		86917F47386EB72167DE2A0F /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -213,6 +216,7 @@
 			children = (
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
 				1CAD5CEA000000000000ABC1 /* AdvancedChartingView.swift */,
+				1CCAAA4A000000000000ABC1 /* CanvasWaveformCharts.swift */,
 				1C90FCA1000000000000ABC1 /* HourlySignalCharts.swift */,
 				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
 				CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */,
@@ -353,6 +357,7 @@
 			files = (
 				1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */,
 				1CAD5CEA000000000000ABC2 /* AdvancedChartingView.swift in Sources */,
+				1CCAAA4A000000000000ABC2 /* CanvasWaveformCharts.swift in Sources */,
 				1C90FCA1000000000000ABC2 /* HourlySignalCharts.swift in Sources */,
 				BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
@@ -390,6 +395,7 @@
 			files = (
 				7A654618BFC0E167BFA4B8FF /* AHIHourlyChart.swift in Sources */,
 				1CAD5CEA000000000000ABC3 /* AdvancedChartingView.swift in Sources */,
+				1CCAAA4A000000000000ABC3 /* CanvasWaveformCharts.swift in Sources */,
 				1C90FCA1000000000000ABC3 /* HourlySignalCharts.swift in Sources */,
 				E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,

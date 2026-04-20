@@ -144,30 +144,35 @@ struct WaveformBundle: Sendable {
             let flowRate = Double(flowSig.samplesPerRecord) / file.header.recordDuration
             let pressRate = Double(pressSig.samplesPerRecord) / file.header.recordDuration
 
-            // Three-tier flow downsampling. Fit view uses the small
-            // overview. Medium zooms (30m–1h) use a mid-density tier
-            // so the visible slice stays around a few thousand marks.
-            // Tight zooms (2m–10m) get near-native detail because the
-            // slicer narrows it to a small on-screen window anyway.
+            // Three-tier flow downsampling. Canvas rendering lets
+            // every tier carry a lot more points than the SwiftUI
+            // Charts LineMark budget permitted — the GPU strokes a
+            // single Path per session, so even the fit view can
+            // carry several points per breath without stutter.
+            //   * Overview  — ~1 point/sec on an 8h night.
+            //   * Mid       — roughly halfway between overview and
+            //                 native; covers 30m / 1h zooms.
+            //   * Detail    — essentially native 25 Hz flow, crisp
+            //                 at any zoom ≤ 2m.
             let flowOverview = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 6_000,
+                targetPoints: 30_000,
                 style: .minMax
             )
             let flowMid = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 60_000,
+                targetPoints: 150_000,
                 style: .minMax
             )
             let flowDetail = DownsampledSignal.points(
                 samples: flowSamples,
                 sampleRate: flowRate,
                 startOffset: startOffset,
-                targetPoints: 400_000,
+                targetPoints: 750_000,
                 style: .minMax
             )
             let pressPoints = DownsampledSignal.points(
@@ -1137,7 +1142,7 @@ struct WaveformSection: View {
         )
 
         withHoverOverlay(tag: "Breathing") {
-            EquatableSignalLineChart(
+            EquatableCanvasSignalLineChart(
                 title: "Breathing",
                 unit: flowUnit,
                 points: visibleFlowPoints,
@@ -1165,7 +1170,7 @@ struct WaveformSection: View {
                 return (lo - 1)...(hi + 1)
             }()
 
-            EquatablePressureChart(
+            EquatableCanvasPressureChart(
                 title: "Pressure",
                 unit: pressureUnit,
                 ipap: ipap,
@@ -1178,7 +1183,7 @@ struct WaveformSection: View {
         }
         if hasLeak {
             withHoverOverlay(tag: "Leak") {
-                EquatableSignalLineChart(
+                EquatableCanvasSignalLineChart(
                     title: "Leak",
                     unit: "L/min",
                     points: sliced(bundle.flatLeak),
@@ -1194,7 +1199,7 @@ struct WaveformSection: View {
         }
         if hasFlowLim {
             withHoverOverlay(tag: "FlowLim") {
-                EquatableSignalAreaChart(
+                EquatableCanvasSignalAreaChart(
                     title: "Flow Limitation",
                     subtitle: "index (0–1)",
                     points: sliced(bundle.flatFlowLimitation),
@@ -1207,7 +1212,7 @@ struct WaveformSection: View {
         }
         if hasTidalVolume {
             withHoverOverlay(tag: "TidalVol") {
-                EquatableSignalLineChart(
+                EquatableCanvasSignalLineChart(
                     title: "Tidal Volume",
                     unit: "mL",
                     points: sliced(bundle.flatTidalVolume),
@@ -1223,7 +1228,7 @@ struct WaveformSection: View {
         }
         if hasSnore {
             withHoverOverlay(tag: "Snore") {
-                EquatableSignalAreaChart(
+                EquatableCanvasSignalAreaChart(
                     title: "Snore",
                     subtitle: "index (0–5)",
                     points: sliced(bundle.flatSnore),
@@ -1321,384 +1326,6 @@ struct SharedAxisConfig: Equatable, Sendable {
     }
 }
 
-/// One chart per signal, rendered with a line (or stepped line) mark.
-/// Equatable so SwiftUI re-renders it only when its own inputs change.
-struct SignalLineChart: View, Equatable {
-    let title: String
-    let unit: String
-    let points: [FlatPoint]
-    let events: [TimedEvent]
-    let color: Color
-    let zeroReference: Bool
-    let stepped: Bool
-    let thresholdY: Double?
-    let yDomain: ClosedRange<Double>?
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    nonisolated static func == (lhs: SignalLineChart, rhs: SignalLineChart) -> Bool {
-        lhs.title == rhs.title
-            && lhs.unit == rhs.unit
-            && lhs.points.count == rhs.points.count
-            && lhs.points.first?.offset == rhs.points.first?.offset
-            && lhs.points.last?.offset == rhs.points.last?.offset
-            && lhs.events.count == rhs.events.count
-            && lhs.zeroReference == rhs.zeroReference
-            && lhs.stepped == rhs.stepped
-            && lhs.thresholdY == rhs.thresholdY
-            && lhs.yDomain == rhs.yDomain
-            && lhs.hoverOffset == rhs.hoverOffset
-            && lhs.axes == rhs.axes
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ChartSubviewTitle(title: title, subtitle: unit.isEmpty ? "" : "(\(unit))")
-            Chart {
-                if zeroReference {
-                    RuleMark(y: .value("Zero", 0))
-                        .foregroundStyle(Color.red.opacity(0.7))
-                        .lineStyle(StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
-                }
-                if let thresholdY {
-                    RuleMark(y: .value("Threshold", thresholdY))
-                        .foregroundStyle(Color.red.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                }
-                ForEach(points) { point in
-                    let mark = LineMark(
-                        x: .value("Time", point.offset),
-                        y: .value(title, point.value),
-                        series: .value("Session", point.sessionID.uuidString)
-                    )
-                    .foregroundStyle(color)
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-
-                    if stepped {
-                        mark.interpolationMethod(.stepEnd)
-                    } else {
-                        mark
-                    }
-                }
-                ForEach(Array(events.enumerated()), id: \.offset) { _, event in
-                    RectangleMark(
-                        xStart: .value("Start", event.offset),
-                        xEnd: .value("End", event.offset + event.duration)
-                    )
-                    .foregroundStyle(ChartSubviewHelpers.eventColor(event.text).opacity(0.22))
-                }
-                if let hoverOffset {
-                    RuleMark(x: .value("Hover", hoverOffset))
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                }
-            }
-            .modifier(SharedAxesModifier(
-                totalDuration: axes.totalDuration,
-                clockLabel: axes.clockLabel
-            ))
-            .applyYDomain(yDomain)
-            .chartXVisibleDomain(length: axes.visibleDomainLength)
-            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
-            .chartScrollPosition(x: axes.scrollBinding)
-            .chartTapProbe(hoverBinding: axes.hoverBinding)
-            .frame(height: WaveformSection.chartHeight)
-        }
-    }
-}
-
-extension View {
-    /// Apply a `chartYScale(domain:)` only when a range is provided.
-    @ViewBuilder fileprivate func applyYDomain(_ range: ClosedRange<Double>?) -> some View {
-        if let range {
-            self.chartYScale(domain: range)
-        } else {
-            self
-        }
-    }
-
-    /// Overlay an invisible tap-and-drag catcher on a SwiftUI Chart
-    /// that sets `hoverBinding` to the x-data-offset under the
-    /// cursor / finger. A plain tap drops the probe at that spot; a
-    /// drag scrubs the probe in real time. `minimumDistance: 0` on
-    /// the drag means the touch-down already places the probe, so
-    /// the first frame of movement doesn't feel disconnected.
-    ///
-    /// Replaces `.chartXSelection` so the readout only appears on
-    /// explicit user intent — hover / drag on macOS no longer
-    /// triggers per-frame chart re-renders.
-    fileprivate func chartTapProbe(
-        hoverBinding: Binding<TimeInterval?>
-    ) -> some View {
-        self.chartOverlay { proxy in
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    // Tap-only — drag-scrubbing per chart was
-                    // claiming the touch on iOS even with the
-                    // horizontal-dominance bail-out, blocking
-                    // the parent ScrollView from handling
-                    // vertical scroll. Users still get continuous
-                    // scrubbing via the SessionTimelineView
-                    // strip at the top of the section.
-                    .onTapGesture { location in
-                        updateProbe(
-                            atScreenX: location.x,
-                            proxy: proxy,
-                            geo: geo,
-                            binding: hoverBinding
-                        )
-                    }
-            }
-        }
-    }
-
-    /// Shared tap / drag → hoverBinding update. Clamps the x
-    /// coordinate to the plot area so overshoot past the axes
-    /// doesn't drop the probe.
-    private func updateProbe(
-        atScreenX screenX: CGFloat,
-        proxy: ChartProxy,
-        geo: GeometryProxy,
-        binding: Binding<TimeInterval?>
-    ) {
-        guard let plotFrame = proxy.plotFrame else { return }
-        let frame = geo[plotFrame]
-        let xInPlot = screenX - frame.origin.x
-        let clamped = min(max(xInPlot, 0), frame.width)
-        if let offset: TimeInterval = proxy.value(atX: clamped) {
-            binding.wrappedValue = offset
-        }
-    }
-}
-
-/// Area-filled chart used for index-scaled signals (snore, flow limit).
-struct SignalAreaChart: View, Equatable {
-    let title: String
-    let subtitle: String
-    let points: [FlatPoint]
-    let color: Color
-    let yDomain: ClosedRange<Double>
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    nonisolated static func == (lhs: SignalAreaChart, rhs: SignalAreaChart) -> Bool {
-        lhs.title == rhs.title
-            && lhs.subtitle == rhs.subtitle
-            && lhs.points.count == rhs.points.count
-            && lhs.points.first?.offset == rhs.points.first?.offset
-            && lhs.points.last?.offset == rhs.points.last?.offset
-            && lhs.yDomain == rhs.yDomain
-            && lhs.hoverOffset == rhs.hoverOffset
-            && lhs.axes == rhs.axes
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ChartSubviewTitle(title: title, subtitle: subtitle)
-            Chart {
-                ForEach(points) { point in
-                    AreaMark(
-                        x: .value("Time", point.offset),
-                        y: .value(title, point.value),
-                        series: .value("Session", point.sessionID.uuidString)
-                    )
-                    .foregroundStyle(color.opacity(0.55))
-                    .interpolationMethod(.stepStart)
-                }
-                if let hoverOffset {
-                    RuleMark(x: .value("Hover", hoverOffset))
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                }
-            }
-            .chartYScale(domain: yDomain)
-            .modifier(SharedAxesModifier(
-                totalDuration: axes.totalDuration,
-                clockLabel: axes.clockLabel
-            ))
-            .chartXVisibleDomain(length: axes.visibleDomainLength)
-            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
-            .chartScrollPosition(x: axes.scrollBinding)
-            .chartTapProbe(hoverBinding: axes.hoverBinding)
-            .frame(height: WaveformSection.chartHeight)
-        }
-    }
-}
-
-/// Pressure chart variant that renders two series — IPAP target (upper
-/// envelope) and EPAP target (lower envelope) — with a shared Y axis
-/// padded by 1 cmH₂O on either side of the visible range.
-struct PressureChart: View, Equatable {
-    let title: String
-    let unit: String
-    let ipap: [FlatPoint]
-    let epap: [FlatPoint]
-    /// BRP mask-pressure waveform used when no PLD IPAP data is
-    /// available (e.g. days scanned from an older iCloud backup).
-    let fallback: [FlatPoint]
-    let yDomain: ClosedRange<Double>?
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    nonisolated static func == (lhs: PressureChart, rhs: PressureChart) -> Bool {
-        lhs.title == rhs.title
-            && lhs.unit == rhs.unit
-            && lhs.ipap.count == rhs.ipap.count
-            && lhs.ipap.first?.offset == rhs.ipap.first?.offset
-            && lhs.ipap.last?.offset == rhs.ipap.last?.offset
-            && lhs.epap.count == rhs.epap.count
-            && lhs.epap.first?.offset == rhs.epap.first?.offset
-            && lhs.epap.last?.offset == rhs.epap.last?.offset
-            && lhs.fallback.count == rhs.fallback.count
-            && lhs.fallback.first?.offset == rhs.fallback.first?.offset
-            && lhs.fallback.last?.offset == rhs.fallback.last?.offset
-            && lhs.yDomain == rhs.yDomain
-            && lhs.hoverOffset == rhs.hoverOffset
-            && lhs.axes == rhs.axes
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ChartSubviewTitle(title: title, subtitle: unit.isEmpty ? "" : "(\(unit))")
-            Chart {
-                ForEach(ipap) { point in
-                    LineMark(
-                        x: .value("Time", point.offset),
-                        y: .value("IPAP", point.value),
-                        series: .value("Series", "IPAP-\(point.sessionID.uuidString)")
-                    )
-                    .foregroundStyle(by: .value("Series", "IPAP"))
-                    .interpolationMethod(.stepEnd)
-                    .lineStyle(StrokeStyle(lineWidth: 1.2))
-                }
-                ForEach(epap) { point in
-                    LineMark(
-                        x: .value("Time", point.offset),
-                        y: .value("EPAP", point.value),
-                        series: .value("Series", "EPAP-\(point.sessionID.uuidString)")
-                    )
-                    .foregroundStyle(by: .value("Series", "EPAP"))
-                    .interpolationMethod(.stepEnd)
-                    .lineStyle(StrokeStyle(lineWidth: 1.2))
-                }
-                ForEach(fallback) { point in
-                    LineMark(
-                        x: .value("Time", point.offset),
-                        y: .value("Mask", point.value),
-                        series: .value("Series", "Mask-\(point.sessionID.uuidString)")
-                    )
-                    .foregroundStyle(by: .value("Series", "Mask"))
-                    .interpolationMethod(.stepEnd)
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-                }
-                if let hoverOffset {
-                    RuleMark(x: .value("Hover", hoverOffset))
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                }
-            }
-            .chartForegroundStyleScale([
-                "IPAP": Color.chartOrange,
-                "EPAP": Color.chartBlue,
-                "Mask": Color.purple
-            ])
-            .chartLegend(position: .top, alignment: .trailing, spacing: 8)
-            .modifier(SharedAxesModifier(
-                totalDuration: axes.totalDuration,
-                clockLabel: axes.clockLabel
-            ))
-            .applyYDomain(yDomain)
-            .chartXVisibleDomain(length: axes.visibleDomainLength)
-            .chartScrollableAxes(axes.isZoomed ? .horizontal : [])
-            .chartScrollPosition(x: axes.scrollBinding)
-            .chartTapProbe(hoverBinding: axes.hoverBinding)
-            .frame(height: WaveformSection.chartHeight)
-        }
-    }
-}
-
-/// Convenience wrappers that return `EquatableView` versions so the
-/// subview short-circuit actually engages.
-struct EquatablePressureChart: View {
-    let title: String
-    let unit: String
-    let ipap: [FlatPoint]
-    let epap: [FlatPoint]
-    let fallback: [FlatPoint]
-    let yDomain: ClosedRange<Double>?
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    var body: some View {
-        PressureChart(
-            title: title,
-            unit: unit,
-            ipap: ipap,
-            epap: epap,
-            fallback: fallback,
-            yDomain: yDomain,
-            hoverOffset: hoverOffset,
-            axes: axes
-        )
-        .equatable()
-    }
-}
-
-struct EquatableSignalLineChart: View {
-    let title: String
-    let unit: String
-    let points: [FlatPoint]
-    let events: [TimedEvent]
-    let color: Color
-    let zeroReference: Bool
-    let stepped: Bool
-    let thresholdY: Double?
-    var yDomain: ClosedRange<Double>? = nil
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    var body: some View {
-        SignalLineChart(
-            title: title,
-            unit: unit,
-            points: points,
-            events: events,
-            color: color,
-            zeroReference: zeroReference,
-            stepped: stepped,
-            thresholdY: thresholdY,
-            yDomain: yDomain,
-            hoverOffset: hoverOffset,
-            axes: axes
-        )
-        .equatable()
-    }
-}
-
-struct EquatableSignalAreaChart: View {
-    let title: String
-    let subtitle: String
-    let points: [FlatPoint]
-    let color: Color
-    let yDomain: ClosedRange<Double>
-    let hoverOffset: TimeInterval?
-    let axes: SharedAxisConfig
-
-    var body: some View {
-        SignalAreaChart(
-            title: title,
-            subtitle: subtitle,
-            points: points,
-            color: color,
-            yDomain: yDomain,
-            hoverOffset: hoverOffset,
-            axes: axes
-        )
-        .equatable()
-    }
-}
 
 struct ChartSubviewTitle: View {
     let title: String
@@ -1724,56 +1351,4 @@ enum ChartSubviewHelpers {
     }
 }
 
-/// Applies the shared X/Y axis treatment to every waveform chart so tick
-/// placement and, crucially, plot-area width line up across the vertical
-/// stack. Fixed-width Y-axis labels make the left edge of every chart
-/// identical regardless of numeric value width.
-private struct SharedAxesModifier: ViewModifier {
-    let totalDuration: TimeInterval
-    let clockLabel: (TimeInterval) -> String
-
-    func body(content: Content) -> some View {
-        content
-            .chartLegend(.hidden)
-            .chartXScale(domain: 0 ... max(totalDuration, 1))
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
-                    if let seconds = value.as(Double.self) {
-                        AxisGridLine()
-                        AxisTick()
-                        AxisValueLabel {
-                            Text(clockLabel(seconds))
-                                .font(.caption2.monospacedDigit())
-                        }
-                    }
-                }
-            }
-            .chartYAxis {
-                // Y-axis labels move to the trailing edge to
-                // match the Overview style. The plot area now
-                // starts at the chart's leading edge, so chart
-                // titles can sit flush with the data instead of
-                // being padded past a left-side axis column.
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel(anchor: .leading) {
-                        if let v = value.as(Double.self) {
-                            Text(Self.format(v))
-                                .font(.caption2.monospacedDigit())
-                                .frame(width: 32, alignment: .leading)
-                        }
-                    }
-                }
-            }
-    }
-
-    /// Pick a format that keeps the Y-axis label column visually tidy across
-    /// charts with very different value magnitudes (flow in fractions of
-    /// L/s vs pressure in whole cmH₂O).
-    private static func format(_ value: Double) -> String {
-        if abs(value) < 10 { return String(format: "%.1f", value) }
-        return String(format: "%.0f", value)
-    }
-}
 
