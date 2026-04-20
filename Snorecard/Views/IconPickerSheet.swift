@@ -14,10 +14,12 @@ import AppKit
 enum AppIconOption: String, CaseIterable, Identifiable {
     case `default` = "Default"
     case claude = "Claude"
+    case inverted = "Inverted"
     case joey = "Joey"
     case oscar = "Oscar"
     case royale = "Royale"
     case sadie = "Sadie"
+    case slimer = "Slimer"
 
     var id: String { rawValue }
 
@@ -27,12 +29,14 @@ enum AppIconOption: String, CaseIterable, Identifiable {
     /// cases map to the alternate-icon asset names in the target.
     var alternateIconName: String? {
         switch self {
-        case .default: return nil
-        case .claude:  return "Snorecard-Claude"
-        case .joey:    return "Snorecard-Joey"
-        case .oscar:   return "Snorecard-Oscar"
-        case .royale:  return "Snorecard-Royale"
-        case .sadie:   return "Snorecard-Sadie"
+        case .default:  return nil
+        case .claude:   return "Snorecard-Claude"
+        case .inverted: return "Snorecard-Inverted"
+        case .joey:     return "Snorecard-Joey"
+        case .oscar:    return "Snorecard-Oscar"
+        case .royale:   return "Snorecard-Royale"
+        case .sadie:    return "Snorecard-Sadie"
+        case .slimer:   return "Snorecard-Slimer"
         }
     }
 
@@ -46,28 +50,6 @@ enum AppIconOption: String, CaseIterable, Identifiable {
         "IconPreview-\(rawValue)"
     }
 
-    /// Base gradient colour pulled from each `.icon` package's
-    /// `icon.json` — used for the picker's preview swatch.
-    var backgroundColor: Color {
-        switch self {
-        case .default: return Color(red: 0.58188, green: 0.21569, blue: 1.00000)
-        case .claude:  return Color(red: 0.85633, green: 0.41433, blue: 0.27193)
-        case .joey:    return Color(red: 0.80543, green: 0.29125, blue: 0.60434)
-        case .oscar:   return Color(red: 0.20471, green: 0.47274, blue: 0.77461)
-        case .royale:  return Color(red: 0.41961, green: 0.12941, blue: 0.78824)
-        case .sadie:   return Color(red: 0.58082, green: 0.08843, blue: 0.31864)
-        }
-    }
-
-    /// Accent colour for the waveform glyph in the preview —
-    /// white on most icons, violet on Joey, yellow on Royale.
-    var accentColor: Color {
-        switch self {
-        case .joey:    return Color(red: 0.47330, green: 0.25304, blue: 0.88424)
-        case .royale:  return Color(red: 1.00000, green: 0.83922, blue: 0.03922)
-        default:       return .white
-        }
-    }
 }
 
 /// Persists + applies the user's icon selection across app launches.

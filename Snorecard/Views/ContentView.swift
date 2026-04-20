@@ -811,9 +811,9 @@ struct ContentView: View {
                     }
                 case .none:
                     ContentUnavailableView(
-                        "Select Overview or a day",
+                        "Welcome to Snorecard",
                         systemImage: "sidebar.left",
-                        description: Text("Pick something from the sidebar.")
+                        description: Text("Select an option from the sidebar to get started.")
                     )
                 }
             } else if library.isInitialProbing {
