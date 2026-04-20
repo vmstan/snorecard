@@ -23,10 +23,8 @@ struct NotesCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 InspectorPaneHeader(
-                    title: {
-                        Text(day.date, format: .dateTime.weekday(.wide).month(.wide).day())
-                    },
-                    caption: headerCaption
+                    title: "Sleep Journal",
+                    caption: dateCaption
                 )
                 if !text.isEmpty {
                     Button {
@@ -41,6 +39,16 @@ struct NotesCard: View {
                     .help("Clear this night's journal entry")
                 }
             }
+
+            #if os(macOS)
+            // AppKit's NSTextField submits on a plain Return;
+            // ⌥+↩ inserts a line break. Keep the hint visible on
+            // its own row just above the editor so the shortcut
+            // stays discoverable without crowding the header.
+            Text("Press ⌥ + ↩ for a new line")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            #endif
 
             // Multi-line TextField (vertical axis) has native
             // placeholder rendering — the first glyph you type
@@ -88,16 +96,10 @@ struct NotesCard: View {
         }
     }
 
-    /// Caption below the big date header. Per-platform text
-    /// keeps the macOS keyboard-shortcut hint visible (it used
-    /// to live as a separate line under the title before the
-    /// shared `InspectorPaneHeader` consolidated the styling).
-    private var headerCaption: String {
-        #if os(macOS)
-        return "Your journal for this night · Press ⌥ + ↩ for a new line"
-        #else
-        return "Your journal for this night"
-        #endif
+    /// Date caption below the "Sleep Journal" title — same
+    /// formatting used everywhere else in the inspector set.
+    private var dateCaption: String {
+        day.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 
     /// Cancel any queued autosave and schedule a fresh one for 750 ms

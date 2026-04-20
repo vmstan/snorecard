@@ -414,10 +414,8 @@ struct RenameDeviceSheet: View {
     private var formBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
-                title: currentOverride?.isEmpty == false
-                    ? (currentOverride ?? defaultName)
-                    : defaultName,
-                caption: "Custom name used across the sidebar and File menu"
+                title: "Rename Device",
+                caption: currentCaption
             )
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -490,5 +488,17 @@ struct RenameDeviceSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(trimmed.isEmpty ? nil : trimmed)
         onClose()
+    }
+
+    /// Caption under the "Rename Device" header. Shows the
+    /// current override when one exists (so the user sees the
+    /// name they're about to edit) and falls back to the ResMed
+    /// product name when nothing custom has been set yet.
+    private var currentCaption: String {
+        if let override = currentOverride,
+           !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return override
+        }
+        return defaultName
     }
 }

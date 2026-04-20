@@ -23,8 +23,8 @@ struct DeviceNotesCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 InspectorPaneHeader(
-                    title: deviceHeader,
-                    caption: headerCaption
+                    title: "Sleep Journal",
+                    caption: deviceHeader
                 )
                 if !text.isEmpty {
                     Button {
@@ -39,6 +39,12 @@ struct DeviceNotesCard: View {
                     .help("Clear the device-wide journal entry")
                 }
             }
+
+            #if os(macOS)
+            Text("Press ⌥ + ↩ for a new line")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            #endif
 
             TextField(
                 "Overall notes for this device — mask changes, pressure tweaks, anything not tied to a single night…",
@@ -92,16 +98,6 @@ struct DeviceNotesCard: View {
 
     private var deviceSerial: String {
         library.card?.identification?.serialNumber ?? ""
-    }
-
-    /// Caption below the big device header. Keeps the macOS
-    /// keyboard-shortcut hint in the shared header styling.
-    private var headerCaption: String {
-        #if os(macOS)
-        return "Your journal for this device · Press ⌥ + ↩ for a new line"
-        #else
-        return "Your journal for this device"
-        #endif
     }
 
     private func scheduleAutosave(newValue: String) {
