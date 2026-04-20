@@ -18,10 +18,8 @@ struct NightSummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             InspectorPaneHeader(
-                title: {
-                    Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
-                },
-                caption: "On-device analysis of this night"
+                title: "Sleep Analysis",
+                caption: day.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
             )
             Group {
                 if let summary {

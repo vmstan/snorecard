@@ -19,8 +19,8 @@ struct TrendNarrativeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             InspectorPaneHeader(
-                title: rangeLabel,
-                caption: "On-device analysis of this range"
+                title: "Sleep Analysis",
+                caption: rangeLabel
             )
             Group {
                 if let narrative {

@@ -53,10 +53,8 @@ struct DailySettingsInspector: View {
         VStack(alignment: .leading, spacing: 0) {
             if let date {
                 InspectorPaneHeader(
-                    title: {
-                        Text(date, format: .dateTime.weekday(.wide).day().month(.wide))
-                    },
-                    caption: "Therapy settings recorded for this night"
+                    title: "Therapy Details",
+                    caption: date.formatted(.dateTime.weekday(.wide).day().month(.wide))
                 )
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
