@@ -27,16 +27,15 @@ struct FloatingActionBar: View {
                 Button {
                     onTap(item)
                 } label: {
-                    Label(item.title, systemImage: item.systemImage)
-                        .labelStyle(.titleAndIcon)
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .contentShape(Capsule())
+                    Image(systemName: item.systemImage)
+                        .font(.title3.weight(.medium))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!isEnabled(item))
                 .opacity(isEnabled(item) ? 1 : 0.4)
+                .accessibilityLabel(item.title)
             }
         }
         .padding(.horizontal, 6)
