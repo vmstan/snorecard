@@ -138,8 +138,19 @@ struct ContentView: View {
         // explanation matches how Sleep Journal / Therapy Details
         // are presented. Closing the inspector later clears the
         // request back to nil so the same tap can re-open.
+        //
+        // Clearing `pendingOverviewAnalysis` here prevents stale
+        // state from the other surface making the per-card
+        // toggle check (`pendingExplain == newRequest`) look
+        // wrong on the next tap — without this, tapping a card
+        // after switching from Sleep Analysis to the explain
+        // pane would silently reset the request and only open
+        // on the *second* tap.
         .onChange(of: library.pendingExplain) { _, newRequest in
             if newRequest != nil {
+                if library.pendingOverviewAnalysis != nil {
+                    library.pendingOverviewAnalysis = nil
+                }
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = .explainMetric
                 }
@@ -150,11 +161,14 @@ struct ContentView: View {
             }
         }
         // OverviewView sets `pendingOverviewAnalysis` when the
-        // user triggers Sleep Analysis from the Overview. Open
-        // the inspector to the trend narrative; clearing the
-        // state retracts it. Same pattern as pendingExplain.
+        // user triggers Sleep Analysis from the Overview. Same
+        // cross-clearing so a pending explain doesn't persist
+        // past a swap to Sleep Analysis.
         .onChange(of: library.pendingOverviewAnalysis) { _, newRequest in
             if newRequest != nil {
+                if library.pendingExplain != nil {
+                    library.pendingExplain = nil
+                }
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = .overviewAnalysis
                 }
@@ -327,9 +341,19 @@ struct ContentView: View {
     /// another swaps content in place without a close/reopen
     /// flicker. Matches the behavior the day-detail toolbar had
     /// before these panes were unified here.
+    ///
+    /// Also clears the shared explain / overview-analysis
+    /// request state whenever the pane changes. Those state
+    /// vars drive the cross-platform presentation of their own
+    /// panes, so swapping to an unrelated pane should leave no
+    /// stale request behind — otherwise the toggle check on
+    /// the next stat-card tap (`pendingExplain == newRequest`)
+    /// can resolve against outdated data and swallow the tap.
     private func toggleInspector(_ pane: InspectorPane) {
         withAnimation(.smooth(duration: 0.32)) {
             inspectorPane = (inspectorPane == pane) ? nil : pane
+            library.pendingExplain = nil
+            library.pendingOverviewAnalysis = nil
         }
     }
 
