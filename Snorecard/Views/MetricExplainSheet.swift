@@ -1,17 +1,30 @@
 import SwiftUI
 import SnorecardKit
 
-/// Sheet opened when the user taps a stat card on `DayDetailView`.
-/// Displays an on-device explanation of the metric, tailored to
-/// the user's current value. Hidden affordance when Apple
-/// Intelligence is unavailable — the taps that would open this
-/// sheet are never wired up on unsupported devices.
+/// Sheet opened when the user taps a stat card. Day-detail and
+/// Overview cards both present this sheet — the difference is
+/// which library helper produces the explanation, which the
+/// caller injects via `loader`. The sheet itself stays
+/// data-source agnostic; it just shows the result.
+///
+/// Hidden affordance when Apple Intelligence is unavailable —
+/// the taps that would open the sheet are never wired up on
+/// unsupported devices.
 struct MetricExplainSheet: View {
-    let day: ResMedDay
     let metric: ExplainableMetric
     let displayLabel: String
     let displayValue: String
-    @Environment(Library.self) private var library
+    /// Short caption under the headline value. "Your value for
+    /// this night" on the day view, "Your average for this
+    /// range" on the Overview.
+    let valueCaption: String
+    /// Async loader supplied by the caller so the sheet doesn't
+    /// need to know whether the explanation is per-day or
+    /// per-range. Returns `nil` on failure (unavailable /
+    /// guardrail / decoding error) which flips the sheet into
+    /// its "An explanation isn't available right now." state.
+    let loader: () async -> MetricExplainOutput?
+
     @Environment(\.dismiss) private var dismiss
     @State private var explanation: MetricExplainOutput?
     @State private var isLoading = true
@@ -23,10 +36,6 @@ struct MetricExplainSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    // Every dynamic state (loading, loaded, failed)
-                    // is wrapped in the same leading-aligned max-
-                    // width frame so the text column width doesn't
-                    // shift when content arrives.
                     Group {
                         if let explanation {
                             VStack(alignment: .leading, spacing: 16) {
@@ -83,7 +92,7 @@ struct MetricExplainSheet: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(displayValue)
                 .font(.title2.weight(.semibold).monospacedDigit())
-            Text("Your value for this night")
+            Text(valueCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -105,26 +114,11 @@ struct MetricExplainSheet: View {
         failed = false
         isLoading = true
         defer { isLoading = false }
-        let trailing = trailingStats()
-        let result = await library.explainMetric(
-            metric,
-            for: day,
-            trailing: trailing
-        )
+        let result = await loader()
         if result == nil {
             failed = true
         } else {
             explanation = result
         }
-    }
-
-    private func trailingStats() -> [DailyStatistics] {
-        guard let card = library.card else { return [] }
-        let calendar = Calendar.current
-        guard let windowStart = calendar.date(byAdding: .day, value: -14, to: day.date)
-        else { return [] }
-        return card.days
-            .compactMap(\.stats)
-            .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
     }
 }

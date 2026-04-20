@@ -415,6 +415,48 @@ final class Library {
         }
     }
 
+    /// Explain an Overview-style aggregate card — the value is
+    /// already a range average, so the prompt is reframed from
+    /// "this night vs your recent average" to "this average vs
+    /// the norms". Caches at device level, not per-day.
+    func explainOverviewMetric(
+        _ metric: ExplainableMetric,
+        averageValue: Double,
+        rangeStart: Date,
+        rangeEnd: Date,
+        sampleSize: Int
+    ) async -> MetricExplainOutput? {
+        guard intelligence.isReady else { return nil }
+        guard let folder = card?.rootURL else { return nil }
+        let input = IntelligenceInputBuilder.overviewMetricExplain(
+            metric: metric,
+            averageValue: averageValue,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            sampleSize: sampleSize
+        )
+        let hash = IntelligenceCache.hash(of: input)
+        if let cached = IntelligenceCache.loadOverviewMetricExplain(
+            for: folder,
+            matching: hash,
+            templateVersion: MetricExplainPrompt.templateVersion
+        ) {
+            return cached
+        }
+        do {
+            let output = try await narration.explainMetric(input)
+            IntelligenceCache.saveOverviewMetricExplain(
+                output,
+                inputHash: hash,
+                templateVersion: MetricExplainPrompt.templateVersion,
+                to: folder
+            )
+            return output
+        } catch {
+            return nil
+        }
+    }
+
     /// Build the correlation observations + LLM narration for the
     /// supplied range. Returns a bundle the view can render as a
     /// single card, or `nil` when the range doesn't meet the

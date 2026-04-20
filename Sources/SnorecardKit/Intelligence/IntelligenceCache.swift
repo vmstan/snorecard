@@ -48,9 +48,39 @@ public enum IntelligenceCache {
         /// user has looked at without writing a new file per
         /// range.
         public var overviewNarratives: [String: Entry<OverviewNarrativeOutput>]
+        /// Keyed on a hash of the full `MetricExplainInput`, so
+        /// the same metric + range + value combination hits the
+        /// cache regardless of which Overview card opened it.
+        public var overviewMetricExplains: [String: Entry<MetricExplainOutput>]
 
-        public init(overviewNarratives: [String: Entry<OverviewNarrativeOutput>] = [:]) {
+        public init(
+            overviewNarratives: [String: Entry<OverviewNarrativeOutput>] = [:],
+            overviewMetricExplains: [String: Entry<MetricExplainOutput>] = [:]
+        ) {
             self.overviewNarratives = overviewNarratives
+            self.overviewMetricExplains = overviewMetricExplains
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case overviewNarratives, overviewMetricExplains
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.overviewNarratives = try container.decodeIfPresent(
+                [String: Entry<OverviewNarrativeOutput>].self,
+                forKey: .overviewNarratives
+            ) ?? [:]
+            self.overviewMetricExplains = try container.decodeIfPresent(
+                [String: Entry<MetricExplainOutput>].self,
+                forKey: .overviewMetricExplains
+            ) ?? [:]
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(overviewNarratives, forKey: .overviewNarratives)
+            try container.encode(overviewMetricExplains, forKey: .overviewMetricExplains)
         }
     }
 
@@ -228,6 +258,46 @@ public enum IntelligenceCache {
                 .sorted { $0.value.generatedAt > $1.value.generatedAt }
                 .prefix(16)
             payload.overviewNarratives = Dictionary(
+                uniqueKeysWithValues: sorted.map { ($0.key, $0.value) }
+            )
+        }
+        saveDevice(payload, to: deviceFolder)
+    }
+
+    public static func loadOverviewMetricExplain(
+        for deviceFolder: URL,
+        matching inputHash: String,
+        templateVersion: Int
+    ) -> MetricExplainOutput? {
+        let payload = loadDevice(for: deviceFolder)
+        guard let entry = payload.overviewMetricExplains[inputHash],
+              entry.modelVersion == modelVersion,
+              entry.promptTemplateVersion == templateVersion
+        else { return nil }
+        return entry.output
+    }
+
+    public static func saveOverviewMetricExplain(
+        _ output: MetricExplainOutput,
+        inputHash: String,
+        templateVersion: Int,
+        to deviceFolder: URL
+    ) {
+        var payload = loadDevice(for: deviceFolder)
+        payload.overviewMetricExplains[inputHash] = Entry(
+            inputHash: inputHash,
+            modelVersion: modelVersion,
+            promptTemplateVersion: templateVersion,
+            output: output
+        )
+        // LRU trim — Overview has up to a dozen cards and a few
+        // range presets; 32 entries comfortably covers repeat
+        // taps without unbounded growth.
+        if payload.overviewMetricExplains.count > 32 {
+            let sorted = payload.overviewMetricExplains
+                .sorted { $0.value.generatedAt > $1.value.generatedAt }
+                .prefix(32)
+            payload.overviewMetricExplains = Dictionary(
                 uniqueKeysWithValues: sorted.map { ($0.key, $0.value) }
             )
         }

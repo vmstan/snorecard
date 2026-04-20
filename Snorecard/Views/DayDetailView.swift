@@ -119,10 +119,17 @@ struct DayDetailView: View {
         }
         .sheet(item: $explainingMetric) { metric in
             MetricExplainSheet(
-                day: day,
                 metric: metric,
                 displayLabel: Self.displayLabel(for: metric),
-                displayValue: displayValue(for: metric)
+                displayValue: displayValue(for: metric),
+                valueCaption: "Your value for this night",
+                loader: {
+                    await library.explainMetric(
+                        metric,
+                        for: day,
+                        trailing: trailingStats()
+                    )
+                }
             )
             #if os(iOS)
             .presentationDetents([.medium, .large])
@@ -304,6 +311,19 @@ struct DayDetailView: View {
     private func explainTap(_ metric: ExplainableMetric) -> (() -> Void)? {
         guard library.intelligence.isReady else { return nil }
         return { explainingMetric = metric }
+    }
+
+    /// Trailing 14 nights with usage relative to `day`, passed to
+    /// the per-day explain so the model can anchor "your recent
+    /// average" framing.
+    private func trailingStats() -> [DailyStatistics] {
+        guard let card = library.card else { return [] }
+        let calendar = Calendar.current
+        guard let windowStart = calendar.date(byAdding: .day, value: -14, to: day.date)
+        else { return [] }
+        return card.days
+            .compactMap(\.stats)
+            .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
     }
 
     static func displayLabel(for metric: ExplainableMetric) -> String {

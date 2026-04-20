@@ -349,6 +349,24 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 0.10,
                 description: "95th-percentile flow-limitation score on a 0 to 1 scale, derived from inspiratory flow-waveform shape. 0 means smooth unobstructed breaths; values approaching 1 mean most inspirations showed flattening or shape distortion. Under 0.05 is good, 0.05–0.10 is elevated, above 0.10 commonly indicates upper-airway resistance that therapy hasn't fully resolved."
             )
+        case .compliance:
+            return MetricExplainInput.Norms(
+                goodMax: 100,
+                elevatedMax: nil,
+                description: "Compliance is the percentage of nights in the selected range with at least 4 hours of usage. 4 hours is the standard threshold insurers and sleep clinics use to count a night as \"on therapy\". 70% and above is typically considered strong adherence; anything lower indicates a pattern of short or skipped nights."
+            )
+        case .daysWithData:
+            return MetricExplainInput.Norms(
+                goodMax: nil,
+                elevatedMax: nil,
+                description: "The number of nights in the selected range that produced any CPAP data. More days of data make averages and trends more reliable; a small number means the window is short and any conclusions are tentative."
+            )
+        case .sessionsPerNight:
+            return MetricExplainInput.Norms(
+                goodMax: 1.5,
+                elevatedMax: 3.0,
+                description: "Each session is one continuous stretch of mask-on time. Averaging close to 1 means you typically sleep straight through; higher averages indicate the mask comes off and goes back on (bathroom trips, waking up, adjusting the fit). Not inherently good or bad; it's contextual information."
+            )
         }
     }
 
@@ -404,21 +422,59 @@ public enum IntelligenceInputBuilder {
                   stats.usageMinutes > 0 else { return nil }
             return seconds / (stats.usageMinutes * 60) * 100
         case .flowLimit:        return stats.flowLimit95
+        // The Overview-only metrics have no per-day rawValue —
+        // they only exist as range aggregates. Return nil so a
+        // day-scoped explain is impossible; the caller must use
+        // the Overview-scoped builder instead.
+        case .compliance:       return nil
+        case .daysWithData:     return nil
+        case .sessionsPerNight: return nil
         }
+    }
+
+    /// Build a `MetricExplainInput` for an Overview-style card,
+    /// where `averageValue` is already computed (e.g. mean AHI
+    /// across the filtered range). `rangeContext` reframes the
+    /// prompt so the narration describes an aggregate, not a
+    /// single night. No `recent14DayMean` is supplied because
+    /// the aggregate is the anchor.
+    public static func overviewMetricExplain(
+        metric: ExplainableMetric,
+        averageValue: Double,
+        rangeStart: Date,
+        rangeEnd: Date,
+        sampleSize: Int
+    ) -> MetricExplainInput {
+        MetricExplainInput(
+            metric: metric,
+            currentValue: PromptRounding.round2(averageValue),
+            unitLabel: unitLabel(for: metric),
+            norms: norms(for: metric),
+            recent14DayMean: nil,
+            recent14DayP90: nil,
+            rangeContext: MetricExplainInput.RangeContext(
+                start: rangeStart,
+                end: rangeEnd,
+                sampleSize: sampleSize
+            )
+        )
     }
 
     static func unitLabel(for metric: ExplainableMetric) -> String {
         switch metric {
-        case .ahi:          return "events per hour"
-        case .glasgowIndex: return "score"
-        case .pressure95:   return "cmH₂O"
-        case .epr:          return "cmH₂O"
-        case .leak95:       return "L/min"
-        case .largeLeak:    return "percent of usage"
-        case .tidalVolume:  return "mL"
-        case .usage:        return "hours"
-        case .timeInApnea:  return "percent of usage"
-        case .flowLimit:    return "score (0–1)"
+        case .ahi:              return "events per hour"
+        case .glasgowIndex:     return "score"
+        case .pressure95:       return "cmH₂O"
+        case .epr:              return "cmH₂O"
+        case .leak95:           return "L/min"
+        case .largeLeak:        return "percent of usage"
+        case .tidalVolume:      return "mL"
+        case .usage:            return "hours"
+        case .timeInApnea:      return "percent of usage"
+        case .flowLimit:        return "score (0–1)"
+        case .compliance:       return "percent of nights"
+        case .daysWithData:     return "nights"
+        case .sessionsPerNight: return "sessions"
         }
     }
 

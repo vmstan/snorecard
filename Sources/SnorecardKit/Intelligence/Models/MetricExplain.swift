@@ -15,6 +15,11 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case usage
     case timeInApnea
     case flowLimit
+    // Overview-only metrics. No daily equivalents exist for
+    // these; they describe the shape of a range as a whole.
+    case compliance
+    case daysWithData
+    case sessionsPerNight
 
     public var id: String { rawValue }
 }
@@ -30,6 +35,23 @@ public struct MetricExplainInput: Codable, Hashable, Sendable {
     public let norms: Norms
     public let recent14DayMean: Double?
     public let recent14DayP90: Double?
+    /// When non-nil, `currentValue` is an aggregate over this
+    /// range rather than a single night's value. The prompt
+    /// frames its description accordingly — "your average AHI
+    /// over the last 7 days" instead of "your AHI last night".
+    public let rangeContext: RangeContext?
+
+    public struct RangeContext: Codable, Hashable, Sendable {
+        public let start: Date
+        public let end: Date
+        public let sampleSize: Int
+
+        public init(start: Date, end: Date, sampleSize: Int) {
+            self.start = start
+            self.end = end
+            self.sampleSize = sampleSize
+        }
+    }
 
     public struct Norms: Codable, Hashable, Sendable {
         public let goodMax: Double?
@@ -52,7 +74,8 @@ public struct MetricExplainInput: Codable, Hashable, Sendable {
         unitLabel: String,
         norms: Norms,
         recent14DayMean: Double?,
-        recent14DayP90: Double?
+        recent14DayP90: Double?,
+        rangeContext: RangeContext? = nil
     ) {
         self.metric = metric
         self.currentValue = currentValue
@@ -60,6 +83,7 @@ public struct MetricExplainInput: Codable, Hashable, Sendable {
         self.norms = norms
         self.recent14DayMean = recent14DayMean
         self.recent14DayP90 = recent14DayP90
+        self.rangeContext = rangeContext
     }
 }
 
@@ -68,7 +92,13 @@ extension MetricExplainInput {
     public var promptDescription: String {
         var lines: [String] = []
         lines.append("Metric: \(metric.displayLabel)")
-        lines.append("Your current value: \(Self.formatValue(currentValue, metric: metric)) \(unitLabel)")
+        if let range = rangeContext {
+            lines.append("Scope: average over \(Self.rangeFormatter.string(from: range.start)) to \(Self.rangeFormatter.string(from: range.end)) (\(range.sampleSize) nights with data)")
+            lines.append("Your average value: \(Self.formatValue(currentValue, metric: metric)) \(unitLabel)")
+        } else {
+            lines.append("Scope: a single night")
+            lines.append("Your current value: \(Self.formatValue(currentValue, metric: metric)) \(unitLabel)")
+        }
         if let mean = recent14DayMean {
             lines.append("Your 14-day mean: \(Self.formatValue(mean, metric: metric)) \(unitLabel)")
         }
@@ -86,13 +116,23 @@ extension MetricExplainInput {
         return body
     }
 
+    private static let rangeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.dateFormat = "d MMMM yyyy"
+        return formatter
+    }()
+
     private static func formatValue(_ value: Double, metric: ExplainableMetric) -> String {
         switch metric {
-        case .largeLeak:     return String(format: "%.1f", value)
-        case .leak95:        return String(format: "%.0f", value)
-        case .tidalVolume:   return String(format: "%.0f", value)
-        case .glasgowIndex:  return String(format: "%.2f", value)
-        default:             return String(format: "%.1f", value)
+        case .largeLeak:        return String(format: "%.1f", value)
+        case .leak95:           return String(format: "%.0f", value)
+        case .tidalVolume:      return String(format: "%.0f", value)
+        case .glasgowIndex:     return String(format: "%.2f", value)
+        case .daysWithData:     return String(format: "%.0f", value)
+        case .sessionsPerNight: return String(format: "%.1f", value)
+        case .compliance:       return String(format: "%.0f", value)
+        default:                return String(format: "%.1f", value)
         }
     }
 }
@@ -103,16 +143,19 @@ extension ExplainableMetric {
     /// an enum raw value like "pressure95" in the prompt.
     public var displayLabel: String {
         switch self {
-        case .ahi:          return "AHI"
-        case .glasgowIndex: return "Glasgow Index"
-        case .pressure95:   return "Pressure (95th percentile target EPAP)"
-        case .epr:          return "Pressure support (IPAP − EPAP)"
-        case .leak95:       return "Leak (95th percentile)"
-        case .largeLeak:    return "Large leak (percent of usage)"
-        case .tidalVolume:  return "Tidal volume (median)"
-        case .usage:        return "Usage hours"
-        case .timeInApnea:  return "Time in apnea (percent of usage)"
-        case .flowLimit:    return "Flow limit (95th percentile)"
+        case .ahi:              return "AHI"
+        case .glasgowIndex:     return "Glasgow Index"
+        case .pressure95:       return "Pressure (95th percentile target EPAP)"
+        case .epr:              return "Pressure support (IPAP − EPAP)"
+        case .leak95:           return "Leak (95th percentile)"
+        case .largeLeak:        return "Large leak (percent of usage)"
+        case .tidalVolume:      return "Tidal volume (median)"
+        case .usage:            return "Usage hours"
+        case .timeInApnea:      return "Time in apnea (percent of usage)"
+        case .flowLimit:        return "Flow limit (95th percentile)"
+        case .compliance:       return "Compliance (percent of nights ≥ 4 hours)"
+        case .daysWithData:     return "Days with recorded data"
+        case .sessionsPerNight: return "Sessions per night"
         }
     }
 }
