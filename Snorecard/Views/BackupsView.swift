@@ -93,6 +93,21 @@ struct BackupsView: View {
 
     @ViewBuilder
     private var formBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            InspectorPaneHeader(
+                title: deviceHeaderTitle,
+                caption: "Archived CPAP data stored in iCloud Drive"
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            form
+        }
+    }
+
+    @ViewBuilder
+    private var form: some View {
         Form {
             if let busyMessage {
                 Section {
@@ -235,6 +250,17 @@ struct BackupsView: View {
                 Label("Delete Backup", systemImage: "trash")
             }
         }
+    }
+
+    /// Label used in the big header above the Form. Prefers the
+    /// user-set alias, falls back to the ResMed product name, and
+    /// lands on a generic device label so the pane never looks
+    /// orphaned when nothing is loaded yet.
+    private var deviceHeaderTitle: String {
+        if let card = library.card {
+            return library.displayName(for: card)
+        }
+        return "Backups"
     }
 
     // MARK: - Action bar

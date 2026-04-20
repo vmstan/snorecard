@@ -18,8 +18,10 @@ struct TrendNarrativeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            headerRow
-                .frame(maxWidth: .infinity, alignment: .leading)
+            InspectorPaneHeader(
+                title: rangeLabel,
+                caption: "On-device analysis of this range"
+            )
             Group {
                 if let narrative {
                     loadedContent(narrative)
@@ -39,20 +41,6 @@ struct TrendNarrativeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: reloadKey) {
             await load()
-        }
-    }
-
-    /// Matches `MetricExplainSheet` — big title on top, small
-    /// caption underneath — so the per-range Sleep Analysis
-    /// reads as part of the same visual family as per-night
-    /// Sleep Analysis and the individual metric explanations.
-    private var headerRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(rangeLabel)
-                .font(.title2.weight(.semibold))
-            Text("On-device analysis of this range")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 

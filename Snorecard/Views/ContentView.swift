@@ -395,6 +395,7 @@ struct ContentView: View {
             if let day = library.selectedDay {
                 DailySettingsInspector(
                     settings: day.stats?.settings,
+                    date: day.date,
                     productName: day.stats?.productName
                         ?? library.card?.identification?.productName,
                     serialNumber: library.card?.identification?.serialNumber,

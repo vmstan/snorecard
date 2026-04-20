@@ -20,29 +20,14 @@ struct NotesCard: View {
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Date alone — the surrounding chrome (iOS sheet
-                    // title, macOS inspector title) already says
-                    // "Sleep Journal", so duplicating that word here
-                    // would only repeat itself. The date carries the
-                    // night-specific context so the user knows which
-                    // entry they're editing.
-                    Text(day.date, format: .dateTime.weekday(.wide).month(.wide).day())
-                        .font(.headline)
-                    #if os(macOS)
-                    // AppKit's NSTextField submits on a plain
-                    // Return; ⌥+↩ inserts a line break. Surfacing
-                    // the hint under the title (instead of under
-                    // the field) keeps it in the user's line of
-                    // sight and out of the way of the text input.
-                    Text("Press ⌥ + ↩ for a new line")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
-                }
-                Spacer()
+                InspectorPaneHeader(
+                    title: {
+                        Text(day.date, format: .dateTime.weekday(.wide).month(.wide).day())
+                    },
+                    caption: headerCaption
+                )
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -101,6 +86,18 @@ struct NotesCard: View {
             saveTask?.cancel()
             flushIfChanged(text)
         }
+    }
+
+    /// Caption below the big date header. Per-platform text
+    /// keeps the macOS keyboard-shortcut hint visible (it used
+    /// to live as a separate line under the title before the
+    /// shared `InspectorPaneHeader` consolidated the styling).
+    private var headerCaption: String {
+        #if os(macOS)
+        return "Your journal for this night · Press ⌥ + ↩ for a new line"
+        #else
+        return "Your journal for this night"
+        #endif
     }
 
     /// Cancel any queued autosave and schedule a fresh one for 750 ms

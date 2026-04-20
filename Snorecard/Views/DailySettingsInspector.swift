@@ -9,6 +9,9 @@ import SnorecardKit
 struct DailySettingsInspector: View {
     let settings: DeviceSettings?
     @Environment(\.dismiss) private var dismiss
+    /// The night the shown settings apply to. Drives the big
+    /// title in the inspector pane / sheet header row.
+    var date: Date? = nil
     /// Product name pulled from `Identification.tgt/json`.
     /// Surfaced in the Device section at the top of the sheet so
     /// the reader can see which machine wrote these settings.
@@ -47,13 +50,27 @@ struct DailySettingsInspector: View {
 
     @ViewBuilder
     private var content: some View {
-        if let settings, settings.hasAnyValue {
-            settingsForm(for: settings)
-        } else {
-            ContentUnavailableView {
-                Label("Therapy Details Unavailable", systemImage: "gauge.with.needle")
-            } description: {
-                Text("Your \(friendlyDeviceName) only keeps therapy settings for a rolling window of recent nights. This night sits outside that window.")
+        VStack(alignment: .leading, spacing: 0) {
+            if let date {
+                InspectorPaneHeader(
+                    title: {
+                        Text(date, format: .dateTime.weekday(.wide).day().month(.wide))
+                    },
+                    caption: "Therapy settings recorded for this night"
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+            }
+            if let settings, settings.hasAnyValue {
+                settingsForm(for: settings)
+            } else {
+                ContentUnavailableView {
+                    Label("Therapy Details Unavailable", systemImage: "gauge.with.needle")
+                } description: {
+                    Text("Your \(friendlyDeviceName) only keeps therapy settings for a rolling window of recent nights. This night sits outside that window.")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

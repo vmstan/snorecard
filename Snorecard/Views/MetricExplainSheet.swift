@@ -21,8 +21,13 @@ struct MetricExplainSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                headerRow
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                InspectorPaneHeader(
+                    title: {
+                        Text(request.displayValue)
+                            .monospacedDigit()
+                    },
+                    caption: request.valueCaption
+                )
                 Group {
                     if let explanation {
                         VStack(alignment: .leading, spacing: 16) {
@@ -56,16 +61,6 @@ struct MetricExplainSheet: View {
         }
         .task(id: request.id) {
             await load()
-        }
-    }
-
-    private var headerRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(request.displayValue)
-                .font(.title2.weight(.semibold).monospacedDigit())
-            Text(request.valueCaption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 

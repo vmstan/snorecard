@@ -17,8 +17,12 @@ struct NightSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            headerRow
-                .frame(maxWidth: .infinity, alignment: .leading)
+            InspectorPaneHeader(
+                title: {
+                    Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
+                },
+                caption: "On-device analysis of this night"
+            )
             Group {
                 if let summary {
                     loadedContent(summary)
@@ -38,20 +42,6 @@ struct NightSummaryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: day.id) {
             await load()
-        }
-    }
-
-    /// Matches `MetricExplainSheet`'s header style — big title
-    /// up top, small caption beneath — so all three AI surfaces
-    /// (Sleep Analysis per night, per range, and metric explain)
-    /// read as one visual family.
-    private var headerRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
-                .font(.title2.weight(.semibold))
-            Text("On-device analysis of this night")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 

@@ -412,7 +412,17 @@ struct RenameDeviceSheet: View {
 
     @ViewBuilder
     private var formBody: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            InspectorPaneHeader(
+                title: currentOverride?.isEmpty == false
+                    ? (currentOverride ?? defaultName)
+                    : defaultName,
+                caption: "Custom name used across the sidebar and File menu"
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
             Form {
                 Section {
                     nameField

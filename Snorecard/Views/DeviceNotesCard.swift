@@ -20,18 +20,12 @@ struct DeviceNotesCard: View {
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(deviceHeader)
-                        .font(.headline)
-                    #if os(macOS)
-                    Text("Press ⌥ + ↩ for a new line")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #endif
-                }
-                Spacer()
+                InspectorPaneHeader(
+                    title: deviceHeader,
+                    caption: headerCaption
+                )
                 if !text.isEmpty {
                     Button {
                         text = ""
@@ -98,6 +92,16 @@ struct DeviceNotesCard: View {
 
     private var deviceSerial: String {
         library.card?.identification?.serialNumber ?? ""
+    }
+
+    /// Caption below the big device header. Keeps the macOS
+    /// keyboard-shortcut hint in the shared header styling.
+    private var headerCaption: String {
+        #if os(macOS)
+        return "Your journal for this device · Press ⌥ + ↩ for a new line"
+        #else
+        return "Your journal for this device"
+        #endif
     }
 
     private func scheduleAutosave(newValue: String) {
