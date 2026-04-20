@@ -19,6 +19,9 @@ extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardRebuildStatistics = Notification.Name("Snorecard.RebuildStatistics")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
+    // Sleep Analysis is declared in the shared ContentView
+    // notification set so both platforms reference the same name;
+    // this extension only adds commands that are macOS-only.
 }
 
 @main
@@ -122,6 +125,17 @@ struct SnorecardApp: App {
             Label("Therapy Details", systemImage: "gauge.with.needle")
         }
         .disabled(!hasCard || !isViewingDay)
+
+        // Sleep Analysis opens the on-device AI summary of the
+        // current night. Disabled when no day is selected OR
+        // when Apple Intelligence is unavailable on this machine
+        // — the inspector pane would be empty in either case.
+        Button {
+            NotificationCenter.default.post(name: .snorecardOpenSleepAnalysis, object: nil)
+        } label: {
+            Label("Sleep Analysis", systemImage: "sparkles")
+        }
+        .disabled(!hasCard || !isViewingDay || !library.intelligence.isReady)
 
         Divider()
 

@@ -9,6 +9,7 @@ extension Notification.Name {
     static let snorecardOpenDailyNotes = Notification.Name("Snorecard.OpenDailyNotes")
     static let snorecardOpenDailySettings = Notification.Name("Snorecard.OpenDailySettings")
     static let snorecardOpenDeviceNotes = Notification.Name("Snorecard.OpenDeviceNotes")
+    static let snorecardOpenSleepAnalysis = Notification.Name("Snorecard.OpenSleepAnalysis")
 }
 
 struct ContentView: View {
@@ -27,7 +28,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case rename, backups, notes, deviceNotes, settings, explainMetric }
+    enum InspectorPane { case rename, backups, notes, deviceNotes, settings, explainMetric, sleepAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -107,11 +108,13 @@ struct ContentView: View {
             // into a day.
             if case .notes = inspectorPane, case .day = newSelection { return }
             if case .settings = inspectorPane, case .day = newSelection { return }
+            if case .sleepAnalysis = inspectorPane, case .day = newSelection { return }
             if case .deviceNotes = inspectorPane, case .overview = newSelection { return }
             if inspectorPane == .notes
                 || inspectorPane == .settings
                 || inspectorPane == .deviceNotes
-                || inspectorPane == .explainMetric {
+                || inspectorPane == .explainMetric
+                || inspectorPane == .sleepAnalysis {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                     library.pendingExplain = nil
@@ -257,6 +260,11 @@ struct ContentView: View {
                 toggleInspector(.deviceNotes)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
+            if case .day = library.selection, library.intelligence.isReady {
+                toggleInspector(.sleepAnalysis)
+            }
+        }
         #endif
     }
 
@@ -323,6 +331,15 @@ struct ContentView: View {
                 MetricExplainSheet(request: request)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .navigationTitle(request.displayLabel)
+            } else {
+                EmptyView()
+            }
+        case .sleepAnalysis:
+            if let day = library.selectedDay {
+                NightSummaryCard(day: day)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle("Sleep Analysis")
             } else {
                 EmptyView()
             }
@@ -503,6 +520,16 @@ struct ContentView: View {
                     )
                 } label: {
                     Label("Therapy Details", systemImage: "gauge.with.needle")
+                }
+                if library.intelligence.isReady {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenSleepAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
                 }
             } else if library.card != nil {
                 // Overview-scoped journal for the whole device —

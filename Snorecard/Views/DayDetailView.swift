@@ -12,6 +12,7 @@ struct DayDetailView: View {
     @State private var loadError: String?
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
+    @State private var isShowingSleepAnalysis = false
 
     var body: some View {
         ScrollView {
@@ -47,6 +48,19 @@ struct DayDetailView: View {
         // shared inspector in `ContentView` owns the display
         // state; this view just announces intent.
         .toolbar {
+            if library.intelligence.isReady {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .snorecardOpenSleepAnalysis,
+                            object: nil
+                        )
+                    } label: {
+                        Label("Sleep Analysis", systemImage: "sparkles")
+                    }
+                    .help("On-device AI summary of this night")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(
@@ -101,14 +115,34 @@ struct DayDetailView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $isShowingSleepAnalysis) {
+            NavigationStack {
+                NightSummaryCard(day: day)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .navigationTitle("Sleep Analysis")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            CloseSheetButton { isShowingSleepAnalysis = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         // Bridges from the shared Options menu's daily entries —
-        // ContentView posts these whenever the user picks Notes
-        // or Device Settings out of the iOS ellipsis menu.
+        // ContentView posts these whenever the user picks Notes,
+        // Sleep Analysis, or Device Settings out of the iOS
+        // ellipsis menu.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
             isShowingNotes = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
             isShowingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
+            isShowingSleepAnalysis = true
         }
         #endif
         .task(id: day.id) {
@@ -172,10 +206,6 @@ struct DayDetailView: View {
         if let stats = day.stats, stats.hasUsage {
             VStack(alignment: .leading, spacing: 12) {
                 EventDonutView(stats: stats)
-
-                if library.intelligence.isReady {
-                    NightSummaryCard(day: day)
-                }
 
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 170), spacing: 12)],

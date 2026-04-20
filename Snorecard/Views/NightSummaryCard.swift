@@ -1,79 +1,69 @@
 import SwiftUI
 import SnorecardKit
 
-/// One-paragraph on-device narrative sitting above the event donut
-/// on `DayDetailView`. Hidden entirely when Apple Intelligence is
-/// unavailable, when the night has no recorded usage, or when
-/// generation fails the guardrail check.
+/// On-device narrative of a single night's therapy data. Presented
+/// as the macOS `.sleepAnalysis` inspector pane and as the iOS
+/// Sleep Analysis sheet — accessed via the toolbar ellipsis /
+/// File menu so the Day detail view isn't cluttered by an
+/// auto-loading AI surface. Apple-Intelligence availability is
+/// checked by the caller; this view assumes it can call
+/// `library.nightSummary` and should render something meaningful
+/// in every state (loading, loaded, failed).
 struct NightSummaryCard: View {
     let day: ResMedDay
     @Environment(Library.self) private var library
     @State private var summary: NightSummaryOutput?
-    @State private var isLoading = false
     @State private var failed = false
 
     var body: some View {
-        // `failed` hides the card entirely (no placeholder, no
-        // error surface) per the product decision for AI-backed
-        // surfaces. Every other state renders through the same
-        // shared chrome (frame / padding / background) so the
-        // card doesn't re-measure when switching between
-        // placeholder and final content — keeping the width and
-        // leading edge locked across the load lifecycle.
-        if !failed {
-            innerView
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(
-                    Color.primary.opacity(0.05),
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
-                .task(id: day.id) {
-                    await load()
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            Group {
+                if let summary {
+                    loadedContent(summary)
+                } else if failed {
+                    failedContent
+                } else {
+                    placeholderContent
                 }
-        }
-    }
-
-    @ViewBuilder
-    private var innerView: some View {
-        if let summary {
-            loadedContent(summary)
-        } else {
-            placeholderContent
-        }
-    }
-
-    @ViewBuilder
-    private func loadedContent(_ summary: NightSummaryOutput) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.tint)
-                // Fixed title — the model now only generates the
-                // paragraph. A stable card header reads more
-                // calmly than a freshly-invented 3-word line on
-                // every regeneration.
-                Text("Sleep Analysis")
-                    .font(.headline)
-                Spacer()
-                Text("On-device")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.primary.opacity(0.08), in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(summary.paragraph)
-                .font(.callout)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 4)
             Text("Summary only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: day.id) {
+            await load()
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.tint)
+            Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
+                .font(.headline)
+            Spacer()
+            Text("On-device")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.primary.opacity(0.08), in: Capsule())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func loadedContent(_ summary: NightSummaryOutput) -> some View {
+        Text(summary.paragraph)
+            .font(.callout)
+            .foregroundStyle(.primary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var placeholderContent: some View {
@@ -89,20 +79,26 @@ struct NightSummaryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var failedContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("A summary isn't available right now.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                Task { await load() }
+            } label: {
+                Label("Try again", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
     private func load() async {
         summary = nil
         failed = false
-        isLoading = true
-        defer { isLoading = false }
         let result = await library.nightSummary(for: day)
-        // Intentionally no `Task.isCancelled` bail here. If the
-        // task gets cancelled mid-flight the view typically also
-        // unmounts (so the state write is a no-op), and if it
-        // doesn't — e.g. Foundation Models cancels a session
-        // because a previous one hasn't finished cleanup —
-        // setting `failed` hides the card cleanly instead of
-        // leaving the placeholder visible forever. A fresh view
-        // instance on re-navigation will try again.
         if result == nil {
             failed = true
         } else {
