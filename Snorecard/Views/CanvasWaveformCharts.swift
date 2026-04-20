@@ -364,6 +364,10 @@ fileprivate struct CanvasPlotShell: View {
                     legendRow(legend)
                 }
             }
+            // Trailing-align the header to the plot area (which sits
+            // inside the Y-axis label column) so the legend chips don't
+            // spill past the plot's right edge.
+            .padding(.trailing, Self.yAxisWidth)
             GeometryReader { geo in
                 let plotWidth = max(0, geo.size.width - Self.yAxisWidth)
                 let plotHeight = max(0, geo.size.height - Self.xAxisHeight)
@@ -501,7 +505,7 @@ fileprivate struct CanvasPlotShell: View {
     private func xAxisLabels(width: CGFloat) -> some View {
         let start = axes.scrollBinding.wrappedValue
         let end = start + axes.visibleDomainLength
-        let ticks = evenTicks(min: start, max: end, count: 6)
+        let ticks = niceTimeTicks(start: start, end: end, dayStart: axes.dayStart)
         let math = CanvasAxesMath(
             visibleStart: start,
             visibleLength: axes.visibleDomainLength,
@@ -547,7 +551,7 @@ fileprivate struct CanvasPlotShell: View {
 
         let xStart = axes.scrollBinding.wrappedValue
         let xEnd = xStart + axes.visibleDomainLength
-        let xTicks = evenTicks(min: xStart, max: xEnd, count: 6)
+        let xTicks = niceTimeTicks(start: xStart, end: xEnd, dayStart: axes.dayStart)
         for tick in xTicks {
             guard let x = math.xPixel(for: tick) else { continue }
             var path = Path()
@@ -761,6 +765,45 @@ fileprivate func evenTicks(
     guard count > 1, hi > lo else { return [lo] }
     let step = (hi - lo) / Double(count - 1)
     return (0..<count).map { lo + Double($0) * step }
+}
+
+/// X-axis ticks at rounded wall-clock times inside the visible window.
+/// Mirrors what SwiftUI Charts' `.automatic(desiredCount:)` does for
+/// `SessionTimelineView` above the canvas charts so the two axes agree
+/// on which times to label — and keeps ticks interior so centered
+/// labels don't spill past the plot edges.
+fileprivate func niceTimeTicks(
+    start: TimeInterval,
+    end: TimeInterval,
+    dayStart: Date
+) -> [Double] {
+    let range = end - start
+    guard range > 0 else { return [] }
+
+    // Step chosen to yield ~5-7 ticks across the visible range.
+    let step: TimeInterval
+    switch range {
+    case ..<150:    step = 30       // 2m zoom → every 30s
+    case ..<600:    step = 120      // 10m zoom → every 2m
+    case ..<1500:   step = 300      // 30m zoom → every 5m
+    case ..<3000:   step = 600      // 1h zoom → every 10m
+    case ..<9000:   step = 1800     // a few hours → every 30m
+    default:        step = 3600     // full night → hourly
+    }
+
+    let startDate = dayStart.addingTimeInterval(start)
+    let localMidnight = Calendar.current.startOfDay(for: startDate)
+    let secsIntoDay = startDate.timeIntervalSince(localMidnight)
+    let firstRoundedSecs = (secsIntoDay / step).rounded(.up) * step
+    let firstTickDate = localMidnight.addingTimeInterval(firstRoundedSecs)
+
+    var ticks: [Double] = []
+    var date = firstTickDate
+    while date.timeIntervalSince(dayStart) <= end {
+        ticks.append(date.timeIntervalSince(dayStart))
+        date = date.addingTimeInterval(step)
+    }
+    return ticks
 }
 
 fileprivate func formatY(_ value: Double) -> String {

@@ -1016,7 +1016,8 @@ struct WaveformSection: View {
         ("1h", 3600),
         ("30m", 1800),
         ("10m", 600),
-        ("2m", 120)
+        ("2m", 120),
+        ("30s", 30)
     ]
 
     @ViewBuilder
@@ -1176,6 +1177,7 @@ struct WaveformSection: View {
             totalDuration: bundle.totalDuration,
             visibleDomainLength: visibleDomainLength,
             isZoomed: isZoomed,
+            dayStart: dayStart,
             scrollBinding: $scrollPosition,
             hoverBinding: $hoverOffset,
             clockLabel: { offset in
@@ -1358,6 +1360,10 @@ struct SharedAxisConfig: Equatable, Sendable {
     let totalDuration: TimeInterval
     let visibleDomainLength: TimeInterval
     let isZoomed: Bool
+    /// Wall-clock start of the first session. Lets the tick generator
+    /// align ticks to round times (e.g., 12:00 AM, 12:30 AM) instead
+    /// of offsets from the session origin.
+    let dayStart: Date
     let scrollBinding: Binding<TimeInterval>
     let hoverBinding: Binding<TimeInterval?>
     let clockLabel: @Sendable (TimeInterval) -> String
@@ -1366,6 +1372,7 @@ struct SharedAxisConfig: Equatable, Sendable {
         lhs.totalDuration == rhs.totalDuration
             && lhs.visibleDomainLength == rhs.visibleDomainLength
             && lhs.isZoomed == rhs.isZoomed
+            && lhs.dayStart == rhs.dayStart
     }
 }
 

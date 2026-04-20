@@ -30,9 +30,14 @@ struct DailySignalSummaryTable: View {
                 isShowingSheet = true
                 #endif
             } label: {
-                Label("Detailed Statistics", systemImage: "tablecells")
+                DayActionButtonLabel(
+                    title: "Detailed Statistics",
+                    subtitle: "Median, 95%, and 99.5% per signal",
+                    systemImage: "tablecells",
+                    tint: .chartBlue
+                )
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DayActionButtonStyle())
             #if os(iOS)
             .sheet(isPresented: $isShowingSheet) {
                 NavigationStack {
@@ -64,6 +69,71 @@ struct DailySignalSummaryTable: View {
             }
             #endif
         }
+    }
+}
+
+/// Card-style label used by the "Detailed Statistics" and
+/// "Advanced Charting" buttons on the day-detail view. Shared so
+/// the two entry points to secondary windows / sheets read as one
+/// set, with a tinted-icon chip on the leading edge, a two-line
+/// title/subtitle stack, and a trailing chevron to hint at the
+/// "opens elsewhere" action.
+struct DayActionButtonLabel: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(tint.opacity(0.15))
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Button chrome for `DayActionButtonLabel` — subtle material
+/// background, thin hairline border, and a small scale / opacity
+/// dip on press so the card reads as a tappable surface on both
+/// platforms without the default bordered-button look.
+struct DayActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.regularMaterial)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+            }
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

@@ -39,9 +39,14 @@ struct AdvancedChartingButton: View {
                 isShowingSheet = true
                 #endif
             } label: {
-                Label("Advanced Charting", systemImage: "waveform")
+                DayActionButtonLabel(
+                    title: "Advanced Charting",
+                    subtitle: "High-resolution breath waveforms",
+                    systemImage: "waveform",
+                    tint: .chartOrange
+                )
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(DayActionButtonStyle())
             #if os(iOS)
             .sheet(isPresented: $isShowingSheet) {
                 NavigationStack {
@@ -55,6 +60,13 @@ struct AdvancedChartingButton: View {
                         }
                 }
                 .presentationDragIndicator(.visible)
+                // iPad's default sheet sizing is the compact centered
+                // form sheet, which cramps the waveform + timeline
+                // stack. `.page` sizing fills the bulk of the window
+                // so the charts breathe at a sensible width. On
+                // iPhone this is a no-op — sheets there always fill
+                // the screen regardless of sizing.
+                .presentationSizing(.page)
             }
             #endif
         }
