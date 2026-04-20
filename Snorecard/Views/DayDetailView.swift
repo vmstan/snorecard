@@ -328,16 +328,22 @@ struct DayDetailView: View {
 
     static func displayLabel(for metric: ExplainableMetric) -> String {
         switch metric {
-        case .ahi:          return "AHI"
-        case .glasgowIndex: return "Glasgow Index"
-        case .pressure95:   return "Pressure (95%)"
-        case .epr:          return "Pressure Support"
-        case .leak95:       return "Leak (95%)"
-        case .largeLeak:    return "Large Leak"
-        case .tidalVolume:  return "Tidal Volume"
-        case .usage:        return "Usage"
-        case .timeInApnea:  return "Time in Apnea"
-        case .flowLimit:    return "Flow Limit (95%)"
+        case .ahi:              return "AHI"
+        case .glasgowIndex:     return "Glasgow Index"
+        case .pressure95:       return "Pressure (95%)"
+        case .epr:              return "Pressure Support"
+        case .leak95:           return "Leak (95%)"
+        case .largeLeak:        return "Large Leak"
+        case .tidalVolume:      return "Tidal Volume"
+        case .usage:            return "Usage"
+        case .timeInApnea:      return "Time in Apnea"
+        case .flowLimit:        return "Flow Limit (95%)"
+        // Overview-only metrics fall back to their enum label —
+        // the daily view never opens the sheet for these, but
+        // the switch has to be exhaustive.
+        case .compliance:       return "Compliance"
+        case .daysWithData:     return "Days with Data"
+        case .sessionsPerNight: return "Sessions / Night"
         }
     }
 
@@ -372,6 +378,11 @@ struct DayDetailView: View {
             return String(format: "%.2f%% of usage", pct)
         case .flowLimit:
             return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
+        // Overview-only metrics have no per-day value — the sheet
+        // path on DayDetailView never hits these cases, but
+        // exhaustive switching still requires them.
+        case .compliance, .daysWithData, .sessionsPerNight:
+            return "—"
         }
     }
 
