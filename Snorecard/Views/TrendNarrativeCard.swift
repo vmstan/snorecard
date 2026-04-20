@@ -17,8 +17,9 @@ struct TrendNarrativeCard: View {
     @State private var failed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        VStack(alignment: .leading, spacing: 16) {
+            headerRow
+                .frame(maxWidth: .infinity, alignment: .leading)
             Group {
                 if let narrative {
                     loadedContent(narrative)
@@ -29,7 +30,7 @@ struct TrendNarrativeCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
             Text("Summary only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -41,21 +42,18 @@ struct TrendNarrativeCard: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.tint)
+    /// Matches `MetricExplainSheet` — big title on top, small
+    /// caption underneath — so the per-range Sleep Analysis
+    /// reads as part of the same visual family as per-night
+    /// Sleep Analysis and the individual metric explanations.
+    private var headerRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(rangeLabel)
-                .font(.headline)
-            Spacer()
-            Text("On-device")
-                .font(.caption2)
+                .font(.title2.weight(.semibold))
+            Text("On-device analysis of this range")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.primary.opacity(0.08), in: Capsule())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var rangeLabel: String {

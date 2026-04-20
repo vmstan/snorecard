@@ -16,8 +16,9 @@ struct NightSummaryCard: View {
     @State private var failed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        VStack(alignment: .leading, spacing: 16) {
+            headerRow
+                .frame(maxWidth: .infinity, alignment: .leading)
             Group {
                 if let summary {
                     loadedContent(summary)
@@ -28,7 +29,7 @@ struct NightSummaryCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
             Text("Summary only — not medical advice.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -40,21 +41,18 @@ struct NightSummaryCard: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.tint)
+    /// Matches `MetricExplainSheet`'s header style — big title
+    /// up top, small caption beneath — so all three AI surfaces
+    /// (Sleep Analysis per night, per range, and metric explain)
+    /// read as one visual family.
+    private var headerRow: some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide))
-                .font(.headline)
-            Spacer()
-            Text("On-device")
-                .font(.caption2)
+                .font(.title2.weight(.semibold))
+            Text("On-device analysis of this night")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.primary.opacity(0.08), in: Capsule())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
