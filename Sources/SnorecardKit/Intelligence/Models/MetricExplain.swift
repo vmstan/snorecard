@@ -7,11 +7,12 @@ import FoundationModels
 public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable, Identifiable {
     case ahi
     case glasgowIndex
-    case pressure95
-    case epr
+    case epap95
+    case ipap95
     case leak95
     case largeLeak
     case tidalVolume
+    case snore95
     case usage
     case timeInApnea
     case flowLimit
@@ -145,11 +146,12 @@ extension ExplainableMetric {
         switch self {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .pressure95:       return "EPAP (95th percentile target)"
-        case .epr:              return "IPAP (95th percentile target)"
+        case .epap95:           return "EPAP (95th percentile target)"
+        case .ipap95:           return "IPAP (95th percentile target)"
         case .leak95:           return "Leak (95th percentile)"
         case .largeLeak:        return "Large leak (percent of usage)"
         case .tidalVolume:      return "Tidal volume (median)"
+        case .snore95:          return "Snore (95th percentile, 0–5 scale)"
         case .usage:            return "Usage hours"
         case .timeInApnea:      return "Time in apnea (percent of usage)"
         case .flowLimit:        return "Flow limit (95th percentile)"

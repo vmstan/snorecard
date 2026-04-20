@@ -440,6 +440,9 @@ public enum SDCardImporter {
                 modeCode: str.modeCode,
                 productName: merged.productName
             )
+            // Rebuilt struct above dropped back to the `snore95`
+            // default — carry the PLD-derived value forward.
+            merged.snore95 = aggregate.snore95
         }
         // Carry the STR-derived settings block through. Field-level
         // merge (rather than wholesale swap) so a newer STR record

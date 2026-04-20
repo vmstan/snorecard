@@ -29,6 +29,11 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     public internal(set) var largeLeakSeconds: Double? = nil
     public internal(set) var glasgowIndex: Double? = nil
     public internal(set) var flowLimit95: Double?
+    /// 95th-percentile snore index from the PLD `Snore` signal,
+    /// on-therapy samples only. ResMed reports snore on a 0–5
+    /// scale. `nil` when no PLD was available or the signal was
+    /// absent for the night (older firmware, STR-only records).
+    public internal(set) var snore95: Double? = nil
     /// Snapshot of therapy / comfort / humidifier / accessory
     /// settings active for this day, decoded from STR.edf's `S.*`
     /// signals. Nil when STR.edf has no record for the day (e.g.
@@ -147,6 +152,7 @@ extension DailyStatistics {
         var minVents: [Double] = []
         var respRates: [Double] = []
         var tidVols: [Double] = []
+        var snores: [Double] = []
 
         for file in day.files(of: .physiological) {
             guard let edf = try? EDFFile(contentsOf: file.url),
@@ -169,6 +175,7 @@ extension DailyStatistics {
             let mv = decode("MinVent")
             let rr = decode("RespRate")
             let tv = decode("TidVol")
+            let snore = decode("Snore")
 
             for i in pressure.indices where pressure[i] > 1.0 {
                 pressures.append(pressure[i])
@@ -179,6 +186,7 @@ extension DailyStatistics {
                 if i < mv.count { minVents.append(mv[i]) }
                 if i < rr.count { respRates.append(rr[i]) }
                 if i < tv.count { tidVols.append(tv[i]) }
+                if i < snore.count { snores.append(snore[i]) }
             }
         }
 
@@ -189,7 +197,7 @@ extension DailyStatistics {
         let leak95 = percentile(leaks, 95).map { $0 * 60 } // L/s → L/min
         let leakMax = leaks.max().map { $0 * 60 }
 
-        return DailyStatistics(
+        var stats = DailyStatistics(
             date: day.date,
             usageMinutes: usageMinutes,
             maskEvents: brp.count,
@@ -213,6 +221,8 @@ extension DailyStatistics {
             modeCode: nil,
             productName: productName
         )
+        stats.snore95 = percentile(snores, 95)
+        return stats
     }
 
     /// Aggregate metrics computed from a day's raw EVE and PLD files.
@@ -382,6 +392,7 @@ extension DailyStatistics {
         var minVents: [Double] = []
         var respRates: [Double] = []
         var tidVols: [Double] = []
+        var snores: [Double] = []
         var largeLeakSeconds: Double = 0
         var sawAnyPLD = false
         let leakThreshold: Double = 24.0 / 60.0 // 24 L/min in L/s
@@ -406,6 +417,7 @@ extension DailyStatistics {
             let mv = samples("MinVent")
             let rr = samples("RespRate")
             let tv = samples("TidVol")
+            let snore = samples("Snore")
 
             sawAnyPLD = true
 
@@ -418,6 +430,7 @@ extension DailyStatistics {
                 if i < mv.count { minVents.append(mv[i]) }
                 if i < rr.count { respRates.append(rr[i]) }
                 if i < tv.count { tidVols.append(tv[i]) }
+                if i < snore.count { snores.append(snore[i]) }
             }
 
             // Large-leak seconds uses every sample (matches existing
@@ -435,7 +448,7 @@ extension DailyStatistics {
             }
         }
 
-        return DailyStatistics(
+        var stats = DailyStatistics(
             date: day.date,
             usageMinutes: usageMinutes,
             maskEvents: brpFiles.count,
@@ -462,6 +475,8 @@ extension DailyStatistics {
             modeCode: nil,
             productName: productName
         )
+        stats.snore95 = percentile(snores, 95)
+        return stats
     }
 
     /// Linear-interpolated percentile. Returns `nil` for an empty input.

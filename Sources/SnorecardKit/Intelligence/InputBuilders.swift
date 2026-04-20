@@ -301,17 +301,17 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 3.0,
                 description: "The Glasgow Index is a breath-quality score derived from the flow-rate signal. Each inspiration is rated against nine characteristics associated with flow limitation — each scoring 0 to 1 — so the overall nightly index can in theory range from 0 to 9. This index is informational only and is not a medical diagnostic tool."
             )
-        case .pressure95:
+        case .epap95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "EPAP stands for Expiratory Positive Airway Pressure — the cushion of air the CPAP holds against the user's exhalation to keep the upper airway from collapsing. The value shown is the 95th-percentile target: the pressure the device held for all but the top 5% of the night. The optional IPAP subtitle, when present, is the matching 95th-percentile inspiratory pressure; on plain CPAP therapy IPAP equals EPAP so the card hides it. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
+                description: "EPAP stands for Expiratory Positive Airway Pressure — the cushion of air the CPAP holds against the user's exhalation to keep the upper airway from collapsing. The value shown is the 95th-percentile target: the pressure the device held for all but the top 5% of the night. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
             )
-        case .epr:
+        case .ipap95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "IPAP stands for Inspiratory Positive Airway Pressure — the pressure the CPAP delivers while the user is breathing in, making inhalation feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. IPAP equals EPAP on plain CPAP therapy and sits above it when EPR (Expiratory Pressure Relief) or bilevel therapy is active; the IPAP−EPAP gap is the extra pressure delivered on inhalation."
+                description: "IPAP stands for Inspiratory Positive Airway Pressure — the pressure the CPAP delivers while the user is breathing in, making inhalation feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. The gap in IPAP−EPAP is considered Pressure Support delivered on inhalation."
             )
         case .leak95:
             return MetricExplainInput.Norms(
@@ -330,6 +330,12 @@ public enum IntelligenceInputBuilder {
                 goodMax: 600,
                 elevatedMax: 700,
                 description: "Median tidal volume. A typical adult sits between 420 and 600 mL; values outside that window warrant attention."
+            )
+        case .snore95:
+            return MetricExplainInput.Norms(
+                goodMax: 1.0,
+                elevatedMax: 3.0,
+                description: "The 95th-percentile snore index on ResMed's 0–5 scale, derived from vibration in the flow signal while on therapy. 0 means quiet breathing; values climb as snoring becomes louder or more persistent. Under 1 is quiet, 1–3 is mild / intermittent, 3 and above is loud or sustained — often a cue to look at mask fit, body position, or residual upper-airway obstruction."
             )
         case .usage:
             return MetricExplainInput.Norms(
@@ -405,8 +411,8 @@ public enum IntelligenceInputBuilder {
         // EPAP), not `pressure95` (measured mask P95). Feed the
         // explain sheet the same value so the number at the top
         // of the sheet matches the card the user tapped.
-        case .pressure95:       return stats.epap95
-        case .epr:              return stats.ipap95
+        case .epap95:           return stats.epap95
+        case .ipap95:           return stats.ipap95
         case .leak95:           return stats.leak95LPerMin
         case .largeLeak:
             guard let seconds = stats.largeLeakSeconds,
@@ -414,6 +420,7 @@ public enum IntelligenceInputBuilder {
             return seconds / (stats.usageMinutes * 60) * 100
         case .tidalVolume:
             return stats.tidalVolume50.map { $0 * 1000 }
+        case .snore95:          return stats.snore95
         case .usage:            return stats.usageHours
         case .timeInApnea:
             guard let seconds = stats.timeInApneaSeconds,
@@ -462,11 +469,12 @@ public enum IntelligenceInputBuilder {
         switch metric {
         case .ahi:              return "events per hour"
         case .glasgowIndex:     return "score"
-        case .pressure95:       return "cmH₂O"
-        case .epr:              return "cmH₂O"
+        case .epap95:           return "cmH₂O"
+        case .ipap95:           return "cmH₂O"
         case .leak95:           return "L/min"
         case .largeLeak:        return "percent of usage"
         case .tidalVolume:      return "mL"
+        case .snore95:          return "index (0–5)"
         case .usage:            return "hours"
         case .timeInApnea:      return "percent of usage"
         case .flowLimit:        return "score (0–1)"

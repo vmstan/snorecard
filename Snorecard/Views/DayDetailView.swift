@@ -230,26 +230,26 @@ struct DayDetailView: View {
                             onTap: explainTap(.timeInApnea)
                         )
                     }
-                    if let gi = stats.glasgowIndex {
-                        StatCard(
-                            label: "Glasgow Index",
-                            value: String(format: "%.2f", gi),
-                            tint: glasgowColor(gi),
-                            onTap: explainTap(.glasgowIndex)
-                        )
-                    }
-
                     if let epap = stats.epap95 {
-                        // Show IPAP as a subtitle only when the
-                        // device actually delivers extra inspiratory
-                        // pressure (EPR / bilevel). On CPAP therapy
-                        // IPAP equals EPAP and the subtitle adds no
-                        // information, so we suppress it.
                         StatCard(
                             label: "EPAP",
                             value: String(format: "%.1f cmH₂O", epap),
-                            subtitle: ipapSubtitle(epap: epap, ipap: stats.ipap95),
-                            onTap: explainTap(.pressure95)
+                            onTap: explainTap(.epap95)
+                        )
+                    }
+                    // IPAP gets its own card only when the device
+                    // actually delivers extra inspiratory pressure.
+                    // On plain CPAP therapy IPAP equals EPAP, so a
+                    // second card would repeat the same number
+                    // next to itself.
+                    if let epap = stats.epap95,
+                       let ipap = stats.ipap95,
+                       ipap > epap + 0.05
+                    {
+                        StatCard(
+                            label: "IPAP",
+                            value: String(format: "%.1f cmH₂O", ipap),
+                            onTap: explainTap(.ipap95)
                         )
                     }
                     if let fl = stats.flowLimit95 {
@@ -260,6 +260,14 @@ struct DayDetailView: View {
                             onTap: explainTap(.flowLimit)
                         )
                     }
+                    if let gi = stats.glasgowIndex {
+                        StatCard(
+                            label: "Glasgow Index",
+                            value: String(format: "%.2f", gi),
+                            tint: glasgowColor(gi),
+                            onTap: explainTap(.glasgowIndex)
+                        )
+                    }
                     if let tv = stats.tidalVolume50 {
                         let mL = tv * 1000
                         StatCard(
@@ -267,6 +275,14 @@ struct DayDetailView: View {
                             value: String(format: "%.0f mL", mL),
                             tint: tidalVolumeColor(mL),
                             onTap: explainTap(.tidalVolume)
+                        )
+                    }
+                    if let snore = stats.snore95 {
+                        StatCard(
+                            label: "Snore (95%)",
+                            value: String(format: "%.1f", snore),
+                            tint: snoreColor(snore),
+                            onTap: explainTap(.snore95)
                         )
                     }
                     if let leak = stats.leak95LPerMin {
@@ -416,11 +432,12 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .pressure95:       return "EPAP"
-        case .epr:              return "IPAP"
+        case .epap95:           return "EPAP"
+        case .ipap95:           return "IPAP"
         case .leak95:           return "Leak (95%)"
         case .largeLeak:        return "Large Leak"
         case .tidalVolume:      return "Tidal Volume"
+        case .snore95:          return "Snore (95%)"
         case .usage:            return "Usage"
         case .timeInApnea:      return "Time in Apnea"
         case .flowLimit:        return "Flow Limit (95%)"
@@ -439,14 +456,9 @@ struct DayDetailView: View {
         case .ahi:          return String(format: "%.1f", stats.ahi)
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
-        case .pressure95:
-            // Matches the EPAP StatCard — sourced from `epap95`,
-            // not `pressure95`. See DayDetailView.header.
+        case .epap95:
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
-        case .epr:
-            // Previously showed the IPAP−EPAP delta as "Pressure
-            // Support"; now named IPAP on the card and here, so
-            // we return the raw IPAP value instead of the delta.
+        case .ipap95:
             return stats.ipap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .leak95:
             return stats.leak95LPerMin.map { String(format: "%.0f L/min", $0) } ?? "—"
@@ -457,6 +469,8 @@ struct DayDetailView: View {
             return String(format: "%.0f%%", pct)
         case .tidalVolume:
             return stats.tidalVolume50.map { String(format: "%.0f mL", $0 * 1000) } ?? "—"
+        case .snore95:
+            return stats.snore95.map { String(format: "%.1f", $0) } ?? "—"
         case .usage:
             return formatHours(stats.usageHours)
         case .timeInApnea:
@@ -551,15 +565,6 @@ struct DayDetailView: View {
         }
     }
 
-    /// Format the optional IPAP subtitle shown on the EPAP card —
-    /// nil means the card renders without a subtitle. We hide the
-    /// line when IPAP matches EPAP (CPAP therapy / EPR off) since
-    /// repeating the same number adds no information.
-    private func ipapSubtitle(epap: Double, ipap: Double?) -> String? {
-        guard let ipap, ipap > epap + 0.05 else { return nil }
-        return String(format: "IPAP %.1f", ipap)
-    }
-
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
     private func usageColor(_ hours: Double) -> Color {
@@ -576,6 +581,18 @@ struct DayDetailView: View {
     /// 1–3 %, red ≥ 3 %. Tighter than the clinical AHI bands.
     private func apneaColor(_ percent: Double) -> Color {
         switch percent {
+        case ..<1: .severityGood
+        case ..<3: .severityLow
+        default: .severityHigh
+        }
+    }
+
+    /// Snore palette (95th-percentile index on ResMed's 0–5 scale) —
+    /// under 1 is quiet, 1–3 is mild / intermittent, ≥3 is loud or
+    /// sustained. Matches the norm boundaries given to the explain
+    /// sheet so the card colour agrees with the AI description.
+    private func snoreColor(_ index: Double) -> Color {
+        switch index {
         case ..<1: .severityGood
         case ..<3: .severityLow
         default: .severityHigh

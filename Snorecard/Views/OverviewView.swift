@@ -214,6 +214,7 @@ struct OverviewView: View {
         let avgLeak = averaging(\.leak95LPerMin)
         let avgLargeLeakPct = avgLargeLeakPercent()
         let avgTidal = averaging(\.tidalVolume50)
+        let avgSnore = averaging(\.snore95)
 
         return LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 160), spacing: 12)],
@@ -273,18 +274,6 @@ struct OverviewView: View {
                     averageValue: avgAHI
                 )
             )
-            if let gi = avgGI {
-                card(
-                    "Avg Glasgow Index",
-                    value: String(format: "%.2f", gi),
-                    tint: glasgowColor(gi),
-                    explain: OverviewExplainContext(
-                        metric: .glasgowIndex,
-                        displayValue: String(format: "%.2f", gi),
-                        averageValue: gi
-                    )
-                )
-            }
             if let apnea = avgApnea {
                 let pct = avgApneaPercent() ?? 0
                 card(
@@ -303,11 +292,29 @@ struct OverviewView: View {
                 card(
                     "Avg EPAP",
                     value: String(format: "%.1f cmH₂O", epap),
-                    subtitle: avgIpapSubtitle(epap: epap, ipap: avgIPAP),
                     explain: OverviewExplainContext(
-                        metric: .pressure95,
+                        metric: .epap95,
                         displayValue: String(format: "%.1f cmH₂O", epap),
                         averageValue: epap
+                    )
+                )
+            }
+            // Separate Avg IPAP card, shown only when the average
+            // IPAP sits meaningfully above EPAP — i.e. the range
+            // includes nights with bilevel / EPR-style therapy.
+            // On plain CPAP the two averages match and a second
+            // card would just echo the first.
+            if let epap = avgEPAP,
+               let ipap = avgIPAP,
+               ipap > epap + 0.05
+            {
+                card(
+                    "Avg IPAP",
+                    value: String(format: "%.1f cmH₂O", ipap),
+                    explain: OverviewExplainContext(
+                        metric: .ipap95,
+                        displayValue: String(format: "%.1f cmH₂O", ipap),
+                        averageValue: ipap
                     )
                 )
             }
@@ -323,6 +330,18 @@ struct OverviewView: View {
                     )
                 )
             }
+            if let gi = avgGI {
+                card(
+                    "Avg Glasgow Index",
+                    value: String(format: "%.2f", gi),
+                    tint: glasgowColor(gi),
+                    explain: OverviewExplainContext(
+                        metric: .glasgowIndex,
+                        displayValue: String(format: "%.2f", gi),
+                        averageValue: gi
+                    )
+                )
+            }
             if let tidal = avgTidal {
                 let mL = tidal * 1000
                 card(
@@ -333,6 +352,18 @@ struct OverviewView: View {
                         metric: .tidalVolume,
                         displayValue: String(format: "%.0f mL", mL),
                         averageValue: mL
+                    )
+                )
+            }
+            if let snore = avgSnore {
+                card(
+                    "Avg snore 95th",
+                    value: String(format: "%.1f", snore),
+                    tint: snoreColor(snore),
+                    explain: OverviewExplainContext(
+                        metric: .snore95,
+                        displayValue: String(format: "%.1f", snore),
+                        averageValue: snore
                     )
                 )
             }
@@ -420,11 +451,12 @@ struct OverviewView: View {
         switch metric {
         case .ahi:              return "Avg AHI"
         case .glasgowIndex:     return "Avg Glasgow Index"
-        case .pressure95:       return "Avg EPAP"
-        case .epr:              return "Avg IPAP"
+        case .epap95:           return "Avg EPAP"
+        case .ipap95:           return "Avg IPAP"
         case .leak95:           return "Avg Leak (95%)"
         case .largeLeak:        return "Avg Large Leak"
         case .tidalVolume:      return "Avg Tidal Volume"
+        case .snore95:          return "Avg Snore (95%)"
         case .usage:            return "Avg Usage"
         case .timeInApnea:      return "Avg Time in Apnea"
         case .flowLimit:        return "Avg Flow Limit (95%)"
@@ -858,15 +890,6 @@ struct OverviewView: View {
         }
     }
 
-    /// Format the optional Avg IPAP subtitle on the EPAP card —
-    /// nil means no subtitle. Same suppression rule as the Daily
-    /// view: hide when average IPAP matches average EPAP (CPAP
-    /// therapy / EPR off).
-    private func avgIpapSubtitle(epap: Double, ipap: Double?) -> String? {
-        guard let ipap, ipap > epap + 0.05 else { return nil }
-        return String(format: "Avg IPAP %.1f", ipap)
-    }
-
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
     private func usageColor(_ hours: Double) -> Color {
@@ -892,6 +915,16 @@ struct OverviewView: View {
     /// Tidal-volume palette (median mL) — two-sided: green in the 420–
     /// 600 mL sweet spot, amber on either side of that window, red at
     /// the extremes.
+    /// Snore palette — same boundaries as the Daily view so the
+    /// average card tints the same way the per-night card would.
+    private func snoreColor(_ index: Double) -> Color {
+        switch index {
+        case ..<1: .severityGood
+        case ..<3: .severityLow
+        default: .severityHigh
+        }
+    }
+
     private func tidalVolumeColor(_ mL: Double) -> Color {
         switch mL {
         case ..<350: .severityHigh
