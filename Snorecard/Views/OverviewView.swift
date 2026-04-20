@@ -200,6 +200,13 @@ struct OverviewView: View {
         let compliantDays = stats.filter { $0.usageHours >= 4 }.count
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
+        // Per-event-class indices averaged across the same set of
+        // nights AHI is computed over. Surfaced as a subtitle on
+        // the Avg AHI card so the user can see which event type
+        // is driving the overall index.
+        let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
+        let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
+        let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgApnea = averaging(\.timeInApneaSeconds)
@@ -267,6 +274,10 @@ struct OverviewView: View {
             card(
                 "Avg AHI",
                 value: String(format: "%.1f", avgAHI),
+                subtitle: String(
+                    format: "OA %.1f · H %.1f · CA %.1f",
+                    avgOAI, avgHI, avgCAI
+                ),
                 tint: ahiColor(avgAHI),
                 explain: OverviewExplainContext(
                     metric: .ahi,
