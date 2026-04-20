@@ -316,16 +316,27 @@ struct DayDetailView: View {
     /// Sets `library.pendingExplain`; `ContentView` owns the
     /// actual presentation (sheet on iOS, inspector pane on
     /// macOS) so both platforms share one routing path.
+    ///
+    /// Toggle behaviour: tapping the card that is already
+    /// showing in the inspector dismisses it, matching how the
+    /// other inspector panes (notes, settings, …) already work
+    /// via `toggleInspector`. Tapping a different card swaps
+    /// content in place.
     private func explainTap(_ metric: ExplainableMetric) -> (() -> Void)? {
         guard library.intelligence.isReady else { return nil }
         return {
-            library.pendingExplain = ExplainRequest(
+            let request = ExplainRequest(
                 metric: metric,
                 displayLabel: Self.displayLabel(for: metric),
                 displayValue: displayValue(for: metric),
                 valueCaption: "Your value for this night",
                 source: .day(dayID: day.id)
             )
+            if library.pendingExplain == request {
+                library.pendingExplain = nil
+            } else {
+                library.pendingExplain = request
+            }
         }
     }
 

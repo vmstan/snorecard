@@ -377,13 +377,16 @@ struct OverviewView: View {
         )
     }
 
+    /// Toggle behaviour: tapping the card that is already
+    /// showing dismisses the inspector (matching how other
+    /// inspector panes already toggle on re-tap).
     private func explainTap(_ ctx: OverviewExplainContext?) -> (() -> Void)? {
         guard let ctx, library.intelligence.isReady else { return nil }
         let capturedStart = rangeStart
         let capturedEnd = rangeEnd
         let sampleSize = stats.count
         return {
-            library.pendingExplain = ExplainRequest(
+            let request = ExplainRequest(
                 metric: ctx.metric,
                 displayLabel: Self.displayLabel(for: ctx.metric),
                 displayValue: ctx.displayValue,
@@ -395,6 +398,11 @@ struct OverviewView: View {
                     sampleSize: sampleSize
                 )
             )
+            if library.pendingExplain == request {
+                library.pendingExplain = nil
+            } else {
+                library.pendingExplain = request
+            }
         }
     }
 
