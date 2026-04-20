@@ -42,6 +42,12 @@ struct DayDetailView: View {
         // flips between centered and leading-aligned depending on
         // how long the weekday/month/day string is.
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            FloatingActionBar(
+                items: floatingBarItems,
+                onTap: handleFloatingBarTap
+            )
+        }
         #endif
         #if os(macOS)
         // macOS keeps these as discrete toolbar buttons because
@@ -169,6 +175,33 @@ struct DayDetailView: View {
         else { return nil }
         return alias
     }
+
+    #if os(iOS)
+    /// Items shown in the floating action bar. Sleep Analysis is
+    /// only present once the on-device intelligence stack is
+    /// ready — matching the gating that used to live in the
+    /// shared Options menu.
+    private var floatingBarItems: [FloatingActionBar.Item] {
+        var items: [FloatingActionBar.Item] = []
+        if library.intelligence.isReady {
+            items.append(.sleepAnalysis)
+        }
+        items.append(.sleepJournal)
+        items.append(.therapyDetails)
+        return items
+    }
+
+    private func handleFloatingBarTap(_ item: FloatingActionBar.Item) {
+        switch item {
+        case .sleepAnalysis:
+            NotificationCenter.default.post(name: .snorecardOpenSleepAnalysis, object: nil)
+        case .sleepJournal:
+            NotificationCenter.default.post(name: .snorecardOpenDailyNotes, object: nil)
+        case .therapyDetails:
+            NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
+        }
+    }
+    #endif
 
     /// Replaces the bare `ProgressView` placeholder with a centered
     /// icon + headline + progress cluster that matches the sidebar

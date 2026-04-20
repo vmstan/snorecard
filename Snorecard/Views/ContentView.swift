@@ -570,19 +570,14 @@ struct ContentView: View {
         }
     }
 
-    /// iOS detail toolbar — always renders the Options menu, but
-    /// the menu's contents change with the active selection so a
-    /// day view can include Notes / Device Settings actions
-    /// alongside the library-level commands without growing
-    /// extra top-bar buttons.
+    /// iOS detail toolbar — renders the same library-level
+    /// Options menu as the sidebar. Per-context actions (Sleep
+    /// Analysis, Sleep Journal, Therapy Details) now live in the
+    /// floating action bar at the bottom of `DayDetailView` and
+    /// `OverviewView`, so the nav bar stays uncluttered.
     @ToolbarContentBuilder
     private var detailToolbarButtonsForiOS: some ToolbarContent {
         toolbarButtons
-    }
-
-    private var isViewingDay: Bool {
-        if case .day = library.selection { return true }
-        return false
     }
 
     @ViewBuilder
@@ -600,66 +595,6 @@ struct ContentView: View {
             }
             #if os(macOS)
             .keyboardShortcut("o", modifiers: [.command])
-            #endif
-
-            #if os(iOS)
-            // Day-detail-specific actions piggyback on the
-            // shared Options menu when the user is viewing a
-            // day, so the nav bar only ever shows one button.
-            // macOS keeps these in the day-detail toolbar
-            // proper because there's room for the extra glyphs.
-            if isViewingDay {
-                Divider()
-                if library.intelligence.isReady {
-                    Button {
-                        NotificationCenter.default.post(
-                            name: .snorecardOpenSleepAnalysis,
-                            object: nil
-                        )
-                    } label: {
-                        Label("Sleep Analysis", systemImage: "sparkles")
-                    }
-                }
-                Button {
-                    NotificationCenter.default.post(
-                        name: .snorecardOpenDailyNotes,
-                        object: nil
-                    )
-                } label: {
-                    Label("Sleep Journal", systemImage: "note.text")
-                }
-                Button {
-                    NotificationCenter.default.post(
-                        name: .snorecardOpenDailySettings,
-                        object: nil
-                    )
-                } label: {
-                    Label("Therapy Details", systemImage: "gauge.with.needle")
-                }
-            } else if library.card != nil {
-                // Overview-scoped entries — Sleep Analysis leads
-                // the cluster (same ordering as the day view),
-                // followed by the device-wide Sleep Journal.
-                Divider()
-                if library.intelligence.isReady {
-                    Button {
-                        NotificationCenter.default.post(
-                            name: .snorecardOpenOverviewAnalysis,
-                            object: nil
-                        )
-                    } label: {
-                        Label("Sleep Analysis", systemImage: "sparkles")
-                    }
-                }
-                Button {
-                    NotificationCenter.default.post(
-                        name: .snorecardOpenDeviceNotes,
-                        object: nil
-                    )
-                } label: {
-                    Label("Sleep Journal", systemImage: "note.text")
-                }
-            }
             #endif
 
             if library.card?.identification?.serialNumber != nil {

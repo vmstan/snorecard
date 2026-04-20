@@ -106,6 +106,20 @@ struct OverviewView: View {
         .navigationSubtitle(library.displayName(for: card))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !allStats.isEmpty {
+                FloatingActionBar(
+                    items: floatingBarItems,
+                    isEnabled: { item in
+                        switch item {
+                        case .sleepAnalysis: return !stats.isEmpty
+                        default:             return true
+                        }
+                    },
+                    onTap: handleFloatingBarTap
+                )
+            }
+        }
         #endif
         #if os(macOS)
         // Matches the per-night Sleep Journal button in
@@ -157,6 +171,32 @@ struct OverviewView: View {
             )
         }
     }
+
+    #if os(iOS)
+    /// Items shown in the floating action bar. Sleep Analysis is
+    /// only included when on-device intelligence is ready;
+    /// `isEnabled` further dims it when the current range filter
+    /// excludes every day.
+    private var floatingBarItems: [FloatingActionBar.Item] {
+        var items: [FloatingActionBar.Item] = []
+        if library.intelligence.isReady {
+            items.append(.sleepAnalysis)
+        }
+        items.append(.sleepJournal)
+        return items
+    }
+
+    private func handleFloatingBarTap(_ item: FloatingActionBar.Item) {
+        switch item {
+        case .sleepAnalysis:
+            NotificationCenter.default.post(name: .snorecardOpenOverviewAnalysis, object: nil)
+        case .sleepJournal:
+            NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
+        case .therapyDetails:
+            break
+        }
+    }
+    #endif
 
     /// Segmented preset picker plus optional custom date-range pickers.
     @ViewBuilder
