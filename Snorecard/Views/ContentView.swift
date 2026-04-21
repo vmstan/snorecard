@@ -25,7 +25,6 @@ extension Notification.Name {
 struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isConfirmingRebuild = false
-    @State private var isShowingBackups = false
     @State private var isShowingSettings = false
     @State private var knownDevices: [Library.DeviceFolder] = []
 
@@ -38,7 +37,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case backups, appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
+    enum InspectorPane { case appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -186,12 +185,9 @@ struct ContentView: View {
         // iOS keeps these as sheets; macOS routes them through the
         // shared inspector column declared above.
         #if os(iOS)
-        .sheet(isPresented: $isShowingBackups) {
-            BackupsView(onClose: { isShowingBackups = false })
-                .environment(library)
-        }
         .sheet(isPresented: $isShowingSettings) {
             SettingsSheet(onClose: { isShowingSettings = false })
+                .environment(library)
         }
         .sheet(isPresented: $isShowingDeviceNotes) {
             NavigationStack {
@@ -280,11 +276,6 @@ struct ContentView: View {
         // day-detail toolbar. All routes funnel into the same
         // inspector state so the third column is the one surface
         // hosting these accessory views.
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
-            if library.card?.identification?.serialNumber != nil {
-                toggleInspector(.backups)
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardShowSettings)) { _ in
             toggleInspector(.appSettings)
         }
@@ -340,19 +331,15 @@ struct ContentView: View {
     @ViewBuilder
     private var inspectorContent: some View {
         switch inspectorPane {
-        case .backups:
-            BackupsView(onClose: {
-                withAnimation(.smooth(duration: 0.32)) {
-                    inspectorPane = nil
-                }
-            })
-                .environment(library)
         case .appSettings:
-            SettingsSheet(onClose: {
-                withAnimation(.smooth(duration: 0.32)) {
-                    inspectorPane = nil
+            SettingsSheet(
+                onClose: {
+                    withAnimation(.smooth(duration: 0.32)) {
+                        inspectorPane = nil
+                    }
                 }
-            })
+            )
+            .environment(library)
         case .notes:
             if let day = library.selectedDay {
                 NotesCard(day: day)
@@ -532,29 +519,17 @@ struct ContentView: View {
             .keyboardShortcut("o", modifiers: [.command])
             #endif
 
-            if library.card?.identification?.serialNumber != nil {
-                if !otherDevices.isEmpty {
-                    Divider()
-                    Menu {
-                        ForEach(otherDevices) { folder in
-                            Button(deviceMenuLabel(for: folder)) {
-                                library.load(folder.url)
-                            }
-                        }
-                    } label: {
-                        Label("Switch PAP Device", systemImage: "rectangle.2.swap")
-                    }
-                }
-
+            if library.card?.identification?.serialNumber != nil,
+               !otherDevices.isEmpty {
                 Divider()
-                Button {
-                    #if os(macOS)
-                    toggleInspector(.backups)
-                    #else
-                    isShowingBackups = true
-                    #endif
+                Menu {
+                    ForEach(otherDevices) { folder in
+                        Button(deviceMenuLabel(for: folder)) {
+                            library.load(folder.url)
+                        }
+                    }
                 } label: {
-                    Label("Backup & Restore", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                    Label("Switch PAP Device", systemImage: "rectangle.2.swap")
                 }
             }
 

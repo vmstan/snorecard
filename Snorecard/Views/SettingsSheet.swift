@@ -140,6 +140,7 @@ struct SettingsSheet: View {
         NavigationStack {
             List {
                 deviceSection
+                backupsSection
                 appIconSection
                 maintenanceSection
             }
@@ -156,7 +157,7 @@ struct SettingsSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
                 title: "Settings",
-                caption: "Preferences that apply across the whole Snorecard app."
+                caption: "Make Snorecard work for you."
             )
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -164,6 +165,7 @@ struct SettingsSheet: View {
 
             Form {
                 deviceSection
+                backupsSection
                 appIconSection
                 macOSMaintenanceSection
             }
@@ -209,6 +211,19 @@ struct SettingsSheet: View {
             } footer: {
                 Text("Shown in the sidebar. Syncs between your devices via iCloud.")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var backupsSection: some View {
+        if hasCard {
+            // Both platforms inline the backups UI directly in the
+            // Settings surface — no NavigationLink push on iOS, no
+            // inspector swap on macOS. The user sees every
+            // preference surface in one scroll and the iCloud
+            // plumbing lives next to Rename / App Icon instead of
+            // being hidden behind a disclosure chevron.
+            BackupsFormSections(onRestoreComplete: {})
         }
     }
 
@@ -309,7 +324,7 @@ struct SettingsSheet: View {
         } label: {
             HStack(spacing: 14) {
                 preview(for: option)
-                    .frame(width: 18, height: 18)
+                    .frame(width: 24, height: 24)
                 Text(option.displayName)
                     .font(.body)
                     .foregroundStyle(.primary)
