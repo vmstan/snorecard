@@ -17,7 +17,7 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
 /// flat and avoids leaking UI state up into `SnorecardApp`.
 extension Notification.Name {
     static let snorecardShowSettings = Notification.Name("Snorecard.ShowSettings")
-    // Sleep Analysis and Rebuild Analysis are declared in the
+    // Sleep Analysis and Rebuild Cache are declared in the
     // shared ContentView notification set so both platforms
     // reference the same names; this extension only adds commands
     // that are macOS-only.

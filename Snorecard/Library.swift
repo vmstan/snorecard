@@ -215,7 +215,7 @@ final class Library {
     /// **User-authored notes (`DailyNotesCache.filename`,
     /// `DeviceNotesCache.filename`) are never touched** — they
     /// aren't derived data and can't be recomputed.
-    func rebuildAnalysis() {
+    func rebuildCache() {
         guard let url = card?.rootURL else { return }
         let datalog = url.appendingPathComponent("DATALOG", isDirectory: true)
         let fm = FileManager.default
