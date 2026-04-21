@@ -24,7 +24,6 @@ extension Notification.Name {
 
 struct ContentView: View {
     @Environment(Library.self) private var library
-    @State private var isRenamingDevice = false
     @State private var isConfirmingRebuild = false
     @State private var isShowingBackups = false
     @State private var isShowingSettings = false
@@ -39,7 +38,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case rename, backups, appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
+    enum InspectorPane { case backups, appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -191,20 +190,6 @@ struct ContentView: View {
             BackupsView(onClose: { isShowingBackups = false })
                 .environment(library)
         }
-        .sheet(isPresented: $isRenamingDevice) {
-            if let card = library.card,
-               let serial = card.identification?.serialNumber {
-                RenameDeviceSheet(
-                    serial: serial,
-                    defaultName: card.identification?.productName ?? "ResMed PAP-device",
-                    currentOverride: library.deviceNameOverrides[serial],
-                    onSave: { newName in
-                        library.setDeviceName(newName, for: serial)
-                    },
-                    onClose: { isRenamingDevice = false }
-                )
-            }
-        }
         .sheet(isPresented: $isShowingSettings) {
             SettingsSheet(onClose: { isShowingSettings = false })
         }
@@ -295,11 +280,6 @@ struct ContentView: View {
         // day-detail toolbar. All routes funnel into the same
         // inspector state so the third column is the one surface
         // hosting these accessory views.
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardRenameDevice)) { _ in
-            if library.card?.identification?.serialNumber != nil {
-                toggleInspector(.rename)
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 toggleInspector(.backups)
@@ -360,8 +340,6 @@ struct ContentView: View {
     @ViewBuilder
     private var inspectorContent: some View {
         switch inspectorPane {
-        case .rename:
-            renameInspectorPane
         case .backups:
             BackupsView(onClose: {
                 withAnimation(.smooth(duration: 0.32)) {
@@ -437,37 +415,6 @@ struct ContentView: View {
                 EmptyView()
             }
         case .none:
-            EmptyView()
-        }
-    }
-
-    /// Rename Device rendered as a Spotlight-style panel inside
-    /// the inspector. Closes by driving `inspectorPane` back to
-    /// nil — we can't use `@Environment(\.dismiss)` here because
-    /// inside an `.inspector` attached to the root
-    /// `NavigationSplitView` it resolves to the host window and
-    /// would quit the app via
-    /// `applicationShouldTerminateAfterLastWindowClosed`.
-    @ViewBuilder
-    private var renameInspectorPane: some View {
-        if
-            let card = library.card,
-            let serial = card.identification?.serialNumber
-        {
-            RenameDeviceSheet(
-                serial: serial,
-                defaultName: card.identification?.productName ?? "ResMed PAP-device",
-                currentOverride: library.deviceNameOverrides[serial],
-                onSave: { newName in
-                    library.setDeviceName(newName, for: serial)
-                },
-                onClose: {
-                    withAnimation(.smooth(duration: 0.32)) {
-                        inspectorPane = nil
-                    }
-                }
-            )
-        } else {
             EmptyView()
         }
     }
@@ -586,17 +533,8 @@ struct ContentView: View {
             #endif
 
             if library.card?.identification?.serialNumber != nil {
-                Divider()
-                Button {
-                    #if os(macOS)
-                    toggleInspector(.rename)
-                    #else
-                    isRenamingDevice = true
-                    #endif
-                } label: {
-                    Label("Rename PAP Device", systemImage: "pencil")
-                }
                 if !otherDevices.isEmpty {
+                    Divider()
                     Menu {
                         ForEach(otherDevices) { folder in
                             Button(deviceMenuLabel(for: folder)) {

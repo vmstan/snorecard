@@ -106,15 +106,40 @@ struct SettingsSheet: View {
 
     @Environment(Library.self) private var library
     @State private var selection: AppIconOption = AppIconController.current
+    /// Draft of the PAP-device alias. Synced from Library on
+    /// appear / card change and committed back via `commitDeviceName`
+    /// on submit and on dismiss, so the user's edits are trimmed
+    /// and persisted without hammering the iCloud store on every
+    /// keystroke.
+    @State private var deviceNameDraft: String = ""
+    /// Serial the draft belongs to — used to re-sync when the
+    /// user swaps devices while Settings is open.
+    @State private var draftSerial: String?
 
     private var hasCard: Bool {
         library.card?.identification?.serialNumber != nil
+    }
+
+    private var currentSerial: String? {
+        library.card?.identification?.serialNumber
+    }
+
+    private var currentDefaultName: String {
+        library.card?.identification?.productName ?? "ResMed PAP-device"
+    }
+
+    private var currentOverride: String? {
+        guard let serial = currentSerial else { return nil }
+        let value = library.deviceNameOverrides[serial]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (value?.isEmpty ?? true) ? nil : value
     }
 
     var body: some View {
         #if os(iOS)
         NavigationStack {
             List {
+                deviceSection
                 appIconSection
                 maintenanceSection
             }
@@ -124,6 +149,9 @@ struct SettingsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .onAppear(perform: syncDeviceDraft)
+        .onChange(of: currentSerial) { _, _ in syncDeviceDraft() }
+        .onDisappear(perform: commitDeviceName)
         #else
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
@@ -135,13 +163,71 @@ struct SettingsSheet: View {
             .padding(.bottom, 8)
 
             Form {
+                deviceSection
                 appIconSection
                 macOSMaintenanceSection
             }
             .formStyle(.grouped)
         }
         .navigationTitle("Settings")
+        .onAppear(perform: syncDeviceDraft)
+        .onChange(of: currentSerial) { _, _ in syncDeviceDraft() }
+        .onDisappear(perform: commitDeviceName)
         #endif
+    }
+
+    @ViewBuilder
+    private var deviceSection: some View {
+        if hasCard, let serial = currentSerial {
+            Section {
+                TextField(currentDefaultName, text: $deviceNameDraft)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    #endif
+                    .onSubmit(commitDeviceName)
+                LabeledContent("Model", value: currentDefaultName)
+                LabeledContent("Serial") {
+                    Text(serial).monospaced()
+                }
+                if currentOverride != nil {
+                    Button(role: .destructive) {
+                        deviceNameDraft = ""
+                        library.setDeviceName(nil, for: serial)
+                    } label: {
+                        #if os(iOS)
+                        Text("Use Default Name")
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        #else
+                        Text("Use Default Name")
+                        #endif
+                    }
+                }
+            } header: {
+                Text("PAP Device")
+            } footer: {
+                Text("Shown in the sidebar. Syncs between your devices via iCloud.")
+            }
+        }
+    }
+
+    private func syncDeviceDraft() {
+        let serial = currentSerial
+        if serial != draftSerial {
+            draftSerial = serial
+            deviceNameDraft = currentOverride ?? ""
+        }
+    }
+
+    private func commitDeviceName() {
+        guard let serial = currentSerial else { return }
+        let trimmed = deviceNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = library.deviceNameOverrides[serial]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed != stored else { return }
+        library.setDeviceName(trimmed.isEmpty ? nil : trimmed, for: serial)
+        deviceNameDraft = trimmed
     }
 
     @ViewBuilder
@@ -223,7 +309,7 @@ struct SettingsSheet: View {
         } label: {
             HStack(spacing: 14) {
                 preview(for: option)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 18, height: 18)
                 Text(option.displayName)
                     .font(.body)
                     .foregroundStyle(.primary)

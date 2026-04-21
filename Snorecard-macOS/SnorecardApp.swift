@@ -16,7 +16,6 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
 /// bindings through `@Environment`) keeps the menu declaration
 /// flat and avoids leaking UI state up into `SnorecardApp`.
 extension Notification.Name {
-    static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
     static let snorecardShowSettings = Notification.Name("Snorecard.ShowSettings")
     // Sleep Analysis and Rebuild Analysis are declared in the
@@ -165,16 +164,8 @@ struct SnorecardApp: App {
         }
         .disabled(!hasCard || !isViewingDay)
 
-        Divider()
-
-        Button {
-            NotificationCenter.default.post(name: .snorecardRenameDevice, object: nil)
-        } label: {
-            Label("Rename PAP Device", systemImage: "pencil")
-        }
-        .disabled(!hasCard)
-
         if !otherDevices.isEmpty {
+            Divider()
             Menu {
                 ForEach(otherDevices) { folder in
                     Button(menuLabel(for: folder)) {

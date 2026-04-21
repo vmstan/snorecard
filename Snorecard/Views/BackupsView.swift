@@ -6,8 +6,8 @@ import SnorecardKit
 /// device serial, newest first, with a restore and a delete
 /// action per row, plus a "Back Up Now" action in the footer bar.
 ///
-/// The macOS layout mirrors `RenameDeviceSheet` and
-/// `DailySettingsInspector` on purpose: a grouped `Form` for the
+/// The macOS layout mirrors `DailySettingsInspector` on purpose:
+/// a grouped `Form` for the
 /// content, a bottom action bar pulled in via `.safeAreaInset`,
 /// and no `.alert` or `.task` modifiers on the root. The shared
 /// third-column inspector crashes during its collapse/expand
@@ -82,8 +82,8 @@ struct BackupsView: View {
         // `NavigationStack` wrapper — its toolbar bridge conflicts
         // with the root `NavigationSplitView`'s toolbar during the
         // inspector collapse/expand animation. Matches the plain
-        // `.navigationTitle` pattern `RenameDeviceSheet` and
-        // `DailySettingsInspector` already use in the same column.
+        // `.navigationTitle` pattern `DailySettingsInspector`
+        // already uses in the same column.
         formBody
             .navigationTitle("Backup & Restore")
         #endif
@@ -268,11 +268,10 @@ struct BackupsView: View {
     @ViewBuilder
     private var actionBar: some View {
         #if os(macOS)
-        // macOS bar mirrors `RenameDeviceSheet` — close button on
-        // the leading edge routes through `onClose` (not
-        // `dismiss()`, which would target the host window), and
-        // Backup on the trailing edge is the default-action
-        // confirmation button.
+        // macOS bottom action bar — close button on the leading
+        // edge routes through `onClose` (not `dismiss()`, which
+        // would target the host window), and Backup on the
+        // trailing edge is the default-action confirmation button.
         HStack {
             Button("Cancel") { onClose() }
                 .keyboardShortcut(.cancelAction)
