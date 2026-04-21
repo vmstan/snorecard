@@ -17,12 +17,12 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
 /// flat and avoids leaking UI state up into `SnorecardApp`.
 extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
-    static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
     static let snorecardShowSettings = Notification.Name("Snorecard.ShowSettings")
-    // Sleep Analysis is declared in the shared ContentView
-    // notification set so both platforms reference the same name;
-    // this extension only adds commands that are macOS-only.
+    // Sleep Analysis and Rebuild Analysis are declared in the
+    // shared ContentView notification set so both platforms
+    // reference the same names; this extension only adds commands
+    // that are macOS-only.
 }
 
 @main
@@ -49,6 +49,12 @@ struct SnorecardApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 fileCommands
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    NotificationCenter.default.post(name: .snorecardShowSettings, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
             }
         }
 
@@ -185,24 +191,9 @@ struct SnorecardApp: App {
         Button {
             NotificationCenter.default.post(name: .snorecardShowBackups, object: nil)
         } label: {
-            Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+            Label("Backup & Restore", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
         }
         .disabled(!hasCard)
-
-        Button(role: .destructive) {
-            NotificationCenter.default.post(name: .snorecardRebuildAnalysis, object: nil)
-        } label: {
-            Label("Rebuild Analysis", systemImage: "hammer")
-        }
-        .disabled(!hasCard)
-
-        Divider()
-
-        Button {
-            NotificationCenter.default.post(name: .snorecardShowSettings, object: nil)
-        } label: {
-            Label("Settings", systemImage: "gearshape")
-        }
     }
 
     /// Alias-aware label for the Switch Device submenu — mirrors

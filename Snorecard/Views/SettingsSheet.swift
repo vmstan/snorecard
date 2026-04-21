@@ -104,13 +104,19 @@ enum AppIconController {
 struct SettingsSheet: View {
     let onClose: () -> Void
 
+    @Environment(Library.self) private var library
     @State private var selection: AppIconOption = AppIconController.current
+
+    private var hasCard: Bool {
+        library.card?.identification?.serialNumber != nil
+    }
 
     var body: some View {
         #if os(iOS)
         NavigationStack {
             List {
                 appIconSection
+                maintenanceSection
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
@@ -130,6 +136,7 @@ struct SettingsSheet: View {
 
             Form {
                 appIconSection
+                macOSMaintenanceSection
             }
             .formStyle(.grouped)
         }
@@ -145,6 +152,67 @@ struct SettingsSheet: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var maintenanceSection: some View {
+        Section {
+            Button(role: .destructive) {
+                NotificationCenter.default.post(
+                    name: .snorecardRebuildAnalysis,
+                    object: nil
+                )
+                onClose()
+            } label: {
+                Text("Rebuild Analysis")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .disabled(!hasCard)
+        } footer: {
+            Text("Rebuilds the cached analysis for this PAP device from the original source data. Useful if the analysis appears stale or incorrect.")
+        }
+    }
+
+    #if os(macOS)
+    /// Two-column Maintenance row on macOS — description + caption
+    /// on the leading edge, destructive action on the trailing
+    /// edge. Kept inside the `Form` (instead of a sibling below it)
+    /// because grouped `Form` + sibling in the same `VStack`
+    /// triggers a layout loop in AppKit ("more Update Constraints
+    /// in Window passes than there are views"), which hangs then
+    /// crashes the app.
+    @ViewBuilder
+    private var macOSMaintenanceSection: some View {
+        Section {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rebuild Analysis")
+                        .font(.callout.weight(.medium))
+                    Text("Recompute the statistics for this PAP-device from the original source data.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 16)
+                Button(role: .destructive) {
+                    onClose()
+                    NotificationCenter.default.post(
+                        name: .snorecardRebuildAnalysis,
+                        object: nil
+                    )
+                } label: {
+                    Image(systemName: "hammer")
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasCard)
+                .help("Rebuild analysis")
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("Maintenance")
+        }
+    }
+    #endif
 
     @ViewBuilder
     private func row(for option: AppIconOption) -> some View {

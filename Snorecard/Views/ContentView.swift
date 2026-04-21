@@ -16,6 +16,10 @@ extension Notification.Name {
     /// with its current range and filtered stats before the
     /// sheet / inspector opens.
     static let snorecardOpenOverviewAnalysis = Notification.Name("Snorecard.OpenOverviewAnalysis")
+    /// Raised from the Settings sheet on both platforms — routes
+    /// back to ContentView which owns the destructive confirmation
+    /// alert.
+    static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
 }
 
 struct ContentView: View {
@@ -278,6 +282,11 @@ struct ContentView: View {
         } message: {
             Text(rebuildAnalysisWarning)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildAnalysis)) { _ in
+            if library.card?.identification?.serialNumber != nil {
+                isConfirmingRebuild = true
+            }
+        }
         .task(id: library.card?.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
         }
@@ -289,11 +298,6 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRenameDevice)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 toggleInspector(.rename)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildAnalysis)) { _ in
-            if library.card?.identification?.serialNumber != nil {
-                isConfirmingRebuild = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardShowBackups)) { _ in
@@ -612,12 +616,7 @@ struct ContentView: View {
                     isShowingBackups = true
                     #endif
                 } label: {
-                    Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
-                }
-                Button(role: .destructive) {
-                    isConfirmingRebuild = true
-                } label: {
-                    Label("Rebuild Analysis", systemImage: "hammer")
+                    Label("Backup & Restore", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                 }
             }
 
