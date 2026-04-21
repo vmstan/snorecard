@@ -19,7 +19,7 @@ extension Notification.Name {
     /// Raised from the Settings sheet on both platforms — routes
     /// back to ContentView which owns the destructive confirmation
     /// alert.
-    static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
+    static let snorecardRebuildCache = Notification.Name("Snorecard.RebuildCache")
 }
 
 struct ContentView: View {
@@ -246,7 +246,7 @@ struct ContentView: View {
         }
         #endif
         .alert(
-            "Rebuild Analysis?",
+            "Rebuild Cache?",
             isPresented: $isConfirmingRebuild
         ) {
             // Order matters — on iOS alerts place Cancel leading
@@ -257,13 +257,13 @@ struct ContentView: View {
             // message grew past a few lines).
             Button("Cancel", role: .cancel) { }
                 .keyboardShortcut(.cancelAction)
-            Button("Rebuild Analysis", role: .destructive) {
-                library.rebuildAnalysis()
+            Button("Rebuild Cache", role: .destructive) {
+                library.rebuildCache()
             }
         } message: {
-            Text(rebuildAnalysisWarning)
+            Text(rebuildCacheWarning)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildAnalysis)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildCache)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 isConfirmingRebuild = true
             }
@@ -427,7 +427,7 @@ struct ContentView: View {
     /// dialog. Mentions the concrete consequences (cache wiped, iCloud
     /// re-sync, time cost) so the user can make an informed call
     /// rather than treating it as a trivial refresh button.
-    private var rebuildAnalysisWarning: String {
+    private var rebuildCacheWarning: String {
         let dayCount = library.card?.days.count ?? 0
         let scope: String
         if dayCount == 0 {

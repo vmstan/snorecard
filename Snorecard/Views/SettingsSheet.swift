@@ -259,12 +259,12 @@ struct SettingsSheet: View {
         Section {
             Button(role: .destructive) {
                 NotificationCenter.default.post(
-                    name: .snorecardRebuildAnalysis,
+                    name: .snorecardRebuildCache,
                     object: nil
                 )
                 onClose()
             } label: {
-                Text("Rebuild Analysis")
+                Text("Rebuild Cache")
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             .disabled(!hasCard)
@@ -286,9 +286,9 @@ struct SettingsSheet: View {
         Section {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Rebuild Analysis")
+                    Text("Rebuild Cache")
                         .font(.callout.weight(.medium))
-                    Text("Recompute the statistics for this PAP-device from the original source data.")
+                    Text("Regenerate cached analysis for this PAP-device.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -297,7 +297,7 @@ struct SettingsSheet: View {
                 Button(role: .destructive) {
                     onClose()
                     NotificationCenter.default.post(
-                        name: .snorecardRebuildAnalysis,
+                        name: .snorecardRebuildCache,
                         object: nil
                     )
                 } label: {
@@ -306,7 +306,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!hasCard)
-                .help("Rebuild analysis")
+                .help("Rebuild cache")
             }
             .padding(.vertical, 4)
         } header: {
