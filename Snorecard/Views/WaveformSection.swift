@@ -781,6 +781,23 @@ struct WaveformSection: View {
                 hoverOffset = nil
                 activeHoverChart = nil
             }
+            #if os(iOS)
+            // iPhone sheets are too cramped to park the nearest-event
+            // button inside the timeline strip. Hoist it into the
+            // navigation bar instead — the action propagates up to
+            // `AdvancedChartingView`'s enclosing `NavigationStack`.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        jumpToNearestEvent()
+                    } label: {
+                        Image(systemName: "timeline.selection")
+                    }
+                    .accessibilityLabel("Center on nearest event")
+                    .disabled(bundle.events.isEmpty)
+                }
+            }
+            #endif
     }
 
     /// Inline tip below the timeline strip explaining the two
@@ -859,6 +876,35 @@ struct WaveformSection: View {
                     viewportStart: scrollPosition,
                     viewportLength: isZoomed ? visibleDomainLength : 0
                 )
+                #if os(macOS)
+                // macOS windows open wide enough that parking the
+                // "snap to the nearest event" button in the empty
+                // trailing Y-axis column the timeline already
+                // reserves for data-chart alignment keeps the chart's
+                // full width and the plot areas line up, pixel for
+                // pixel, with the data charts below. iOS hoists the
+                // same action into the nav-bar toolbar instead —
+                // screens there are too narrow for the overlay.
+                .overlay(alignment: .trailing) {
+                    Button {
+                        jumpToNearestEvent()
+                    } label: {
+                        Image(systemName: "timeline.selection")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Center on the nearest event")
+                    .accessibilityLabel("Center on nearest event")
+                    .disabled(bundle.events.isEmpty)
+                    .frame(width: Self.plotAreaLeadingInset)
+                    // The overlay centres on the chart's full 57pt
+                    // frame, which includes the x-axis label strip at
+                    // the bottom. Shift up so the button sits on the
+                    // bar row's visual centre instead of the full
+                    // frame's geometric centre.
+                    .offset(y: -8)
+                }
+                #endif
                 timelineHelpText
 
                 chartStack
@@ -872,12 +918,38 @@ struct WaveformSection: View {
     @ViewBuilder
     private var hoverReadout: some View {
         let time = hoverOffset.map { bundle.dayStart.addingTimeInterval($0) }
+        ZStack(alignment: .topTrailing) {
+            hoverReadoutContent(time: time)
+            // Close button layered *outside* the `.allowsHitTesting(false)`
+            // content so it remains tappable while the rest of the
+            // readout still passes touches through to the chart below.
+            Button {
+                hoverOffset = nil
+                activeHoverChart = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+            .accessibilityLabel("Dismiss readout")
+        }
+    }
+
+    @ViewBuilder
+    private func hoverReadoutContent(time: Date?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Text(time?.formatted(date: .omitted, time: .shortened) ?? "—")
                     .font(.callout.monospacedDigit().weight(.medium))
                     .frame(minWidth: 60, alignment: .leading)
                 Spacer(minLength: 0)
+                // Keeps the time stamp from sliding under the close
+                // button that the parent ZStack layers on top.
+                Color.clear
+                    .frame(width: 18, height: 18)
             }
             FlowLayout(horizontalSpacing: 16, verticalSpacing: 6) {
                 readoutChip(
@@ -1035,6 +1107,30 @@ struct WaveformSection: View {
             .labelsHidden()
             ChartSubviewTitle(title: "Timeline", subtitle: zoomRangeLabel)
         }
+    }
+
+    /// Snap the viewport onto an event indicator. From a fit-zoom
+    /// ("All") state, there's no meaningful viewport centre to
+    /// anchor against, so the first event of the night wins. When
+    /// already zoomed in, the event with the smallest distance from
+    /// the current centre is chosen. Relies on `jumpTo(time:)` for
+    /// the "zoom from All into a 10-minute window" behaviour so this
+    /// button lands in a useful zoom level without extra logic here.
+    private func jumpToNearestEvent() {
+        guard !bundle.events.isEmpty else { return }
+        let target: TimeInterval
+        if zoomWindow == 0 {
+            target = bundle.events
+                .map(\.offset)
+                .min() ?? bundle.events[0].offset
+        } else {
+            let centre = scrollPosition + visibleDomainLength / 2
+            target = bundle.events
+                .map(\.offset)
+                .min(by: { abs($0 - centre) < abs($1 - centre) })
+                ?? bundle.events[0].offset
+        }
+        jumpTo(time: target)
     }
 
     /// Picker binding that maps the `zoomWindow` state to whichever
