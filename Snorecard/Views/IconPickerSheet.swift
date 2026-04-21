@@ -74,7 +74,11 @@ enum AppIconController {
         guard app.supportsAlternateIcons else { return }
         let targetName = option.alternateIconName
         guard app.alternateIconName != targetName else { return }
-        app.setAlternateIconName(targetName) { _ in }
+        app.setAlternateIconName(targetName) { error in
+            if let error {
+                print("Icon change failed: \(error.localizedDescription)")
+            }
+        }
         #elseif canImport(AppKit)
         // macOS doesn't expose a public `setAlternateIconName`
         // equivalent. Swap `NSApp.applicationIconImage` at runtime —

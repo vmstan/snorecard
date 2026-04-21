@@ -481,6 +481,15 @@
 		1C11057968406CC172841089 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = (
+					"Snorecard-Claude",
+					"Snorecard-Inverted",
+					"Snorecard-Joey",
+					"Snorecard-Oscar",
+					"Snorecard-Royale",
+					"Snorecard-Sadie",
+					"Snorecard-Slimer",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -558,6 +567,15 @@
 		CCB41BC03C9842BAE530C1C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = (
+					"Snorecard-Claude",
+					"Snorecard-Inverted",
+					"Snorecard-Joey",
+					"Snorecard-Oscar",
+					"Snorecard-Royale",
+					"Snorecard-Sadie",
+					"Snorecard-Slimer",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
