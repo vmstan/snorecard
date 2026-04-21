@@ -1,13 +1,13 @@
 import Foundation
 
-/// Snapshot of the Overview range the user is looking at when
+/// Snapshot of the Trends range the user is looking at when
 /// they request a trend narrative. Passed through
-/// `Library.pendingOverviewAnalysis` so `ContentView` can open
+/// `Library.pendingTrendsAnalysis` so `ContentView` can open
 /// the summary in the macOS inspector or the iOS sheet without
-/// having to reach into `OverviewView`'s local range state.
+/// having to reach into `TrendsView`'s local range state.
 ///
 /// Pure data so it can flow through observable storage.
-public struct OverviewAnalysisRequest: Identifiable, Equatable, Sendable {
+public struct TrendsAnalysisRequest: Identifiable, Equatable, Sendable {
     public let stats: [DailyStatistics]
     public let rangeStart: Date
     public let rangeEnd: Date

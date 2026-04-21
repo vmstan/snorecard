@@ -66,7 +66,7 @@ final class PromptBuilderTests: XCTestCase {
             NightSummaryPrompt.systemInstructions.contains("Never give advice")
         )
         XCTAssertTrue(
-            OverviewNarrativePrompt.systemInstructions.contains("Never give advice")
+            TrendsNarrativePrompt.systemInstructions.contains("Never give advice")
         )
         XCTAssertTrue(
             MetricExplainPrompt.systemInstructions.contains("Never give advice")

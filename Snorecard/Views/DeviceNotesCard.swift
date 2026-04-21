@@ -2,7 +2,7 @@ import SwiftUI
 import SnorecardKit
 
 /// Free-form device-wide journal entry, rendered in the shared
-/// inspector when the Overview is selected. Mirrors `NotesCard`
+/// inspector when Trends is selected. Mirrors `NotesCard`
 /// (same debounced autosave, same blank-means-delete rule) but
 /// talks to the device-level sidecar rather than a per-night one,
 /// so the user can keep overall notes about a CPAP — mask changes,

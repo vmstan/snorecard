@@ -466,7 +466,7 @@ struct DayDetailView: View {
         case .usage:            return "Usage"
         case .timeInApnea:      return "Time in Apnea"
         case .flowLimit:        return "Flow Limit (95%)"
-        // Overview-only metrics fall back to their enum label —
+        // Trends-only metrics fall back to their enum label —
         // the daily view never opens the sheet for these, but
         // the switch has to be exhaustive.
         case .compliance:       return "Compliance"
@@ -505,7 +505,7 @@ struct DayDetailView: View {
             return String(format: "%.2f%% of usage", pct)
         case .flowLimit:
             return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
-        // Overview-only metrics have no per-day value — the sheet
+        // Trends-only metrics have no per-day value — the sheet
         // path on DayDetailView never hits these cases, but
         // exhaustive switching still requires them.
         case .compliance, .daysWithData, .sessionsPerNight:

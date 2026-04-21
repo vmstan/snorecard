@@ -41,7 +41,7 @@ extension Color {
     static let severityMedium = Color(red: 0.92, green: 0.60, blue: 0.35)
     static let severityHigh   = Color(red: 0.85, green: 0.42, blue: 0.42)
 
-    /// Muted chart series colours used across the Overview trend charts.
+    /// Muted chart series colours used across the Trends charts.
     static let chartTeal   = Color(red: 0.38, green: 0.70, blue: 0.72)
     static let chartBlue   = Color(red: 0.42, green: 0.60, blue: 0.82)
     static let chartOrange = Color(red: 0.92, green: 0.60, blue: 0.35)

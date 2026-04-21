@@ -1,6 +1,6 @@
 import Foundation
 
-public enum OverviewNarrativePrompt {
+public enum TrendsNarrativePrompt {
     // v6: second-person only — the data is always about one
     // person (the reader), not "some patients" or "many users".
     public static let templateVersion = 6
@@ -40,7 +40,7 @@ public enum OverviewNarrativePrompt {
     - Do not name clinical cutoffs the input does not supply.
     """
 
-    public static func buildPrompt(input: OverviewNarrativeInput) -> String {
+    public static func buildPrompt(input: TrendsNarrativeInput) -> String {
         """
         Narrate the trend over the range described below. The
         reader sees the aggregate cards with raw numbers above
