@@ -439,7 +439,17 @@ fileprivate struct CanvasPlotShell: View {
             guard let offset = math.dataOffset(forPixel: location.x) else { return }
             axes.hoverBinding.wrappedValue = offset
         }
-        .gesture(scrollGesture(width: size.width))
+        #if os(macOS)
+        // macOS: drag a chart body to pan the zoom window. On iOS
+        // this gesture is intentionally absent — even as a
+        // `simultaneousGesture`, it defeats the enclosing sheet's
+        // vertical scroll, forcing users to scroll only along the
+        // side margins. Panning on iOS is done via the timeline
+        // scrubber instead, which keeps the chart hit area purely
+        // for tap-to-drop-probe and lets the ScrollView own vertical
+        // drags.
+        .simultaneousGesture(scrollGesture(width: size.width))
+        #endif
     }
 
     private var dashedVerticalRule: some View {
@@ -454,6 +464,7 @@ fileprivate struct CanvasPlotShell: View {
 
     // MARK: Gestures
 
+    #if os(macOS)
     private func scrollGesture(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
@@ -471,6 +482,7 @@ fileprivate struct CanvasPlotShell: View {
                 axes.scrollBinding.wrappedValue = clamped
             }
     }
+    #endif
 
     // MARK: Axes
 

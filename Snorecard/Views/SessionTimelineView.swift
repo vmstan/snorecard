@@ -23,6 +23,27 @@ struct SessionTimelineView: View {
     var viewportStart: TimeInterval = 0
     var viewportLength: TimeInterval = 0
 
+    /// Axis the current drag has committed to. `nil` while we're
+    /// still deciding (first few points of motion); `.horizontal`
+    /// locks into timeline scrubbing for the rest of the gesture;
+    /// `.ignore` stays out of the way so vertical scroll on the
+    /// enclosing sheet / ScrollView can proceed unimpeded.
+    @State private var dragAxis: DragAxis? = nil
+
+    private enum DragAxis { case horizontal, ignore }
+
+    /// Minimum travel before the timeline drag activates. On iOS the
+    /// threshold is larger than macOS so a finger briefly grazing
+    /// the strip on its way to a vertical scroll doesn't grab the
+    /// viewport. On macOS a cursor can be precise at 6 pt.
+    private var dragMinimumDistance: CGFloat {
+        #if os(iOS)
+        12
+        #else
+        6
+        #endif
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Chart {
@@ -108,21 +129,35 @@ struct SessionTimelineView: View {
                         }
                         // Drag pans the viewport in real time — the
                         // shaded band follows the finger / pointer.
-                        // `simultaneousGesture` + horizontal-
-                        // dominance bail so vertical scroll on the
-                        // enclosing ScrollView still works when you
-                        // try to scroll the page past the timeline.
+                        // `simultaneousGesture` + a sticky axis
+                        // decision so a dominantly-vertical swipe is
+                        // ignored for the rest of the gesture, letting
+                        // the enclosing ScrollView scroll the page
+                        // past the timeline without the viewport
+                        // also jumping around.
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 6)
+                            DragGesture(minimumDistance: dragMinimumDistance)
                                 .onChanged { value in
-                                    let dx = abs(value.translation.width)
-                                    let dy = abs(value.translation.height)
-                                    guard dx > dy else { return }
+                                    if dragAxis == nil {
+                                        let dx = abs(value.translation.width)
+                                        let dy = abs(value.translation.height)
+                                        // Wait for a clear direction
+                                        // before deciding. Below the
+                                        // threshold, keep both axes
+                                        // live so a late vertical
+                                        // component can still take over.
+                                        guard max(dx, dy) >= 8 else { return }
+                                        dragAxis = dx > dy ? .horizontal : .ignore
+                                    }
+                                    guard dragAxis == .horizontal else { return }
                                     notifyDrag(
                                         atScreenX: value.location.x,
                                         proxy: proxy,
                                         geo: geo
                                     )
+                                }
+                                .onEnded { _ in
+                                    dragAxis = nil
                                 }
                         )
                 }
