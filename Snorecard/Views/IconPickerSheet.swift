@@ -109,9 +109,14 @@ struct IconPickerSheet: View {
     var body: some View {
         #if os(iOS)
         NavigationStack {
-            grid
-                .navigationTitle("App Icon")
-                .navigationBarTitleDisplayMode(.inline)
+            List {
+                ForEach(AppIconOption.allCases) { option in
+                    row(for: option)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("App Icon")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -124,51 +129,42 @@ struct IconPickerSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 8)
-            grid
+
+            Form {
+                Section {
+                    ForEach(AppIconOption.allCases) { option in
+                        row(for: option)
+                    }
+                }
+            }
+            .formStyle(.grouped)
         }
         .navigationTitle("App Icon")
         #endif
     }
 
-    private var grid: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 120), spacing: 16)],
-                spacing: 16
-            ) {
-                ForEach(AppIconOption.allCases) { option in
-                    tile(for: option)
-                }
-            }
-            .padding(20)
-        }
-    }
-
     @ViewBuilder
-    private func tile(for option: AppIconOption) -> some View {
+    private func row(for option: AppIconOption) -> some View {
         let isSelected = option == selection
         Button {
             selection = option
             AppIconController.apply(option)
         } label: {
-            VStack(spacing: 10) {
+            HStack(spacing: 14) {
                 preview(for: option)
-                    .frame(width: 96, height: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(
-                                isSelected ? Color.accentColor : Color.clear,
-                                lineWidth: 3
-                            )
-                    }
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(option.displayName)
-                    .font(.callout.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.displayName)
