@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		A1C0000000000000A1C00002 /* AppIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0000000000000A1C00001 /* AppIconController.swift */; };
 		A1C0000000000000A1C00003 /* AppIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0000000000000A1C00001 /* AppIconController.swift */; };
-		A1D0000000000000A1D00002 /* SnorecardAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0000000000000A1D00001 /* SnorecardAppDelegate.swift */; };
 		01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */; };
 		09E9B6F3D594E5549162467E /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */; };
@@ -94,7 +93,6 @@
 
 /* Begin PBXFileReference section */
 		A1C0000000000000A1C00001 /* AppIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconController.swift; sourceTree = "<group>"; };
-		A1D0000000000000A1D00001 /* SnorecardAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardAppDelegate.swift; sourceTree = "<group>"; };
 		099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Slimer.icon"; sourceTree = "<group>"; };
 		0B6AAABBE89C89D502593E1D /* Snorecard-Joey.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Joey.icon"; sourceTree = "<group>"; };
 		0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformSection.swift; sourceTree = "<group>"; };
@@ -227,7 +225,6 @@
 			children = (
 				2F389374600456412824F0F6 /* Info.plist */,
 				722D23C564C439409491B429 /* SnorecardApp.swift */,
-				A1D0000000000000A1D00001 /* SnorecardAppDelegate.swift */,
 			);
 			path = "Snorecard-macOS";
 			sourceTree = "<group>";
@@ -428,7 +425,6 @@
 				C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */,
 				94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */,
 				B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */,
-				A1D0000000000000A1D00002 /* SnorecardAppDelegate.swift in Sources */,
 				8088C122E1E00BB6138F5C98 /* StatCard.swift in Sources */,
 				8DDFF4E0A64DDDAF9EAE48D7 /* TrendNarrativeCard.swift in Sources */,
 				5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */,

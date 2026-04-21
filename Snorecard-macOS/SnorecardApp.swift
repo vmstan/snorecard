@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct SnorecardApp: App {
-    @NSApplicationDelegateAdaptor(SnorecardAppDelegate.self) private var appDelegate
     @State private var library = Library()
 
     var body: some Scene {
