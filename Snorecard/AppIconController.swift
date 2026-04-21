@@ -1,8 +1,5 @@
 #if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 /// Catalogue of every app-icon the user can switch between. The
 /// `assetName` matches the `.icon` package shipped in the bundle
@@ -42,9 +39,6 @@ enum AppIconOption: String, CaseIterable, Identifiable {
     /// Asset-catalog name of the pre-rendered preview PNG. Lives
     /// in `Assets.xcassets/IconPreview-<Name>.imageset` with the
     /// same 1024×1024 source bitmap the icon was exported from.
-    /// Using plain imagesets (not `.icon` packages) gives SwiftUI
-    /// a CGImage-backed UIImage/NSImage, so `.resizable()` is safe
-    /// on both platforms.
     var previewAssetName: String {
         "IconPreview-\(rawValue)"
     }
@@ -55,9 +49,10 @@ enum AppIconOption: String, CaseIterable, Identifiable {
 /// `"selectedAppIcon"`; both platforms read it on app launch and
 /// re-apply so the change survives relaunch.
 ///
-/// This is the single quarantined island of UIKit/AppKit in the app
-/// — neither `UIApplication.setAlternateIconName` nor
-/// `NSApp.applicationIconImage` has a SwiftUI equivalent.
+/// iOS only. macOS has no public API equivalent — swapping
+/// `NSApp.applicationIconImage` at runtime changes the Dock icon
+/// only while the process is alive and reverts the moment the app
+/// quits, so the feature isn't offered on that platform.
 @MainActor
 enum AppIconController {
     private static let defaultsKey = "selectedAppIcon"
@@ -71,7 +66,6 @@ enum AppIconController {
     /// already active so repeat taps don't churn the system.
     static func apply(_ option: AppIconOption) {
         UserDefaults.standard.set(option.rawValue, forKey: defaultsKey)
-        #if canImport(UIKit)
         let app = UIApplication.shared
         guard app.supportsAlternateIcons else { return }
         let targetName = option.alternateIconName
@@ -81,15 +75,6 @@ enum AppIconController {
                 print("Icon change failed: \(error.localizedDescription)")
             }
         }
-        #elseif canImport(AppKit)
-        // macOS doesn't expose a public `setAlternateIconName`
-        // equivalent. Swap `NSApp.applicationIconImage` at runtime —
-        // the Dock picks it up as soon as the app's icon is drawn,
-        // and the UserDefaults write above re-applies it on the
-        // next launch via `AppIconController.applyStoredOnLaunch()`.
-        let image: NSImage? = option.alternateIconName.flatMap { NSImage(named: $0) }
-        NSApp.applicationIconImage = image
-        #endif
     }
 
     /// Re-apply whatever the user last picked. Called from the
@@ -99,3 +84,4 @@ enum AppIconController {
         apply(current)
     }
 }
+#endif
