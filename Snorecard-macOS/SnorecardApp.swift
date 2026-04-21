@@ -10,19 +10,6 @@ final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Notification bridges between the macOS File menu and the
-/// `ContentView` state that drives the confirm-dialog / rename
-/// sheet. Keeping them as notifications (instead of plumbing
-/// bindings through `@Environment`) keeps the menu declaration
-/// flat and avoids leaking UI state up into `SnorecardApp`.
-extension Notification.Name {
-    static let snorecardShowSettings = Notification.Name("Snorecard.ShowSettings")
-    // Sleep Analysis and Rebuild Cache are declared in the
-    // shared ContentView notification set so both platforms
-    // reference the same names; this extension only adds commands
-    // that are macOS-only.
-}
-
 @main
 struct SnorecardApp: App {
     @NSApplicationDelegateAdaptor(SnorecardAppDelegate.self) private var appDelegate
@@ -51,14 +38,15 @@ struct SnorecardApp: App {
             CommandGroup(after: .toolbar) {
                 viewCommands
             }
-            CommandGroup(replacing: .appSettings) {
-                Button {
-                    NotificationCenter.default.post(name: .snorecardShowSettings, object: nil)
-                } label: {
-                    Label("Settings…", systemImage: "gearshape")
-                }
-                .keyboardShortcut(",", modifiers: [.command])
-            }
+        }
+
+        // Standard macOS preferences window — SwiftUI wires the
+        // Snorecard ▸ Settings… menu item (⌘,) to this scene
+        // automatically, matching every other Mac app instead of
+        // opening an in-window inspector pane.
+        Settings {
+            SettingsWindowHost()
+                .environment(library)
         }
 
         // Standalone window opened from the Daily view's
@@ -211,6 +199,20 @@ struct SnorecardApp: App {
         .disabled(!hasCard || !isViewingDay)
 
         Divider()
+    }
+
+    /// Wrapper around `SettingsSheet` that gives its `onClose`
+    /// callback somewhere real to go — destructive actions like
+    /// Rebuild Cache need to close the Settings window first so
+    /// the confirmation alert in the main window isn't hidden
+    /// behind it.
+    private struct SettingsWindowHost: View {
+        @Environment(\.dismiss) private var dismiss
+
+        var body: some View {
+            SettingsSheet(onClose: { dismiss() })
+                .frame(width: 560, height: 460)
+        }
     }
 
     /// Alias-aware label for the Switch Device submenu — mirrors

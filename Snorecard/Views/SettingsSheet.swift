@@ -137,12 +137,41 @@ struct SettingsSheet: View {
 
     var body: some View {
         #if os(iOS)
+        // iOS mirrors the macOS TabView split — four top-level
+        // NavigationLinks on the Settings root (Device, Backups,
+        // Appearance, Advanced) so each concern gets its own
+        // pushed screen instead of one long scroll. Matches the
+        // iOS system Settings app idiom.
         NavigationStack {
             List {
-                deviceSection
-                backupsSection
-                appIconSection
-                maintenanceSection
+                NavigationLink {
+                    deviceTab
+                        .navigationTitle("Device")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Device", systemImage: "externaldrive")
+                }
+                NavigationLink {
+                    backupsTab
+                        .navigationTitle("Backups")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Backups", systemImage: "icloud")
+                }
+                NavigationLink {
+                    appearanceTab
+                        .navigationTitle("Appearance")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Appearance", systemImage: "paintpalette")
+                }
+                NavigationLink {
+                    advancedTab
+                        .navigationTitle("Advanced")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+                }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
@@ -154,24 +183,21 @@ struct SettingsSheet: View {
         .onChange(of: currentSerial) { _, _ in syncDeviceDraft() }
         .onDisappear(perform: commitDeviceName)
         #else
-        VStack(alignment: .leading, spacing: 0) {
-            InspectorPaneHeader(
-                title: "Settings",
-                caption: "Make Snorecard work for you."
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
-
-            Form {
-                deviceSection
-                backupsSection
-                appIconSection
-                macOSMaintenanceSection
-            }
-            .formStyle(.grouped)
+        // macOS Settings is a tabbed window following the standard
+        // System Settings / Mac-app Preferences idiom — one focused
+        // pane per concern so the window chrome + tab bar carry
+        // context instead of the content repeating it.
+        TabView {
+            deviceTab
+                .tabItem { Label("Device", systemImage: "externaldrive") }
+            backupsTab
+                .tabItem { Label("Backups", systemImage: "icloud") }
+            appearanceTab
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
+            advancedTab
+                .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
         }
-        .navigationTitle("Settings")
+        .scenePadding()
         .onAppear(perform: syncDeviceDraft)
         .onChange(of: currentSerial) { _, _ in syncDeviceDraft() }
         .onDisappear(perform: commitDeviceName)
@@ -182,13 +208,16 @@ struct SettingsSheet: View {
     private var deviceSection: some View {
         if hasCard, let serial = currentSerial {
             Section {
-                TextField(currentDefaultName, text: $deviceNameDraft)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                    .textInputAutocapitalization(.words)
-                    .submitLabel(.done)
-                    #endif
-                    .onSubmit(commitDeviceName)
+                LabeledContent("Alias") {
+                    TextField(currentDefaultName, text: $deviceNameDraft)
+                        .autocorrectionDisabled()
+                        .multilineTextAlignment(.trailing)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        #endif
+                        .onSubmit(commitDeviceName)
+                }
                 LabeledContent("Model", value: currentDefaultName)
                 LabeledContent("Serial") {
                     Text(serial).monospaced()
@@ -207,7 +236,7 @@ struct SettingsSheet: View {
                     }
                 }
             } header: {
-                Text("PAP Device")
+                Text("Details")
             } footer: {
                 Text("Shown in the sidebar. Syncs between your devices via iCloud.")
             }
@@ -254,6 +283,34 @@ struct SettingsSheet: View {
         }
     }
 
+    /// User-facing master switch for on-device Apple Intelligence
+    /// features (Sleep Analysis, Explain This Metric, correlation
+    /// hints). Disabled on devices that can't run the models in the
+    /// first place, since the toggle would be inert there.
+    @ViewBuilder
+    private var appleIntelligenceSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { library.intelligence.isEnabled },
+                set: { library.intelligence.isEnabled = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Intelligence")
+                    if !library.intelligence.isSupported {
+                        Text("Not available on this device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(!library.intelligence.isSupported)
+        } header: {
+            Text("Sleep Analysis")
+        } footer: {
+            Text("Turn on to see on-device Sleep Analysis, contextual metric explanations, and correlation hints from your Sleep Journal. Everything runs on your device — nothing is sent to a server.")
+        }
+    }
+
     @ViewBuilder
     private var maintenanceSection: some View {
         Section {
@@ -271,6 +328,100 @@ struct SettingsSheet: View {
         } footer: {
             Text("Rebuilds the cached analysis for this PAP device from the original source data. Useful if the analysis appears stale or incorrect.")
         }
+    }
+
+    /// Device tab — PAP-device alias + model + serial. Falls back
+    /// to an empty-state message when no card is loaded so the tab
+    /// isn't a blank pane. Shared by the macOS TabView and the
+    /// iOS NavigationLink destination.
+    @ViewBuilder
+    private var deviceTab: some View {
+        Form {
+            if hasCard {
+                deviceSection
+            } else {
+                settingsEmptyState(
+                    icon: "externaldrive",
+                    title: "No PAP Device Loaded",
+                    message: "Import a ResMed SD card to see device details here."
+                )
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Backups tab — iCloud backup + restore controls. Gated on a
+    /// loaded card since backups are per-device.
+    @ViewBuilder
+    private var backupsTab: some View {
+        Form {
+            if hasCard {
+                BackupsFormSections(onRestoreComplete: {})
+            } else {
+                settingsEmptyState(
+                    icon: "icloud",
+                    title: "No PAP Device Loaded",
+                    message: "Import a ResMed SD card to back it up to iCloud Drive."
+                )
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Appearance tab — app-icon picker. Available regardless of
+    /// whether a card is loaded since it's a purely presentational
+    /// preference.
+    @ViewBuilder
+    private var appearanceTab: some View {
+        Form {
+            appIconSection
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Advanced tab — Apple Intelligence master switch at the top,
+    /// followed by destructive maintenance (rebuild cache).
+    /// Separated from the rest so the user has to deliberately
+    /// navigate here before a one-click rebuild is even in reach.
+    /// The two platforms render the maintenance row differently
+    /// (full-width red button on iOS, two-column title + hammer
+    /// icon on macOS) so the section body is picked per-platform.
+    @ViewBuilder
+    private var advancedTab: some View {
+        Form {
+            appleIntelligenceSection
+            #if os(macOS)
+            macOSMaintenanceSection
+            #else
+            maintenanceSection
+            #endif
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Centered icon + title + caption used by tabs that have no
+    /// content to show when no card is loaded. Matches the voice of
+    /// the sidebar empty state without pulling in that view's
+    /// layout machinery.
+    @ViewBuilder
+    private func settingsEmptyState(
+        icon: String,
+        title: String,
+        message: String
+    ) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 32, weight: .regular))
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 
     #if os(macOS)
@@ -309,8 +460,6 @@ struct SettingsSheet: View {
                 .help("Rebuild cache")
             }
             .padding(.vertical, 4)
-        } header: {
-            Text("Maintenance")
         }
     }
     #endif
