@@ -53,11 +53,6 @@ struct AdvancedChartingButton: View {
                     AdvancedChartingView(payload: payload)
                         .navigationTitle("Advanced Charting")
                         .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                CloseSheetButton { isShowingSheet = false }
-                            }
-                        }
                 }
                 .presentationDragIndicator(.visible)
                 // iPad's default sheet sizing is the compact centered

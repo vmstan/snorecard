@@ -208,12 +208,8 @@ struct ContentView: View {
             NavigationStack {
                 DeviceNotesCard()
                     .padding(20)
+                    .padding(.top, 12)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            CloseSheetButton { isShowingDeviceNotes = false }
-                        }
-                    }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -231,14 +227,8 @@ struct ContentView: View {
             // would duplicate the content.
             NavigationStack {
                 MetricExplainSheet(request: request)
+                    .padding(.top, 12)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            CloseSheetButton {
-                                library.pendingExplain = nil
-                            }
-                        }
-                    }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -256,15 +246,9 @@ struct ContentView: View {
                     rangeEnd: request.rangeEnd
                 )
                 .padding(20)
+                .padding(.top, 12)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        CloseSheetButton {
-                            library.pendingOverviewAnalysis = nil
-                        }
-                    }
-                }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)

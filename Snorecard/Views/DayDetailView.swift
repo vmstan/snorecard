@@ -98,12 +98,8 @@ struct DayDetailView: View {
             NavigationStack {
                 NotesCard(day: day)
                     .padding(20)
+                    .padding(.top, 12)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            CloseSheetButton { isShowingNotes = false }
-                        }
-                    }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -127,13 +123,9 @@ struct DayDetailView: View {
             NavigationStack {
                 NightSummaryCard(day: day)
                     .padding(20)
+                    .padding(.top, 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            CloseSheetButton { isShowingSleepAnalysis = false }
-                        }
-                    }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)

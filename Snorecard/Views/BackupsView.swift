@@ -66,11 +66,9 @@ struct BackupsView: View {
         // stacking a duplicate in the top bar.
         NavigationStack {
             formBody
+                .padding(.top, 12)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        CloseSheetButton { onClose() }
-                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Backup") { runBackup() }
                             .disabled(library.card == nil || busyMessage != nil)

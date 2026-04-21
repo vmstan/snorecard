@@ -53,16 +53,6 @@ struct DailySignalSummaryTable: View {
                     }
                     .navigationTitle("Detailed Statistics")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        // Use the shared X-glyph close control so this
-                        // read-only stats sheet matches the dismissal
-                        // affordance on Backup & Restore, Sleep Journal
-                        // and Therapy Details — sheets without a
-                        // confirmation action all share one pattern.
-                        ToolbarItem(placement: .topBarTrailing) {
-                            CloseSheetButton { isShowingSheet = false }
-                        }
-                    }
                 }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

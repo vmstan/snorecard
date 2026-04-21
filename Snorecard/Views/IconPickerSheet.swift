@@ -108,11 +108,6 @@ struct IconPickerSheet: View {
             grid
                 .navigationTitle("App Icon")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        CloseSheetButton { onClose() }
-                    }
-                }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

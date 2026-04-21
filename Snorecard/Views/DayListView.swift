@@ -383,14 +383,9 @@ struct RenameDeviceSheet: View {
         // on iOS to avoid duplicating it in the top bar.
         NavigationStack {
             formBody
+                .padding(.top, 12)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    // iOS keeps the standard sheet pattern: X close
-                    // on the leading edge, Save as the trailing
-                    // confirmation action.
-                    ToolbarItem(placement: .topBarLeading) {
-                        CloseSheetButton { onClose() }
-                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save", action: save)
                             .keyboardShortcut(.defaultAction)

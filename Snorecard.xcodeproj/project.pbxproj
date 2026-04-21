@@ -58,7 +58,6 @@
 		91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		932D76CCD07D0C20A14E8C27 /* Snorecard-Inverted.icon in Resources */ = {isa = PBXBuildFile; fileRef = C7263BF411326B541811D4A3 /* Snorecard-Inverted.icon */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
-		95F01DA5C16C4F67CCF2A2E5 /* CloseSheetButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */; };
 		A2C6179E5EC7090AA3A4604E /* IconPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* IconPickerSheet.swift */; };
 		A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
@@ -69,7 +68,6 @@
 		BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		BFBCE1DE8BAF792C85CCA58F /* CorrelationHintsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */; };
 		C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
-		CA995AF314F2C4148C56F4D0 /* CloseSheetButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */; };
 		CF85FDD451369E9EB50F30DC /* Snorecard-Slimer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */; };
 		D4FB9B70DFAAB21D64B38AAA /* Snorecard-Claude.icon in Resources */ = {isa = PBXBuildFile; fileRef = 921A499B2F22084A2BD06D66 /* Snorecard-Claude.icon */; };
 		D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
@@ -138,7 +136,6 @@
 		B747A2CBB649FA04FD41E138 /* MetricExplainSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricExplainSheet.swift; sourceTree = "<group>"; };
 		B7D3A08725D70B6A35104190 /* Snorecard.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Snorecard.icon; sourceTree = "<group>"; };
 		C7263BF411326B541811D4A3 /* Snorecard-Inverted.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Inverted.icon"; sourceTree = "<group>"; };
-		CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseSheetButton.swift; sourceTree = "<group>"; };
 		D2AF636BF6337EA599258DBC /* Snorecard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Snorecard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
 		E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrelationHintsCard.swift; sourceTree = "<group>"; };
@@ -252,7 +249,6 @@
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
 				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
 				A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */,
-				CE61B5433BFFA0B57D3EE889 /* CloseSheetButton.swift */,
 				FB115042FD0555DF4AFECD0E /* ContentView.swift */,
 				E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */,
 				73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */,
@@ -410,7 +406,6 @@
 				BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */,
 				DEE4196822751F027CD5DB00 /* CanvasWaveformCharts.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
-				CA995AF314F2C4148C56F4D0 /* CloseSheetButton.swift in Sources */,
 				AC510E3F49A711C07D621669 /* ContentView.swift in Sources */,
 				BFBCE1DE8BAF792C85CCA58F /* CorrelationHintsCard.swift in Sources */,
 				75D5F5B0DB330F4179F9FA48 /* DailySettingsInspector.swift in Sources */,
@@ -450,7 +445,6 @@
 				E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */,
 				E925A255B55DC53835F8056F /* CanvasWaveformCharts.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
-				95F01DA5C16C4F67CCF2A2E5 /* CloseSheetButton.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
 				E2A340EC989C8E50E6050C24 /* CorrelationHintsCard.swift in Sources */,
 				EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */,

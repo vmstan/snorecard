@@ -31,17 +31,12 @@ struct DailySettingsInspector: View {
         // Fresh NavigationStack so this sheet's own toolbar /
         // dismiss don't bleed up into the day-detail header.
         // The `InspectorPaneHeader` at the top of `content`
-        // already shows the pane label and date; we
-        // intentionally skip `.navigationTitle` on iOS so the
-        // inline top bar only carries the Close button.
+        // already shows the pane label and date, so we skip
+        // `.navigationTitle` on iOS.
         NavigationStack {
             content
+                .padding(.top, 12)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        CloseSheetButton { dismiss() }
-                    }
-                }
         }
         #else
         content
