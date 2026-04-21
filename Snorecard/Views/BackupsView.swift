@@ -1,31 +1,19 @@
 import SwiftUI
 import SnorecardKit
 
-/// Restore-from-backup inspector / sheet. Lists every archive in
-/// iCloud's `Backups/` folder that matches the currently-loaded
-/// device serial, newest first, with a restore and a delete
-/// action per row, plus a "Back Up Now" action in the footer bar.
-///
-/// The macOS layout mirrors `DailySettingsInspector` on purpose:
-/// a grouped `Form` for the
-/// content, a bottom action bar pulled in via `.safeAreaInset`,
-/// and no `.alert` or `.task` modifiers on the root. The shared
-/// third-column inspector crashes during its collapse/expand
-/// animation if the hosted view mutates state or vends toolbar
-/// preferences while the split view is still animating, so the
-/// structure here avoids both: the backup list is loaded from a
-/// `DispatchQueue.main.async` hop inside `.onAppear` (pushing the
-/// state update to the next runloop pass, after layout settles)
-/// and destructive confirmations use a single consolidated
-/// confirmation dialog attached inside the Form rather than three
-/// root-level alerts.
-struct BackupsView: View {
+/// Reusable Form sections that list every archive in iCloud's
+/// `Backups/` folder for the currently-loaded device (plus
+/// busy/error banners, restore/delete actions, and an inline
+/// "Back Up Now" button). Callers embed this inside their own
+/// grouped `Form` — the sections own their own state + dialogs so
+/// no backup plumbing has to flow through the caller.
+struct BackupsFormSections: View {
     @Environment(Library.self) private var library
-    /// Explicit close callback. `@Environment(\.dismiss)` would
-    /// target the host window when this view is hosted inside
-    /// the macOS inspector, which would quit the app instead of
-    /// collapsing the inspector column.
-    let onClose: () -> Void
+
+    /// Called after a successful restore. iOS pops the containing
+    /// NavigationStack; macOS is a no-op because Backups lives
+    /// inline in Settings.
+    let onRestoreComplete: () -> Void
 
     @State private var backups: [Library.BackupFile] = []
     @State private var pendingConfirmation: PendingConfirmation?
@@ -33,20 +21,26 @@ struct BackupsView: View {
     /// show progress and disable the other actions.
     @State private var busyMessage: String?
     @State private var errorMessage: String?
+    /// Transient success banner shown at the top of the section
+    /// after a create / restore completes, so the user gets a
+    /// visible "it worked" moment even though the list refresh
+    /// already reflects the new archive. Cleared after a couple
+    /// of seconds by `flashCompletion(_:)`.
+    @State private var completionMessage: String?
     /// Flips to `true` once the initial `reloadList()` has run.
     /// Until then the Backups section renders a placeholder row
     /// instead of the empty-state text so the view body has the
     /// same shape on first layout as it does after backups load —
-    /// that stability matters because the inspector's collapse
-    /// animation crashes if the hosted view's preference graph
-    /// reshapes mid-animation.
+    /// that stability matters because the macOS inspector's
+    /// collapse animation crashes if the hosted view's preference
+    /// graph reshapes mid-animation.
     @State private var didLoad = false
 
     /// Sum type for the confirmation dialog so we only attach one
-    /// `.confirmationDialog` modifier to the Form instead of three
-    /// separate root-level `.alert`s. Fewer modifiers means fewer
+    /// `.confirmationDialog` modifier instead of three separate
+    /// root-level `.alert`s. Fewer modifiers means fewer
     /// preferences flowing up to the window during the inspector
-    /// animation.
+    /// animation on macOS.
     private enum PendingConfirmation: Identifiable {
         case restore(Library.BackupFile)
         case delete(Library.BackupFile)
@@ -60,110 +54,35 @@ struct BackupsView: View {
     }
 
     var body: some View {
-        #if os(iOS)
-        // `InspectorPaneHeader` inside `formBody` supplies the
-        // pane title, so iOS skips `.navigationTitle` to avoid
-        // stacking a duplicate in the top bar.
-        NavigationStack {
-            formBody
-                .padding(.top, 12)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Backup") { runBackup() }
-                            .disabled(library.card == nil || busyMessage != nil)
-                    }
-                }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        #else
-        // macOS hosts this in the shared inspector column. No
-        // `NavigationStack` wrapper — its toolbar bridge conflicts
-        // with the root `NavigationSplitView`'s toolbar during the
-        // inspector collapse/expand animation. Matches the plain
-        // `.navigationTitle` pattern `DailySettingsInspector`
-        // already uses in the same column.
-        formBody
-            .navigationTitle("Backup & Restore")
-        #endif
-    }
-
-    // MARK: - Form body
-
-    @ViewBuilder
-    private var formBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            InspectorPaneHeader(
-                title: deviceHeaderTitle,
-                caption: "Archived PAP-device data stored in iCloud Drive"
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
-
-            form
-        }
-    }
-
-    @ViewBuilder
-    private var form: some View {
-        Form {
-            if let busyMessage {
-                Section {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(busyMessage)
-                        Spacer()
-                        Text("Keep the app open")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+        backupsSection
+                .confirmationDialog(
+                confirmationTitle,
+                isPresented: confirmationBinding,
+                titleVisibility: .visible,
+                presenting: pendingConfirmation
+            ) { pending in
+                confirmationButtons(for: pending)
+            } message: { pending in
+                Text(confirmationMessage(for: pending))
             }
-
-            backupsSection
-
-            Section {
-                EmptyView()
-            } footer: {
-                Text("Backups live in iCloud Drive → Snorecard → Backups and are accessible to every device signed in to this account.")
+            .alert(
+                "Something went wrong",
+                isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { if !$0 { errorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage ?? "")
             }
-        }
-        .formStyle(.grouped)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            actionBar
-        }
-        .confirmationDialog(
-            confirmationTitle,
-            isPresented: confirmationBinding,
-            titleVisibility: .visible,
-            presenting: pendingConfirmation
-        ) { pending in
-            confirmationButtons(for: pending)
-        } message: { pending in
-            Text(confirmationMessage(for: pending))
-        }
-        .alert(
-            "Something went wrong",
-            isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "")
-        }
-        .onAppear {
+            .onAppear {
             // Defer the state mutation by one runloop pass so the
-            // initial inspector open animation (which drives the
-            // `NSSplitViewItem setCollapsed:` → toolbar-bridge
-            // update path) completes before `backups` changes and
-            // reshapes the view's preference graph. Mutating
-            // synchronously in `.task` / `.onAppear` was crashing
-            // inside `_postWindowNeedsUpdateConstraints`.
+            // initial inspector open animation (macOS) completes
+            // before `backups` changes and reshapes the view's
+            // preference graph. Mutating synchronously in `.task`
+            // / `.onAppear` was crashing inside
+            // `_postWindowNeedsUpdateConstraints`.
             DispatchQueue.main.async {
                 reloadList()
                 didLoad = true
@@ -176,11 +95,31 @@ struct BackupsView: View {
     @ViewBuilder
     private var backupsSection: some View {
         Section {
+            // Single always-present status row so iOS's List
+            // treats the busy → completion swap as a content
+            // update instead of a delete-then-insert; otherwise
+            // the checkmark banner can flicker out before the
+            // user sees it.
+            if busyMessage != nil || completionMessage != nil {
+                HStack(spacing: 10) {
+                    if let busyMessage {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(busyMessage)
+                        Spacer()
+                        Text("Keep the app open")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if let completionMessage {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(completionMessage)
+                        Spacer()
+                    }
+                }
+            }
+
             if !didLoad {
-                // Placeholder row — keeps the Section non-empty on
-                // the very first layout so the Form's preference
-                // graph doesn't reshape when the real rows arrive
-                // on the next runloop pass.
                 HStack(spacing: 10) {
                     ProgressView()
                         .controlSize(.small)
@@ -202,8 +141,22 @@ struct BackupsView: View {
                     row(for: backup)
                 }
             }
+
+            Button {
+                runBackup()
+            } label: {
+                #if os(iOS)
+                Text("Backup Now")
+                    .frame(maxWidth: .infinity, alignment: .center)
+                #else
+                Label("Backup Now", systemImage: "arrow.up.doc")
+                #endif
+            }
+            .disabled(library.card == nil || busyMessage != nil)
         } header: {
             Text("Available Backups")
+        } footer: {
+            Text("Backups live in iCloud Drive → Snorecard → Backups and are accessible to every device signed in to this account.")
         }
     }
 
@@ -250,46 +203,6 @@ struct BackupsView: View {
                 Label("Delete Backup", systemImage: "trash")
             }
         }
-    }
-
-    /// Label used in the big header above the Form. Prefers the
-    /// user-set alias, falls back to the ResMed product name, and
-    /// lands on a generic device label so the pane never looks
-    /// orphaned when nothing is loaded yet.
-    private var deviceHeaderTitle: String {
-        if let card = library.card {
-            return library.displayName(for: card)
-        }
-        return "Backups"
-    }
-
-    // MARK: - Action bar
-
-    @ViewBuilder
-    private var actionBar: some View {
-        #if os(macOS)
-        // macOS bottom action bar — close button on the leading
-        // edge routes through `onClose` (not `dismiss()`, which
-        // would target the host window), and Backup on the
-        // trailing edge is the default-action confirmation button.
-        HStack {
-            Button("Cancel") { onClose() }
-                .keyboardShortcut(.cancelAction)
-            Spacer()
-            Button("Backup") { runBackup() }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .tint(.accentColor)
-                .disabled(library.card == nil || busyMessage != nil)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(.bar)
-        #else
-        // iOS routes the Backup action through the navigation bar
-        // trailing item, so the bottom inset is empty.
-        EmptyView()
-        #endif
     }
 
     // MARK: - Confirmation dialog plumbing
@@ -350,6 +263,7 @@ struct BackupsView: View {
             do {
                 _ = try await library.createBackup()
                 reloadList()
+                flashCompletion("Backup created")
             } catch {
                 errorMessage = String(describing: error)
             }
@@ -362,7 +276,8 @@ struct BackupsView: View {
             defer { withAnimation { busyMessage = nil } }
             do {
                 try await library.restoreBackup(backup)
-                onClose()
+                flashCompletion("Backup restored")
+                onRestoreComplete()
             } catch {
                 errorMessage = String(describing: error)
             }
@@ -372,6 +287,18 @@ struct BackupsView: View {
     private func reloadList() {
         let serial = library.card?.identification?.serialNumber
         backups = Library.listBackups(forSerial: serial)
+    }
+
+    /// Show a success banner for a few seconds so the user gets
+    /// visible confirmation that the create / restore finished —
+    /// otherwise the progress spinner just disappears and the
+    /// operation reads as silently aborted.
+    private func flashCompletion(_ text: String) {
+        withAnimation { completionMessage = text }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            withAnimation { completionMessage = nil }
+        }
     }
 
     private func formatBytes(_ bytes: Int) -> String {
