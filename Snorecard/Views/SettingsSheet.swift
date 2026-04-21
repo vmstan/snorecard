@@ -7,9 +7,7 @@ struct SettingsSheet: View {
     let onClose: () -> Void
 
     @Environment(Library.self) private var library
-    #if os(iOS)
     @State private var selection: AppIconOption = AppIconController.current
-    #endif
     /// Draft of the PAP-device alias. Synced from Library on
     /// appear / card change and committed back via `commitDeviceName`
     /// on submit and on dismiss, so the user's edits are trimmed
@@ -290,7 +288,6 @@ struct SettingsSheet: View {
         deviceNameDraft = trimmed
     }
 
-    #if os(iOS)
     @ViewBuilder
     private var appIconSection: some View {
         Section("App Icon") {
@@ -299,7 +296,6 @@ struct SettingsSheet: View {
             }
         }
     }
-    #endif
 
     /// User-facing master switch for on-device Apple Intelligence
     /// features (Sleep Analysis, Explain This Metric, correlation
@@ -388,23 +384,13 @@ struct SettingsSheet: View {
         .formStyle(.grouped)
     }
 
-    /// Appearance tab — app-icon picker on iOS, explanatory empty
-    /// state on macOS. macOS has no public API for persistent
-    /// alternate icons (swapping `NSApp.applicationIconImage`
-    /// reverts as soon as the app quits), so the picker isn't
-    /// offered there.
+    /// Appearance tab — app-icon picker. Available regardless of
+    /// whether a card is loaded since it's a purely presentational
+    /// preference.
     @ViewBuilder
     private var appearanceTab: some View {
         Form {
-            #if os(iOS)
             appIconSection
-            #else
-            settingsEmptyState(
-                icon: "app.badge",
-                title: "Alternate Icons on iPhone Only",
-                message: "Pick a custom app icon in Settings on your iPhone. macOS doesn't offer a way to change the app icon persistently."
-            )
-            #endif
         }
         .formStyle(.grouped)
     }
@@ -494,7 +480,6 @@ struct SettingsSheet: View {
     }
     #endif
 
-    #if os(iOS)
     @ViewBuilder
     private func row(for option: AppIconOption) -> some View {
         let isSelected = option == selection
@@ -532,5 +517,4 @@ struct SettingsSheet: View {
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
     }
-    #endif
 }

@@ -11,6 +11,12 @@ struct SnorecardApp: App {
                 .environment(library)
                 .frame(minWidth: 900, minHeight: 600)
                 .task {
+                    // Re-apply the last-selected alternate icon so
+                    // the Dock picks it up on cold launch instead
+                    // of flashing the primary icon and then
+                    // swapping — UserDefaults is read synchronously
+                    // so the swap happens before the first layout.
+                    AppIconController.applyStoredOnLaunch()
                     await library.loadLastOpenedIfPossible()
                 }
         }
