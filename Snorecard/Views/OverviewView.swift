@@ -848,9 +848,19 @@ struct OverviewView: View {
     private var dateRangeLabel: String {
         guard let first = stats.first?.date, let last = stats.last?.date else { return "" }
         if Calendar.current.isDate(first, inSameDayAs: last) {
-            return first.formatted(date: .abbreviated, time: .omitted)
+            return formatRangeDate(first)
         }
-        return "\(first.formatted(date: .abbreviated, time: .omitted)) – \(last.formatted(date: .abbreviated, time: .omitted))"
+        return "\(formatRangeDate(first)) – \(formatRangeDate(last))"
+    }
+
+    private func formatRangeDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        let dateYear = calendar.component(.year, from: date)
+        if dateYear == currentYear {
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 
     /// Mean number of BRP sessions across days inside the current range
@@ -913,11 +923,11 @@ struct OverviewView: View {
         }
     }
 
-    /// Leak-severity palette — green under 5 L/min, amber 5–9, red ≥ 10.
+    /// Leak-severity palette — green under 5 L/min, amber 5–23, red ≥ 24.
     private func leakColor(_ leak: Double) -> Color {
         switch leak {
         case ..<5: .severityGood
-        case ..<10: .severityLow
+        case ..<24: .severityLow
         default: .severityHigh
         }
     }

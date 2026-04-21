@@ -574,7 +574,7 @@ struct DayDetailView: View {
     private func leakColor(_ leak: Double) -> Color {
         switch leak {
         case ..<5: .severityGood
-        case ..<10: .severityLow
+        case ..<24: .severityLow
         default: .severityHigh
         }
     }
