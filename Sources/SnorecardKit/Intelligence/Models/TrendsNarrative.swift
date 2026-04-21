@@ -11,10 +11,10 @@ public enum TrendBucket: String, Codable, Hashable, Sendable {
     case notEnoughData
 }
 
-/// Aggregate stats for the current Overview range, canonicalised
+/// Aggregate stats for the current Trends range, canonicalised
 /// before hashing. `sampleSize` is the count of days-with-data so
 /// the model can calibrate confidence.
-public struct OverviewNarrativeInput: Codable, Hashable, Sendable {
+public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
     public let rangeStart: Date
     public let rangeEnd: Date
     public let sampleSize: Int
@@ -73,7 +73,7 @@ public struct OverviewNarrativeInput: Codable, Hashable, Sendable {
     }
 }
 
-extension OverviewNarrativeInput {
+extension TrendsNarrativeInput {
     /// Plain-English rendering of the range for embedding in a
     /// prompt. Avoids JSON keys so the model can't echo internal
     /// identifiers like `avgLeak95LPerMin` into the narration.
@@ -135,7 +135,7 @@ extension OverviewNarrativeInput {
 }
 
 @Generable
-public struct OverviewNarrativeOutput: Codable, Hashable, Sendable {
+public struct TrendsNarrativeOutput: Codable, Hashable, Sendable {
     @Guide(description: "3 to 5 sentences describing direction of travel over the range. British English. No advice, no causal claims, no recommendations.")
     public let paragraph: String
 

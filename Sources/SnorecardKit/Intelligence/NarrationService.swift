@@ -22,7 +22,7 @@ public enum NarrationError: Error, Sendable, Equatable {
 /// no-op (for unsupported devices) throws `unavailable`.
 public protocol NarrationService: Sendable {
     func nightSummary(_ input: NightSummaryInput) async throws -> NightSummaryOutput
-    func overviewNarrative(_ input: OverviewNarrativeInput) async throws -> OverviewNarrativeOutput
+    func trendsNarrative(_ input: TrendsNarrativeInput) async throws -> TrendsNarrativeOutput
     func explainMetric(_ input: MetricExplainInput) async throws -> MetricExplainOutput
     func extractNoteTags(_ input: NoteTagInput) async throws -> NoteTagsOutput
     func correlationNarrative(_ input: CorrelationNarrativeInput) async throws -> CorrelationNarrativeOutput
@@ -121,18 +121,18 @@ public struct FoundationNarrationService: NarrationService {
         }
     }
 
-    public func overviewNarrative(
-        _ input: OverviewNarrativeInput
-    ) async throws -> OverviewNarrativeOutput {
-        let prompt = OverviewNarrativePrompt.buildPrompt(input: input)
-        return try await withRetries(feature: "overviewNarrative") {
+    public func trendsNarrative(
+        _ input: TrendsNarrativeInput
+    ) async throws -> TrendsNarrativeOutput {
+        let prompt = TrendsNarrativePrompt.buildPrompt(input: input)
+        return try await withRetries(feature: "trendsNarrative") {
             let session = LanguageModelSession(
-                instructions: Instructions(OverviewNarrativePrompt.systemInstructions)
+                instructions: Instructions(TrendsNarrativePrompt.systemInstructions)
             )
             do {
                 let response = try await session.respond(
                     to: Prompt(prompt),
-                    generating: OverviewNarrativeOutput.self
+                    generating: TrendsNarrativeOutput.self
                 )
                 let output = response.content
                 try enforce(Guardrails.evaluateAll(
@@ -144,7 +144,7 @@ public struct FoundationNarrationService: NarrationService {
             } catch let error as NarrationError {
                 throw error
             } catch {
-                log.error("overviewNarrative session failed: \(String(describing: error), privacy: .public)")
+                log.error("trendsNarrative session failed: \(String(describing: error), privacy: .public)")
                 throw NarrationError.sessionFailed(String(describing: error))
             }
         }
@@ -245,7 +245,7 @@ public struct NoOpNarrationService: NarrationService {
         throw NarrationError.unavailable
     }
 
-    public func overviewNarrative(_ input: OverviewNarrativeInput) async throws -> OverviewNarrativeOutput {
+    public func trendsNarrative(_ input: TrendsNarrativeInput) async throws -> TrendsNarrativeOutput {
         throw NarrationError.unavailable
     }
 

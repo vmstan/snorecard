@@ -47,40 +47,40 @@ public enum IntelligenceCache {
         /// we can hold a rolling LRU of the last few ranges the
         /// user has looked at without writing a new file per
         /// range.
-        public var overviewNarratives: [String: Entry<OverviewNarrativeOutput>]
+        public var trendsNarratives: [String: Entry<TrendsNarrativeOutput>]
         /// Keyed on a hash of the full `MetricExplainInput`, so
         /// the same metric + range + value combination hits the
-        /// cache regardless of which Overview card opened it.
-        public var overviewMetricExplains: [String: Entry<MetricExplainOutput>]
+        /// cache regardless of which Trends card opened it.
+        public var trendsMetricExplains: [String: Entry<MetricExplainOutput>]
 
         public init(
-            overviewNarratives: [String: Entry<OverviewNarrativeOutput>] = [:],
-            overviewMetricExplains: [String: Entry<MetricExplainOutput>] = [:]
+            trendsNarratives: [String: Entry<TrendsNarrativeOutput>] = [:],
+            trendsMetricExplains: [String: Entry<MetricExplainOutput>] = [:]
         ) {
-            self.overviewNarratives = overviewNarratives
-            self.overviewMetricExplains = overviewMetricExplains
+            self.trendsNarratives = trendsNarratives
+            self.trendsMetricExplains = trendsMetricExplains
         }
 
         private enum CodingKeys: String, CodingKey {
-            case overviewNarratives, overviewMetricExplains
+            case trendsNarratives, trendsMetricExplains
         }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.overviewNarratives = try container.decodeIfPresent(
-                [String: Entry<OverviewNarrativeOutput>].self,
-                forKey: .overviewNarratives
+            self.trendsNarratives = try container.decodeIfPresent(
+                [String: Entry<TrendsNarrativeOutput>].self,
+                forKey: .trendsNarratives
             ) ?? [:]
-            self.overviewMetricExplains = try container.decodeIfPresent(
+            self.trendsMetricExplains = try container.decodeIfPresent(
                 [String: Entry<MetricExplainOutput>].self,
-                forKey: .overviewMetricExplains
+                forKey: .trendsMetricExplains
             ) ?? [:]
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(overviewNarratives, forKey: .overviewNarratives)
-            try container.encode(overviewMetricExplains, forKey: .overviewMetricExplains)
+            try container.encode(trendsNarratives, forKey: .trendsNarratives)
+            try container.encode(trendsMetricExplains, forKey: .trendsMetricExplains)
         }
     }
 
@@ -210,7 +210,7 @@ public enum IntelligenceCache {
         saveDay(payload, to: dayFolder)
     }
 
-    // MARK: - Device-level overview narrative sidecar
+    // MARK: - Device-level trends narrative sidecar
 
     public static func loadDevice(for deviceFolder: URL) -> DevicePayload {
         let url = deviceFolder.appendingPathComponent(deviceFilename)
@@ -226,78 +226,78 @@ public enum IntelligenceCache {
         try? data.write(to: url, options: .atomic)
     }
 
-    public static func loadOverviewNarrative(
+    public static func loadTrendsNarrative(
         for deviceFolder: URL,
         matching inputHash: String,
         templateVersion: Int
-    ) -> OverviewNarrativeOutput? {
+    ) -> TrendsNarrativeOutput? {
         let payload = loadDevice(for: deviceFolder)
-        guard let entry = payload.overviewNarratives[inputHash],
+        guard let entry = payload.trendsNarratives[inputHash],
               entry.modelVersion == modelVersion,
               entry.promptTemplateVersion == templateVersion
         else { return nil }
         return entry.output
     }
 
-    public static func saveOverviewNarrative(
-        _ output: OverviewNarrativeOutput,
+    public static func saveTrendsNarrative(
+        _ output: TrendsNarrativeOutput,
         inputHash: String,
         templateVersion: Int,
         to deviceFolder: URL
     ) {
         var payload = loadDevice(for: deviceFolder)
-        payload.overviewNarratives[inputHash] = Entry(
+        payload.trendsNarratives[inputHash] = Entry(
             inputHash: inputHash,
             modelVersion: modelVersion,
             promptTemplateVersion: templateVersion,
             output: output
         )
         // LRU trim — cap at 16 ranges so the sidecar stays small.
-        if payload.overviewNarratives.count > 16 {
-            let sorted = payload.overviewNarratives
+        if payload.trendsNarratives.count > 16 {
+            let sorted = payload.trendsNarratives
                 .sorted { $0.value.generatedAt > $1.value.generatedAt }
                 .prefix(16)
-            payload.overviewNarratives = Dictionary(
+            payload.trendsNarratives = Dictionary(
                 uniqueKeysWithValues: sorted.map { ($0.key, $0.value) }
             )
         }
         saveDevice(payload, to: deviceFolder)
     }
 
-    public static func loadOverviewMetricExplain(
+    public static func loadTrendsMetricExplain(
         for deviceFolder: URL,
         matching inputHash: String,
         templateVersion: Int
     ) -> MetricExplainOutput? {
         let payload = loadDevice(for: deviceFolder)
-        guard let entry = payload.overviewMetricExplains[inputHash],
+        guard let entry = payload.trendsMetricExplains[inputHash],
               entry.modelVersion == modelVersion,
               entry.promptTemplateVersion == templateVersion
         else { return nil }
         return entry.output
     }
 
-    public static func saveOverviewMetricExplain(
+    public static func saveTrendsMetricExplain(
         _ output: MetricExplainOutput,
         inputHash: String,
         templateVersion: Int,
         to deviceFolder: URL
     ) {
         var payload = loadDevice(for: deviceFolder)
-        payload.overviewMetricExplains[inputHash] = Entry(
+        payload.trendsMetricExplains[inputHash] = Entry(
             inputHash: inputHash,
             modelVersion: modelVersion,
             promptTemplateVersion: templateVersion,
             output: output
         )
-        // LRU trim — Overview has up to a dozen cards and a few
+        // LRU trim — Trends has up to a dozen cards and a few
         // range presets; 32 entries comfortably covers repeat
         // taps without unbounded growth.
-        if payload.overviewMetricExplains.count > 32 {
-            let sorted = payload.overviewMetricExplains
+        if payload.trendsMetricExplains.count > 32 {
+            let sorted = payload.trendsMetricExplains
                 .sorted { $0.value.generatedAt > $1.value.generatedAt }
                 .prefix(32)
-            payload.overviewMetricExplains = Dictionary(
+            payload.trendsMetricExplains = Dictionary(
                 uniqueKeysWithValues: sorted.map { ($0.key, $0.value) }
             )
         }

@@ -5,9 +5,9 @@ import os.log
 
 private let importLog = Logger(subsystem: "com.vmstan.Snorecard", category: "Import")
 
-/// Which section of the sidebar is active. An overview sits above all the days.
+/// Which section of the sidebar is active. A trends view sits above all the days.
 enum SidebarSelection: Hashable, Sendable {
-    case overview
+    case trends
     case day(Date)
 }
 
@@ -66,12 +66,12 @@ final class Library {
     /// sheet/inspector when it closes.
     var pendingExplain: ExplainRequest? = nil
 
-    /// Non-nil while the user has opened the Overview's Sleep
+    /// Non-nil while the user has opened the Trends' Sleep
     /// Analysis from the toolbar / menu. Carries the stats,
     /// range bounds, and filtered day list so
     /// `TrendNarrativeCard` can render without needing
-    /// `OverviewView`'s local range state.
-    var pendingOverviewAnalysis: OverviewAnalysisRequest? = nil
+    /// `TrendsView`'s local range state.
+    var pendingTrendsAnalysis: TrendsAnalysisRequest? = nil
 
     /// Serial number → per-day tag-extraction task. Tracked here
     /// so a rapid note edit (750 ms autosave churning) cancels
@@ -206,8 +206,8 @@ final class Library {
     ///      follows.
     ///   2. `IntelligenceCache.dayFilename` sidecars (per-night AI
     ///      narratives + metric-explain LRUs) and the device-level
-    ///      `IntelligenceCache.deviceFilename` (Overview narratives,
-    ///      Overview metric-explain LRUs). AI caches are *cleared
+    ///      `IntelligenceCache.deviceFilename` (Trends narratives,
+    ///      Trends metric-explain LRUs). AI caches are *cleared
     ///      but not regenerated* — they rebuild lazily on demand
     ///      the next time the user opens a Sleep Analysis / Explain
     ///      surface.
@@ -229,8 +229,8 @@ final class Library {
                 try? fm.removeItem(at: dir.appendingPathComponent(IntelligenceCache.dayFilename))
             }
         }
-        // Device-level intelligence sidecar (Overview narratives +
-        // Overview metric-explain LRUs) lives at the device root,
+        // Device-level intelligence sidecar (Trends narratives +
+        // Trends metric-explain LRUs) lives at the device root,
         // not inside DATALOG.
         try? fm.removeItem(at: url.appendingPathComponent(IntelligenceCache.deviceFilename))
         load(url)
@@ -373,37 +373,37 @@ final class Library {
         }
     }
 
-    /// Fetch the on-device overview narrative for a pre-filtered
+    /// Fetch the on-device trends narrative for a pre-filtered
     /// window. Caches keyed on the input hash so switching between
     /// preset ranges (7d / 14d / 30d) doesn't regenerate unless the
     /// underlying aggregates actually changed.
-    func overviewNarrative(
+    func trendsNarrative(
         stats: [DailyStatistics],
         rangeStart: Date,
         rangeEnd: Date
-    ) async -> OverviewNarrativeOutput? {
+    ) async -> TrendsNarrativeOutput? {
         guard intelligence.isReady else { return nil }
         guard let folder = card?.rootURL else { return nil }
         guard !stats.isEmpty else { return nil }
-        let input = IntelligenceInputBuilder.overviewNarrative(
+        let input = IntelligenceInputBuilder.trendsNarrative(
             stats: stats,
             rangeStart: rangeStart,
             rangeEnd: rangeEnd
         )
         let hash = IntelligenceCache.hash(of: input)
-        if let cached = IntelligenceCache.loadOverviewNarrative(
+        if let cached = IntelligenceCache.loadTrendsNarrative(
             for: folder,
             matching: hash,
-            templateVersion: OverviewNarrativePrompt.templateVersion
+            templateVersion: TrendsNarrativePrompt.templateVersion
         ) {
             return cached
         }
         do {
-            let output = try await narration.overviewNarrative(input)
-            IntelligenceCache.saveOverviewNarrative(
+            let output = try await narration.trendsNarrative(input)
+            IntelligenceCache.saveTrendsNarrative(
                 output,
                 inputHash: hash,
-                templateVersion: OverviewNarrativePrompt.templateVersion,
+                templateVersion: TrendsNarrativePrompt.templateVersion,
                 to: folder
             )
             return output
@@ -452,11 +452,11 @@ final class Library {
         }
     }
 
-    /// Explain an Overview-style aggregate card — the value is
+    /// Explain a Trends-style aggregate card — the value is
     /// already a range average, so the prompt is reframed from
     /// "this night vs your recent average" to "this average vs
     /// the norms". Caches at device level, not per-day.
-    func explainOverviewMetric(
+    func explainTrendsMetric(
         _ metric: ExplainableMetric,
         averageValue: Double,
         rangeStart: Date,
@@ -465,7 +465,7 @@ final class Library {
     ) async -> MetricExplainOutput? {
         guard intelligence.isReady else { return nil }
         guard let folder = card?.rootURL else { return nil }
-        let input = IntelligenceInputBuilder.overviewMetricExplain(
+        let input = IntelligenceInputBuilder.trendsMetricExplain(
             metric: metric,
             averageValue: averageValue,
             rangeStart: rangeStart,
@@ -473,7 +473,7 @@ final class Library {
             sampleSize: sampleSize
         )
         let hash = IntelligenceCache.hash(of: input)
-        if let cached = IntelligenceCache.loadOverviewMetricExplain(
+        if let cached = IntelligenceCache.loadTrendsMetricExplain(
             for: folder,
             matching: hash,
             templateVersion: MetricExplainPrompt.templateVersion
@@ -482,7 +482,7 @@ final class Library {
         }
         do {
             let output = try await narration.explainMetric(input)
-            IntelligenceCache.saveOverviewMetricExplain(
+            IntelligenceCache.saveTrendsMetricExplain(
                 output,
                 inputHash: hash,
                 templateVersion: MetricExplainPrompt.templateVersion,
@@ -495,7 +495,7 @@ final class Library {
     }
 
     /// Resolve an `ExplainRequest` to its on-device explanation by
-    /// dispatching to the per-day or Overview-scoped helper based
+    /// dispatching to the per-day or Trends-scoped helper based
     /// on the request's source. Hides the day-vs-range difference
     /// from the sheet/inspector view so a single surface can
     /// render both.
@@ -519,8 +519,8 @@ final class Library {
                 for: day,
                 trailing: trailing
             )
-        case .overview(let averageValue, let rangeStart, let rangeEnd, let sampleSize):
-            return await explainOverviewMetric(
+        case .trends(let averageValue, let rangeStart, let rangeEnd, let sampleSize):
+            return await explainTrendsMetric(
                 request.metric,
                 averageValue: averageValue,
                 rangeStart: rangeStart,
@@ -771,7 +771,7 @@ final class Library {
             // On iPhone NavigationSplitView is a stack — clear the
             // selection immediately so the detail pane pops back to
             // the sidebar instead of leaving the user stuck on a now-
-            // stale Overview / Day view while the new device loads.
+            // stale Trends / Day view while the new device loads.
             selection = nil
             #endif
         }
@@ -920,7 +920,7 @@ final class Library {
     }
 
     /// Choose the detail-pane selection after a card finishes loading.
-    /// On iOS we stay on the sidebar; on macOS we default to Overview
+    /// On iOS we stay on the sidebar; on macOS we default to Trends
     /// (or the most recent day with raw files if STR.edf is empty).
     private func applyDefaultSelection(for card: ResMedSDCard) {
         #if os(iOS)
@@ -940,7 +940,7 @@ final class Library {
         // made while the `.hydrating` state was up.
         if selection != nil { return }
         if card.days.contains(where: { $0.stats?.hasUsage == true }) {
-            selection = .overview
+            selection = .trends
         } else if let fallback = card.days.last(where: { !$0.files.isEmpty })?.id {
             selection = .day(fallback)
         } else {

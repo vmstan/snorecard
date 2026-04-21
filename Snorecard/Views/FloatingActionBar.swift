@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// Centered glass pill anchored to the bottom of the daily and
-/// overview screens on iOS. Hosts the per-context shortcuts that
+/// trends screens on iOS. Hosts the per-context shortcuts that
 /// used to live inside the navigation bar's "..." menu — Sleep
 /// Analysis, Sleep Journal, and (for day views) Therapy Details
 /// — so reaching them no longer requires opening a menu.

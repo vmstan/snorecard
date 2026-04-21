@@ -2,9 +2,9 @@ import SwiftUI
 import SnorecardKit
 
 /// On-device narrative of direction-of-travel for a range of
-/// Overview data. Presented as the macOS `.overviewAnalysis`
+/// Trends data. Presented as the macOS `.trendsAnalysis`
 /// inspector pane and the iOS Sleep Analysis sheet when the user
-/// is on the Overview — same entry point as the daily Sleep
+/// is on Trends — same entry point as the daily Sleep
 /// Analysis but scoped to the aggregate. Always renders
 /// something (loading, loaded, or failed) since it's shown only
 /// on explicit user action.
@@ -13,7 +13,7 @@ struct TrendNarrativeCard: View {
     let rangeStart: Date
     let rangeEnd: Date
     @Environment(Library.self) private var library
-    @State private var narrative: OverviewNarrativeOutput?
+    @State private var narrative: TrendsNarrativeOutput?
     @State private var failed = false
 
     var body: some View {
@@ -61,7 +61,7 @@ struct TrendNarrativeCard: View {
     }
 
     @ViewBuilder
-    private func loadedContent(_ narrative: OverviewNarrativeOutput) -> some View {
+    private func loadedContent(_ narrative: TrendsNarrativeOutput) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let highlight = narrative.highlight, !highlight.isEmpty {
                 Text(highlight)
@@ -108,7 +108,7 @@ struct TrendNarrativeCard: View {
     private func load() async {
         narrative = nil
         failed = false
-        let result = await library.overviewNarrative(
+        let result = await library.trendsNarrative(
             stats: stats,
             rangeStart: rangeStart,
             rangeEnd: rangeEnd

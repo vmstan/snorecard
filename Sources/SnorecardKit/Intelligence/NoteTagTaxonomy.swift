@@ -44,7 +44,7 @@ public enum NoteTag: String, Codable, Hashable, Sendable, CaseIterable {
     case sleepingOnBack
     case sleepingOnSide
 
-    /// Short display label surfaced in chip UI on the Overview
+    /// Short display label surfaced in chip UI on the Trends
     /// correlation card. Ordering of `allCases` is the order chips
     /// appear when multiple tags fire together.
     public var displayLabel: String {

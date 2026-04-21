@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 import SnorecardKit
 
-struct OverviewView: View {
+struct TrendsView: View {
     let card: ResMedSDCard
     @Environment(Library.self) private var library
     @State private var rangeKind: RangeKind = .last14
@@ -14,13 +14,13 @@ struct OverviewView: View {
     /// needed to populate an `ExplainRequest` live here — the
     /// sheet/inspector itself is owned by `ContentView` via
     /// `library.pendingExplain`.
-    struct OverviewExplainContext {
+    struct TrendsExplainContext {
         let metric: ExplainableMetric
         let displayValue: String
         let averageValue: Double
     }
 
-    /// Date ranges selectable from the Overview header.
+    /// Date ranges selectable from the Trends header.
     enum RangeKind: Hashable {
         case all, last7, last14, last30, custom
     }
@@ -102,7 +102,7 @@ struct OverviewView: View {
             }
             .padding(20)
         }
-        .navigationTitle("Overview")
+        .navigationTitle("Trends")
         .navigationSubtitle(library.displayName(for: card))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -133,7 +133,7 @@ struct OverviewView: View {
             if library.intelligence.isReady {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+                        library.pendingTrendsAnalysis = TrendsAnalysisRequest(
                             stats: stats,
                             rangeStart: rangeStart,
                             rangeEnd: rangeEnd
@@ -160,11 +160,11 @@ struct OverviewView: View {
         #endif
         // iOS + macOS: listen for Sleep Analysis requests posted
         // from the shared Options menu / File menu. macOS routes
-        // through `library.pendingOverviewAnalysis`; iOS does the
+        // through `library.pendingTrendsAnalysis`; iOS does the
         // same, and the sheet binding at ContentView picks it up.
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenOverviewAnalysis)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenTrendsAnalysis)) { _ in
             guard !stats.isEmpty else { return }
-            library.pendingOverviewAnalysis = OverviewAnalysisRequest(
+            library.pendingTrendsAnalysis = TrendsAnalysisRequest(
                 stats: stats,
                 rangeStart: rangeStart,
                 rangeEnd: rangeEnd
@@ -189,7 +189,7 @@ struct OverviewView: View {
     private func handleFloatingBarTap(_ item: FloatingActionBar.Item) {
         switch item {
         case .sleepAnalysis:
-            NotificationCenter.default.post(name: .snorecardOpenOverviewAnalysis, object: nil)
+            NotificationCenter.default.post(name: .snorecardOpenTrendsAnalysis, object: nil)
         case .sleepJournal:
             NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
         case .therapyDetails:
@@ -250,7 +250,7 @@ struct OverviewView: View {
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgApnea = averaging(\.timeInApneaSeconds)
-        // Source from `epap95` (target EPAP) so the Overview card
+        // Source from `epap95` (target EPAP) so the Trends card
         // aligns with the EPAP card on the Daily view. The raw
         // `pressure95` field (measured mask pressure) still backs
         // the pressureChart trend below, where the clinical framing
@@ -272,7 +272,7 @@ struct OverviewView: View {
                 "Days with data",
                 value: "\(days)",
                 subtitle: dateRangeLabel,
-                explain: OverviewExplainContext(
+                explain: TrendsExplainContext(
                     metric: .daysWithData,
                     displayValue: "\(days) night\(days == 1 ? "" : "s")",
                     averageValue: Double(days)
@@ -284,7 +284,7 @@ struct OverviewView: View {
                 value: "\(Int(compliancePct))%",
                 subtitle: "\(compliantDays) of \(days) days ≥ 4h",
                 tint: compliance >= 0.7 ? .severityGood : .severityMedium,
-                explain: OverviewExplainContext(
+                explain: TrendsExplainContext(
                     metric: .compliance,
                     displayValue: "\(Int(compliancePct))% of nights ≥ 4h",
                     averageValue: compliancePct
@@ -294,7 +294,7 @@ struct OverviewView: View {
                 "Avg usage / night",
                 value: formatMinutes(avgUsageMinutes),
                 tint: usageColor(avgUsageMinutes / 60),
-                explain: OverviewExplainContext(
+                explain: TrendsExplainContext(
                     metric: .usage,
                     displayValue: formatMinutes(avgUsageMinutes),
                     averageValue: avgUsageMinutes / 60
@@ -304,7 +304,7 @@ struct OverviewView: View {
                 card(
                     "Avg sessions / night",
                     value: String(format: "%.1f", avgSessions),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .sessionsPerNight,
                         displayValue: String(format: "%.1f per night", avgSessions),
                         averageValue: avgSessions
@@ -319,7 +319,7 @@ struct OverviewView: View {
                     avgOAI, avgHI, avgCAI
                 ),
                 tint: ahiColor(avgAHI),
-                explain: OverviewExplainContext(
+                explain: TrendsExplainContext(
                     metric: .ahi,
                     displayValue: String(format: "%.1f events/hr", avgAHI),
                     averageValue: avgAHI
@@ -332,7 +332,7 @@ struct OverviewView: View {
                     value: formatDurationShort(apnea),
                     subtitle: "per night",
                     tint: apneaColor(pct),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .timeInApnea,
                         displayValue: String(format: "%.2f%% of usage", pct),
                         averageValue: pct
@@ -343,7 +343,7 @@ struct OverviewView: View {
                 card(
                     "Avg EPAP (95%)",
                     value: String(format: "%.1f cmH₂O", epap),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .epap95,
                         displayValue: String(format: "%.1f cmH₂O", epap),
                         averageValue: epap
@@ -362,7 +362,7 @@ struct OverviewView: View {
                 card(
                     "Avg IPAP (95%)",
                     value: String(format: "%.1f cmH₂O", ipap),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .ipap95,
                         displayValue: String(format: "%.1f cmH₂O", ipap),
                         averageValue: ipap
@@ -374,7 +374,7 @@ struct OverviewView: View {
                     "Avg flow limit 95th",
                     value: String(format: "%.2f", flow),
                     tint: flowLimitColor(flow),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .flowLimit,
                         displayValue: String(format: "%.2f", flow),
                         averageValue: flow
@@ -386,7 +386,7 @@ struct OverviewView: View {
                     "Avg Glasgow Index",
                     value: String(format: "%.2f", gi),
                     tint: glasgowColor(gi),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .glasgowIndex,
                         displayValue: String(format: "%.2f", gi),
                         averageValue: gi
@@ -399,7 +399,7 @@ struct OverviewView: View {
                     "Avg tidal volume",
                     value: String(format: "%.0f mL", mL),
                     tint: tidalVolumeColor(mL),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .tidalVolume,
                         displayValue: String(format: "%.0f mL", mL),
                         averageValue: mL
@@ -411,7 +411,7 @@ struct OverviewView: View {
                     "Avg snore 95th",
                     value: String(format: "%.1f", snore),
                     tint: snoreColor(snore),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .snore95,
                         displayValue: String(format: "%.1f", snore),
                         averageValue: snore
@@ -423,7 +423,7 @@ struct OverviewView: View {
                     "Avg leak 95th",
                     value: String(format: "%.0f L/min", leak),
                     tint: leakColor(leak),
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .leak95,
                         displayValue: String(format: "%.0f L/min", leak),
                         averageValue: leak
@@ -436,7 +436,7 @@ struct OverviewView: View {
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
                     tint: largeLeak < 0.5 ? .severityGood : .severityHigh,
-                    explain: OverviewExplainContext(
+                    explain: TrendsExplainContext(
                         metric: .largeLeak,
                         displayValue: String(format: "%.1f%% of usage", largeLeak),
                         averageValue: largeLeak
@@ -446,7 +446,7 @@ struct OverviewView: View {
         }
     }
 
-    /// Thin wrapper around `StatCard` so the Overview grid shares the
+    /// Thin wrapper around `StatCard` so the Trends grid shares the
     /// same visual treatment and vertical alignment as the daily view.
     /// Passing an `explain` context wires the card up as a button
     /// that opens `MetricExplainSheet` with the range-scoped loader.
@@ -455,7 +455,7 @@ struct OverviewView: View {
         value: String,
         subtitle: String? = nil,
         tint: Color = .primary,
-        explain: OverviewExplainContext? = nil
+        explain: TrendsExplainContext? = nil
     ) -> some View {
         StatCard(
             label: label,
@@ -469,7 +469,7 @@ struct OverviewView: View {
     /// Toggle behaviour: tapping the card that is already
     /// showing dismisses the inspector (matching how other
     /// inspector panes already toggle on re-tap).
-    private func explainTap(_ ctx: OverviewExplainContext?) -> (() -> Void)? {
+    private func explainTap(_ ctx: TrendsExplainContext?) -> (() -> Void)? {
         guard let ctx, library.intelligence.isReady else { return nil }
         let capturedStart = rangeStart
         let capturedEnd = rangeEnd
@@ -480,7 +480,7 @@ struct OverviewView: View {
                 displayLabel: Self.displayLabel(for: ctx.metric),
                 displayValue: ctx.displayValue,
                 valueCaption: "Your average for this range",
-                source: .overview(
+                source: .trends(
                     averageValue: ctx.averageValue,
                     rangeStart: capturedStart,
                     rangeEnd: capturedEnd,

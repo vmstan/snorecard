@@ -11,11 +11,11 @@ extension Notification.Name {
     static let snorecardOpenDeviceNotes = Notification.Name("Snorecard.OpenDeviceNotes")
     /// Per-night AI narrative — fired from the day view.
     static let snorecardOpenSleepAnalysis = Notification.Name("Snorecard.OpenSleepAnalysis")
-    /// Per-range AI narrative — fired from the Overview. Routes
-    /// to `OverviewView` so it can populate the trigger state
+    /// Per-range AI narrative — fired from Trends. Routes
+    /// to `TrendsView` so it can populate the trigger state
     /// with its current range and filtered stats before the
     /// sheet / inspector opens.
-    static let snorecardOpenOverviewAnalysis = Notification.Name("Snorecard.OpenOverviewAnalysis")
+    static let snorecardOpenTrendsAnalysis = Notification.Name("Snorecard.OpenTrendsAnalysis")
     /// Raised from the Settings sheet on both platforms — routes
     /// back to ContentView which owns the destructive confirmation
     /// alert.
@@ -37,7 +37,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, overviewAnalysis }
+    enum InspectorPane { case appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, trendsAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -100,7 +100,7 @@ struct ContentView: View {
                         // re-triggering the same surface opens it
                         // again cleanly.
                         library.pendingExplain = nil
-                        library.pendingOverviewAnalysis = nil
+                        library.pendingTrendsAnalysis = nil
                     }
                 }
             }
@@ -115,34 +115,34 @@ struct ContentView: View {
             // the day they were looking at, so retract the
             // inspector whenever selection flips away from a day.
             // Symmetrically, the device-wide journal is only offered
-            // from the Overview, so retract it when the user drills
+            // from Trends, so retract it when the user drills
             // into a day.
             if case .notes = inspectorPane, case .day = newSelection { return }
             if case .settings = inspectorPane, case .day = newSelection { return }
             if case .sleepAnalysis = inspectorPane, case .day = newSelection { return }
-            if case .deviceNotes = inspectorPane, case .overview = newSelection { return }
-            if case .overviewAnalysis = inspectorPane, case .overview = newSelection { return }
+            if case .deviceNotes = inspectorPane, case .trends = newSelection { return }
+            if case .trendsAnalysis = inspectorPane, case .trends = newSelection { return }
             if inspectorPane == .notes
                 || inspectorPane == .settings
                 || inspectorPane == .deviceNotes
                 || inspectorPane == .explainMetric
                 || inspectorPane == .sleepAnalysis
-                || inspectorPane == .overviewAnalysis {
+                || inspectorPane == .trendsAnalysis {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                     library.pendingExplain = nil
-                    library.pendingOverviewAnalysis = nil
+                    library.pendingTrendsAnalysis = nil
                 }
             }
         }
         // Any tap on a stat card — either in DayDetailView or in
-        // OverviewView — sets `library.pendingExplain`. Open the
+        // TrendsView — sets `library.pendingExplain`. Open the
         // inspector in the shared column so the metric
         // explanation matches how Sleep Journal / Therapy Details
         // are presented. Closing the inspector later clears the
         // request back to nil so the same tap can re-open.
         //
-        // Clearing `pendingOverviewAnalysis` here prevents stale
+        // Clearing `pendingTrendsAnalysis` here prevents stale
         // state from the other surface making the per-card
         // toggle check (`pendingExplain == newRequest`) look
         // wrong on the next tap — without this, tapping a card
@@ -151,8 +151,8 @@ struct ContentView: View {
         // on the *second* tap.
         .onChange(of: library.pendingExplain) { _, newRequest in
             if newRequest != nil {
-                if library.pendingOverviewAnalysis != nil {
-                    library.pendingOverviewAnalysis = nil
+                if library.pendingTrendsAnalysis != nil {
+                    library.pendingTrendsAnalysis = nil
                 }
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = .explainMetric
@@ -163,19 +163,19 @@ struct ContentView: View {
                 }
             }
         }
-        // OverviewView sets `pendingOverviewAnalysis` when the
-        // user triggers Sleep Analysis from the Overview. Same
+        // TrendsView sets `pendingTrendsAnalysis` when the
+        // user triggers Sleep Analysis from Trends. Same
         // cross-clearing so a pending explain doesn't persist
         // past a swap to Sleep Analysis.
-        .onChange(of: library.pendingOverviewAnalysis) { _, newRequest in
+        .onChange(of: library.pendingTrendsAnalysis) { _, newRequest in
             if newRequest != nil {
                 if library.pendingExplain != nil {
                     library.pendingExplain = nil
                 }
                 withAnimation(.smooth(duration: 0.32)) {
-                    inspectorPane = .overviewAnalysis
+                    inspectorPane = .trendsAnalysis
                 }
-            } else if inspectorPane == .overviewAnalysis {
+            } else if inspectorPane == .trendsAnalysis {
                 withAnimation(.smooth(duration: 0.32)) {
                     inspectorPane = nil
                 }
@@ -219,10 +219,10 @@ struct ContentView: View {
             .presentationDragIndicator(.visible)
             .environment(library)
         }
-        .sheet(item: $library.pendingOverviewAnalysis) { request in
+        .sheet(item: $library.pendingTrendsAnalysis) { request in
             // Same pattern as Sleep Analysis on the day view —
             // iOS presents as a sheet here at the ContentView
-            // root so OverviewView doesn't have to host it
+            // root so TrendsView doesn't have to host it
             // directly.
             NavigationStack {
                 TrendNarrativeCard(
@@ -309,7 +309,7 @@ struct ContentView: View {
     /// flicker. Matches the behavior the day-detail toolbar had
     /// before these panes were unified here.
     ///
-    /// Also clears the shared explain / overview-analysis
+    /// Also clears the shared explain / trends-analysis
     /// request state whenever the pane changes. Those state
     /// vars drive the cross-platform presentation of their own
     /// panes, so swapping to an unrelated pane should leave no
@@ -320,7 +320,7 @@ struct ContentView: View {
         withAnimation(.smooth(duration: 0.32)) {
             inspectorPane = (inspectorPane == pane) ? nil : pane
             library.pendingExplain = nil
-            library.pendingOverviewAnalysis = nil
+            library.pendingTrendsAnalysis = nil
         }
     }
 
@@ -388,8 +388,8 @@ struct ContentView: View {
             } else {
                 EmptyView()
             }
-        case .overviewAnalysis:
-            if let request = library.pendingOverviewAnalysis {
+        case .trendsAnalysis:
+            if let request = library.pendingTrendsAnalysis {
                 TrendNarrativeCard(
                     stats: request.stats,
                     rangeStart: request.rangeStart,
@@ -496,7 +496,7 @@ struct ContentView: View {
     /// Options menu as the sidebar. Per-context actions (Sleep
     /// Analysis, Sleep Journal, Therapy Details) now live in the
     /// floating action bar at the bottom of `DayDetailView` and
-    /// `OverviewView`, so the nav bar stays uncluttered.
+    /// `TrendsView`, so the nav bar stays uncluttered.
     @ToolbarContentBuilder
     private var detailToolbarButtonsForiOS: some ToolbarContent {
         toolbarButtons
@@ -629,8 +629,8 @@ struct ContentView: View {
         Group {
             if let card = library.card {
                 switch library.selection {
-                case .overview:
-                    OverviewView(card: card)
+                case .trends:
+                    TrendsView(card: card)
                 case .day:
                     if let day = library.selectedDay {
                         DayDetailView(day: day)

@@ -14,10 +14,10 @@ public struct ExplainRequest: Identifiable, Hashable, Sendable {
         /// `ResMedDay.id` so the resolver can locate the day
         /// inside the currently-loaded card.
         case day(dayID: Date)
-        /// Tapped on an Overview card — the aggregate is already
+        /// Tapped on a Trends card — the aggregate is already
         /// computed, so the request carries both the value and
         /// the range it was computed over.
-        case overview(
+        case trends(
             averageValue: Double,
             rangeStart: Date,
             rangeEnd: Date,
@@ -54,8 +54,8 @@ public struct ExplainRequest: Identifiable, Hashable, Sendable {
         switch source {
         case .day(let dayID):
             return "day-\(metric.rawValue)-\(dayID.timeIntervalSince1970)"
-        case .overview(_, let start, let end, _):
-            return "overview-\(metric.rawValue)-\(start.timeIntervalSince1970)-\(end.timeIntervalSince1970)"
+        case .trends(_, let start, let end, _):
+            return "trends-\(metric.rawValue)-\(start.timeIntervalSince1970)-\(end.timeIntervalSince1970)"
         }
     }
 }

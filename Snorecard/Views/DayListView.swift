@@ -15,8 +15,8 @@ struct DayListView: View {
             // `navigationSubtitle(deviceName)`) so both
             // platforms read the same at a glance.
             Section {
-                overviewRow(isSelected: selection == .overview)
-                    .tag(SidebarSelection.overview)
+                trendsRow(isSelected: selection == .trends)
+                    .tag(SidebarSelection.trends)
             } header: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Snorecard")
@@ -32,10 +32,10 @@ struct DayListView: View {
             #else
             // iOS uses the navigation title for the device name (see
             // the .navigationTitle override below) so there's no
-            // secondary header — the Overview row sits directly
+            // secondary header — the Trends row sits directly
             // under the nav bar like a normal list.
-            overviewRow(isSelected: selection == .overview)
-                .tag(SidebarSelection.overview)
+            trendsRow(isSelected: selection == .trends)
+                .tag(SidebarSelection.trends)
             #endif
 
             ForEach(daysByMonth, id: \.month) { group in
@@ -125,20 +125,20 @@ struct DayListView: View {
             || s.largeLeakSeconds != nil
     }
 
-    /// Sidebar row for the "Overview" entry. Mirrors the day-row layout
+    /// Sidebar row for the "Trends" entry. Mirrors the day-row layout
     /// (same-size glyph + label + right-aligned AHI) so the first entry
     /// in the sidebar lines up visually with everything below.
     @ViewBuilder
-    private func overviewRow(isSelected: Bool) -> some View {
+    private func trendsRow(isSelected: Bool) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            OverviewGlyph(isSelected: isSelected)
-            Text("Overview")
+            TrendsGlyph(isSelected: isSelected)
+            Text("Trends")
                 .font(.body)
             Spacer()
             if let avg = overallAHI {
                 VStack(alignment: .trailing, spacing: 1) {
                     // Plain text — colour now lives on the
-                    // calendar / overview glyph instead, which
+                    // calendar / trends glyph instead, which
                     // reads as a glanceable severity indicator
                     // without dragging the number into the
                     // green/amber/red palette.
@@ -269,10 +269,10 @@ struct DayListView: View {
     }
 }
 
-/// Glyph placed next to the Overview label in the sidebar. Bare
+/// Glyph placed next to the Trends label in the sidebar. Bare
 /// SF Symbol — same treatment as the day rows' calendar icons,
 /// so the column of glyphs reads as one consistent set.
-private struct OverviewGlyph: View {
+private struct TrendsGlyph: View {
     var isSelected: Bool = false
 
     private var iconColor: Color {

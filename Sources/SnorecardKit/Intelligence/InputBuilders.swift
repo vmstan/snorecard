@@ -154,16 +154,16 @@ public enum IntelligenceInputBuilder {
         }
     }
 
-    // MARK: - Overview narrative
+    // MARK: - Trends narrative
 
-    /// Shape an `OverviewNarrativeInput` from the filtered stats in
+    /// Shape a `TrendsNarrativeInput` from the filtered stats in
     /// a range. `sampleSize` is the count of days with usage; the
     /// model calibrates confidence against that.
-    public static func overviewNarrative(
+    public static func trendsNarrative(
         stats: [DailyStatistics],
         rangeStart: Date,
         rangeEnd: Date
-    ) -> OverviewNarrativeInput {
+    ) -> TrendsNarrativeInput {
         let days = stats.filter(\.hasUsage)
         let sample = days.count
         let compliantDays = days.filter { $0.usageHours >= 4 }.count
@@ -197,7 +197,7 @@ public enum IntelligenceInputBuilder {
 
         let trends = trendBuckets(days: days)
 
-        return OverviewNarrativeInput(
+        return TrendsNarrativeInput(
             rangeStart: rangeStart,
             rangeEnd: rangeEnd,
             sampleSize: sample,
@@ -218,10 +218,10 @@ public enum IntelligenceInputBuilder {
     /// a per-metric noise floor. Usage flips the polarity.
     private static func trendBuckets(
         days: [DailyStatistics]
-    ) -> OverviewNarrativeInput.Trends {
+    ) -> TrendsNarrativeInput.Trends {
         let sorted = days.sorted { $0.date < $1.date }
         guard sorted.count >= 4 else {
-            return OverviewNarrativeInput.Trends(
+            return TrendsNarrativeInput.Trends(
                 ahi: .notEnoughData,
                 usage: .notEnoughData,
                 glasgowIndex: .notEnoughData,
@@ -274,7 +274,7 @@ public enum IntelligenceInputBuilder {
             lowerIsBetter: true
         )
 
-        return OverviewNarrativeInput.Trends(
+        return TrendsNarrativeInput.Trends(
             ahi: ahiBucket,
             usage: usageBucket,
             glasgowIndex: giBucket,
@@ -427,23 +427,23 @@ public enum IntelligenceInputBuilder {
                   stats.usageMinutes > 0 else { return nil }
             return seconds / (stats.usageMinutes * 60) * 100
         case .flowLimit:        return stats.flowLimit95
-        // The Overview-only metrics have no per-day rawValue —
+        // The Trends-only metrics have no per-day rawValue —
         // they only exist as range aggregates. Return nil so a
         // day-scoped explain is impossible; the caller must use
-        // the Overview-scoped builder instead.
+        // the Trends-scoped builder instead.
         case .compliance:       return nil
         case .daysWithData:     return nil
         case .sessionsPerNight: return nil
         }
     }
 
-    /// Build a `MetricExplainInput` for an Overview-style card,
+    /// Build a `MetricExplainInput` for a Trends-style card,
     /// where `averageValue` is already computed (e.g. mean AHI
     /// across the filtered range). `rangeContext` reframes the
     /// prompt so the narration describes an aggregate, not a
     /// single night. No `recent14DayMean` is supplied because
     /// the aggregate is the anchor.
-    public static func overviewMetricExplain(
+    public static func trendsMetricExplain(
         metric: ExplainableMetric,
         averageValue: Double,
         rangeStart: Date,

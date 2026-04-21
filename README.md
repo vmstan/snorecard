@@ -41,7 +41,7 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 
 Snorecard uses Apple Intelligence to turn your raw therapy data into plain-English narratives — entirely on-device. Nothing about your nights ever leaves your Mac or iPhone.
 
-- **Sleep Analysis** — a narrative read on how your recent nights are trending, available from the Overview
+- **Sleep Analysis** — a narrative read on how your recent nights are trending, available from Trends
 - **Explain this metric** — tap any card (AHI, usage, pressure, Glasgow Index, flow limitation, time in apnea, and more) for a contextual interpretation grounded in *your* numbers, not a generic definition
 - **Per-night summaries** — a short recap of how a specific night went and how it compared to the ones around it
 - **Correlation hints** — patterns the app notices between your therapy data and your Sleep Journal entries

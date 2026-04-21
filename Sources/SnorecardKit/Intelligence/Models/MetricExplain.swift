@@ -16,7 +16,7 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case usage
     case timeInApnea
     case flowLimit
-    // Overview-only metrics. No daily equivalents exist for
+    // Trends-only metrics. No daily equivalents exist for
     // these; they describe the shape of a range as a whole.
     case compliance
     case daysWithData

@@ -126,12 +126,12 @@ struct SnorecardApp: App {
         Divider()
 
         // Sleep Analysis covers both scopes: per-night on the day
-        // view, per-range on the Overview. Posts whichever
+        // view, per-range on Trends. Posts whichever
         // notification matches the current selection, mirroring
         // how Sleep Journal swaps between daily / device notes.
         Button {
             NotificationCenter.default.post(
-                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenOverviewAnalysis,
+                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenTrendsAnalysis,
                 object: nil
             )
         } label: {
@@ -141,7 +141,7 @@ struct SnorecardApp: App {
 
         // Sleep Journal targets whichever scope the user is
         // currently viewing — the per-night journal from a day,
-        // the device-wide journal from the Overview. Matches the
+        // the device-wide journal from Trends. Matches the
         // iOS ellipsis, which swaps the same item between the two
         // notifications based on `isViewingDay`.
         Button {
