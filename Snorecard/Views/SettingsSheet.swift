@@ -98,10 +98,10 @@ enum AppIconController {
     }
 }
 
-/// Icon-picker sheet/inspector content. Six tappable tiles in an
-/// adaptive grid; the active option gets a tint ring so the user
-/// can confirm their selection without re-opening the picker.
-struct IconPickerSheet: View {
+/// Top-level Settings sheet / inspector pane. Currently hosts just
+/// the App Icon picker, but structured as a sectioned list so more
+/// preference groups can slot in without reshaping the surface.
+struct SettingsSheet: View {
     let onClose: () -> Void
 
     @State private var selection: AppIconOption = AppIconController.current
@@ -110,12 +110,10 @@ struct IconPickerSheet: View {
         #if os(iOS)
         NavigationStack {
             List {
-                ForEach(AppIconOption.allCases) { option in
-                    row(for: option)
-                }
+                appIconSection
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("App Icon")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
@@ -123,24 +121,29 @@ struct IconPickerSheet: View {
         #else
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
-                title: "App Icon",
-                caption: "Changes the Snorecard icon in the Dock and on the Home Screen."
+                title: "Settings",
+                caption: "Preferences that apply across the whole Snorecard app."
             )
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 8)
 
             Form {
-                Section {
-                    ForEach(AppIconOption.allCases) { option in
-                        row(for: option)
-                    }
-                }
+                appIconSection
             }
             .formStyle(.grouped)
         }
-        .navigationTitle("App Icon")
+        .navigationTitle("Settings")
         #endif
+    }
+
+    @ViewBuilder
+    private var appIconSection: some View {
+        Section("App Icon") {
+            ForEach(AppIconOption.allCases) { option in
+                row(for: option)
+            }
+        }
     }
 
     @ViewBuilder
@@ -153,7 +156,6 @@ struct IconPickerSheet: View {
             HStack(spacing: 14) {
                 preview(for: option)
                     .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(option.displayName)
                     .font(.body)
                     .foregroundStyle(.primary)

@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */; };
-		09E9B6F3D594E5549162467E /* IconPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* IconPickerSheet.swift */; };
+		09E9B6F3D594E5549162467E /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */; };
 		0E244EDF4E0543DA8B838869 /* TrendNarrativeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA139BDBDFF7D621A0CAFE0 /* TrendNarrativeCard.swift */; };
 		14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		15F314042E6CECBE694C5032 /* InspectorPaneHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */; };
@@ -58,7 +58,7 @@
 		91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		932D76CCD07D0C20A14E8C27 /* Snorecard-Inverted.icon in Resources */ = {isa = PBXBuildFile; fileRef = C7263BF411326B541811D4A3 /* Snorecard-Inverted.icon */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
-		A2C6179E5EC7090AA3A4604E /* IconPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* IconPickerSheet.swift */; };
+		A2C6179E5EC7090AA3A4604E /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */; };
 		A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
 		B19FA7293CD3811BB334229E /* NightSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A45553900FBA215B415695 /* NightSummaryCard.swift */; };
@@ -119,7 +119,7 @@
 		6AAAD964BB003BB6ECF52278 /* DeviceNotesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNotesCard.swift; sourceTree = "<group>"; };
 		6AF56B9E1D066E90C067AE57 /* Snorecard-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Snorecard-iOS.entitlements"; sourceTree = "<group>"; };
 		722D23C564C439409491B429 /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
-		73A185B054E2C91ABE8F9DFF /* IconPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPickerSheet.swift; sourceTree = "<group>"; };
+		73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySettingsInspector.swift; sourceTree = "<group>"; };
 		755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AHIHourlyChart.swift; sourceTree = "<group>"; };
 		7CAC2E76E74D9E219323127C /* WindowControlAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowControlAccessor.swift; sourceTree = "<group>"; };
@@ -260,7 +260,7 @@
 				4D01BD9D312161180297342B /* FloatingActionBar.swift */,
 				ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */,
 				2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */,
-				73A185B054E2C91ABE8F9DFF /* IconPickerSheet.swift */,
+				73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */,
 				29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */,
 				0F85425A6C4E977C75813A1E /* LoadingView.swift */,
 				B747A2CBB649FA04FD41E138 /* MetricExplainSheet.swift */,
@@ -418,7 +418,7 @@
 				DA60A103DAFC2FF97CEBCF96 /* FlowLayout.swift in Sources */,
 				FCDDCD1E72B5331F4FFE81A3 /* FolderPicker.swift in Sources */,
 				58EA56F42785887A575234D9 /* HourlySignalCharts.swift in Sources */,
-				A2C6179E5EC7090AA3A4604E /* IconPickerSheet.swift in Sources */,
+				A2C6179E5EC7090AA3A4604E /* SettingsSheet.swift in Sources */,
 				15F314042E6CECBE694C5032 /* InspectorPaneHeader.swift in Sources */,
 				6BE2F7C24C6199A50A408A71 /* Library.swift in Sources */,
 				8047240FC6B1B672F0F3888E /* LoadingView.swift in Sources */,
@@ -457,7 +457,7 @@
 				1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */,
 				615A9F9CC9633EC81107A811 /* FolderPicker.swift in Sources */,
 				02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */,
-				09E9B6F3D594E5549162467E /* IconPickerSheet.swift in Sources */,
+				09E9B6F3D594E5549162467E /* SettingsSheet.swift in Sources */,
 				B958BA5F93D5A0546E7C1697 /* InspectorPaneHeader.swift in Sources */,
 				D88A174919214544AD7A4BB6 /* Library.swift in Sources */,
 				27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */,

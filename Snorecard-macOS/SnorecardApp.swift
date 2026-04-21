@@ -19,7 +19,7 @@ extension Notification.Name {
     static let snorecardRenameDevice = Notification.Name("Snorecard.RenameDevice")
     static let snorecardRebuildAnalysis = Notification.Name("Snorecard.RebuildAnalysis")
     static let snorecardShowBackups = Notification.Name("Snorecard.ShowBackups")
-    static let snorecardShowAppIcon = Notification.Name("Snorecard.ShowAppIcon")
+    static let snorecardShowSettings = Notification.Name("Snorecard.ShowSettings")
     // Sleep Analysis is declared in the shared ContentView
     // notification set so both platforms reference the same name;
     // this extension only adds commands that are macOS-only.
@@ -199,9 +199,9 @@ struct SnorecardApp: App {
         Divider()
 
         Button {
-            NotificationCenter.default.post(name: .snorecardShowAppIcon, object: nil)
+            NotificationCenter.default.post(name: .snorecardShowSettings, object: nil)
         } label: {
-            Label("App Icon", systemImage: "app.badge")
+            Label("Settings", systemImage: "gearshape")
         }
     }
 
