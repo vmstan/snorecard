@@ -48,6 +48,9 @@ struct SnorecardApp: App {
             CommandGroup(replacing: .newItem) {
                 fileCommands
             }
+            CommandGroup(after: .toolbar) {
+                viewCommands
+            }
             CommandGroup(replacing: .appSettings) {
                 Button {
                     NotificationCenter.default.post(name: .snorecardShowSettings, object: nil)
@@ -86,11 +89,10 @@ struct SnorecardApp: App {
         }
     }
 
-    /// Full File-menu command stack — mirrors the in-app Actions
-    /// ellipsis on iOS so users who reach for the menu bar get the
-    /// same surface. Order follows the iOS menu verbatim, with
-    /// Refresh kept at the top because ⌘R is a menu-bar staple the
-    /// iOS surface has no equivalent for (it uses pull-to-refresh).
+    /// File-menu command stack — Refresh, Import SD Card, and (when
+    /// multiple devices are known) the Switch PAP Device submenu.
+    /// Everything else that opens a pane or auxiliary window lives
+    /// in the View menu via `viewCommands`.
     @ViewBuilder
     private var fileCommands: some View {
         let hasCard = library.card?.identification?.serialNumber != nil
@@ -98,18 +100,6 @@ struct SnorecardApp: App {
         let otherDevices = Library.iCloudDeviceFolders().filter { folder in
             folder.serial != currentSerial
         }
-        let isViewingDay: Bool = {
-            if case .day = library.selection { return true }
-            return false
-        }()
-
-        Button {
-            library.reloadCurrent()
-        } label: {
-            Label("Refresh", systemImage: "arrow.clockwise")
-        }
-        .keyboardShortcut("r", modifiers: [.command])
-        .disabled(!hasCard)
 
         Button {
             if let url = presentFolderPicker(
@@ -123,48 +113,6 @@ struct SnorecardApp: App {
         }
         .keyboardShortcut("o", modifiers: [.command])
 
-        Divider()
-
-        // Sleep Analysis covers both scopes: per-night on the day
-        // view, per-range on Trends. Posts whichever
-        // notification matches the current selection, mirroring
-        // how Sleep Journal swaps between daily / device notes.
-        Button {
-            NotificationCenter.default.post(
-                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenTrendsAnalysis,
-                object: nil
-            )
-        } label: {
-            Label("Sleep Analysis", systemImage: "sparkles")
-        }
-        .disabled(!hasCard || !library.intelligence.isReady)
-
-        // Sleep Journal targets whichever scope the user is
-        // currently viewing — the per-night journal from a day,
-        // the device-wide journal from Trends. Matches the
-        // iOS ellipsis, which swaps the same item between the two
-        // notifications based on `isViewingDay`.
-        Button {
-            NotificationCenter.default.post(
-                name: isViewingDay ? .snorecardOpenDailyNotes : .snorecardOpenDeviceNotes,
-                object: nil
-            )
-        } label: {
-            Label("Sleep Journal", systemImage: "note.text")
-        }
-        .disabled(!hasCard)
-
-        // Therapy Details is day-specific, so the menu entry is
-        // always visible (menu-bar convention: advertise the
-        // command, disable when inapplicable) but only enabled
-        // while a day is selected.
-        Button {
-            NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
-        } label: {
-            Label("Therapy Details", systemImage: "gauge.with.needle")
-        }
-        .disabled(!hasCard || !isViewingDay)
-
         if !otherDevices.isEmpty {
             Divider()
             Menu {
@@ -177,6 +125,92 @@ struct SnorecardApp: App {
                 Label("Switch PAP Device", systemImage: "rectangle.2.swap")
             }
         }
+    }
+
+    /// View-menu additions — all day- or scope-scoped panes and
+    /// auxiliary windows. The entries advertise themselves even when
+    /// disabled (standard menu-bar convention) so users can learn
+    /// the commands exist before they have a card loaded.
+    @ViewBuilder
+    private var viewCommands: some View {
+        let hasCard = library.card?.identification?.serialNumber != nil
+        let isViewingDay: Bool = {
+            if case .day = library.selection { return true }
+            return false
+        }()
+
+        Divider()
+
+        // Reload re-reads the currently-loaded card — a view-level
+        // operation, not a file-level one. Lives at the top of the
+        // View menu to match the Safari ⌘R "Reload Page" convention.
+        Button {
+            library.reloadCurrent()
+        } label: {
+            Label("Reload Data", systemImage: "arrow.clockwise")
+        }
+        .keyboardShortcut("r", modifiers: [.command])
+        .disabled(!hasCard)
+
+        Divider()
+
+        // Sleep Analysis covers both scopes: per-night on the day
+        // view, per-range on Trends. Posts whichever notification
+        // matches the current selection, mirroring how Sleep Journal
+        // swaps between daily / device notes.
+        Button {
+            NotificationCenter.default.post(
+                name: isViewingDay ? .snorecardOpenSleepAnalysis : .snorecardOpenTrendsAnalysis,
+                object: nil
+            )
+        } label: {
+            Label("Sleep Analysis", systemImage: "sparkles")
+        }
+        .keyboardShortcut("a", modifiers: [.command, .shift])
+        .disabled(!hasCard || !library.intelligence.isReady)
+
+        Button {
+            NotificationCenter.default.post(
+                name: isViewingDay ? .snorecardOpenDailyNotes : .snorecardOpenDeviceNotes,
+                object: nil
+            )
+        } label: {
+            Label("Sleep Journal", systemImage: "note.text")
+        }
+        .keyboardShortcut("j", modifiers: [.command, .shift])
+        .disabled(!hasCard)
+
+        Button {
+            NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
+        } label: {
+            Label("Therapy Details", systemImage: "gauge.with.needle")
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift])
+        .disabled(!hasCard || !isViewingDay)
+
+        Divider()
+
+        // Detailed Statistics + Advanced Charting route through
+        // DayDetailView (which holds the loaded waveform bundle and
+        // file URLs) so the payload can be constructed with the
+        // current day's data before `openWindow(value:)` is called.
+        Button {
+            NotificationCenter.default.post(name: .snorecardOpenDetailedStatistics, object: nil)
+        } label: {
+            Label("Detailed Statistics", systemImage: "tablecells")
+        }
+        .keyboardShortcut("s", modifiers: [.command, .shift])
+        .disabled(!hasCard || !isViewingDay)
+
+        Button {
+            NotificationCenter.default.post(name: .snorecardOpenAdvancedCharting, object: nil)
+        } label: {
+            Label("Advanced Charting", systemImage: "waveform.path.ecg")
+        }
+        .keyboardShortcut("c", modifiers: [.command, .shift])
+        .disabled(!hasCard || !isViewingDay)
+
+        Divider()
     }
 
     /// Alias-aware label for the Switch Device submenu — mirrors

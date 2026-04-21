@@ -20,6 +20,14 @@ extension Notification.Name {
     /// back to ContentView which owns the destructive confirmation
     /// alert.
     static let snorecardRebuildCache = Notification.Name("Snorecard.RebuildCache")
+    /// Open the Detailed Statistics window — fired from the macOS
+    /// View menu. Routed to `DayDetailView` which owns the
+    /// currently-loaded waveform bundle used to build the payload.
+    static let snorecardOpenDetailedStatistics = Notification.Name("Snorecard.OpenDetailedStatistics")
+    /// Open the Advanced Charting window — fired from the macOS
+    /// View menu. Routed to `DayDetailView` which builds the
+    /// payload from the current day's BRP / PLD / EVE URLs.
+    static let snorecardOpenAdvancedCharting = Notification.Name("Snorecard.OpenAdvancedCharting")
 }
 
 struct ContentView: View {
@@ -521,7 +529,6 @@ struct ContentView: View {
 
             if library.card?.identification?.serialNumber != nil,
                !otherDevices.isEmpty {
-                Divider()
                 Menu {
                     ForEach(otherDevices) { folder in
                         Button(deviceMenuLabel(for: folder)) {

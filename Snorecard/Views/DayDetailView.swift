@@ -8,6 +8,9 @@ private let waveformLog = Logger(subsystem: "com.vmstan.Snorecard", category: "W
 struct DayDetailView: View {
     let day: ResMedDay
     @Environment(Library.self) private var library
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
     @State private var loadedWaveform: WaveformBundle?
     @State private var loadError: String?
     @State private var isShowingSettings = false
@@ -91,6 +94,30 @@ struct DayDetailView: View {
                 }
                 .help("Show therapy details for this night")
             }
+        }
+        // View-menu bridges — the macOS menu posts these so the day
+        // view (which holds the loaded bundle + file URLs) can
+        // construct the payload and open the standalone window.
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDetailedStatistics)) { _ in
+            guard let bundle = loadedWaveform, !bundle.signalSummary.isEmpty else { return }
+            openWindow(
+                value: DetailedStatisticsPayload(
+                    dayDate: day.date,
+                    deviceName: library.card.map { library.displayName(for: $0) },
+                    rows: bundle.signalSummary
+                )
+            )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenAdvancedCharting)) { _ in
+            openWindow(
+                value: AdvancedChartingPayload(
+                    dayDate: day.date,
+                    deviceName: library.card.map { library.displayName(for: $0) },
+                    brpURLs: day.files(of: .breath).map(\.url),
+                    pldURLs: day.files(of: .physiological).map(\.url),
+                    eveURLs: day.files(of: .events).map(\.url)
+                )
+            )
         }
         #endif
         #if os(iOS)
