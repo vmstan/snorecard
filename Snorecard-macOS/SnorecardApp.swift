@@ -1,14 +1,4 @@
 import SwiftUI
-import AppKit
-
-/// Quit the app when the user closes its only window. Standard macOS
-/// behavior leaves the process running in the Dock — not what a
-/// single-window data viewer like Snorecard should do.
-final class SnorecardAppDelegate: NSObject, NSApplicationDelegate {
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
-    }
-}
 
 @main
 struct SnorecardApp: App {
@@ -59,7 +49,6 @@ struct SnorecardApp: App {
                 DetailedStatisticsView(payload: payload)
                     .padding(20)
                     .frame(minWidth: 460, minHeight: 620)
-                    .disableNonCloseWindowButtons()
             }
         }
         .windowResizability(.contentSize)
@@ -83,19 +72,13 @@ struct SnorecardApp: App {
     /// in the View menu via `viewCommands`.
     @ViewBuilder
     private var fileCommands: some View {
-        let hasCard = library.card?.identification?.serialNumber != nil
         let currentSerial = library.card?.identification?.serialNumber
         let otherDevices = Library.iCloudDeviceFolders().filter { folder in
             folder.serial != currentSerial
         }
 
         Button {
-            if let url = presentFolderPicker(
-                prompt: "Open",
-                message: "Select a PAP-device SD card or DATALOG export folder"
-            ) {
-                library.load(url)
-            }
+            NotificationCenter.default.post(name: .snorecardImportSDCard, object: nil)
         } label: {
             Label("Import SD Card", systemImage: "externaldrive.badge.plus")
         }

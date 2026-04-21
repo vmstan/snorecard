@@ -1,5 +1,6 @@
 import SwiftUI
 import SnorecardKit
+import UniformTypeIdentifiers
 
 // Notifications used by the iOS Options menu to drive the daily
 // view's per-night sheets. Defined in the shared codebase so both
@@ -28,12 +29,17 @@ extension Notification.Name {
     /// View menu. Routed to `DayDetailView` which builds the
     /// payload from the current day's BRP / PLD / EVE URLs.
     static let snorecardOpenAdvancedCharting = Notification.Name("Snorecard.OpenAdvancedCharting")
+    /// Present the SD-card folder picker — fired from the macOS
+    /// File menu so ContentView, which owns the `.fileImporter`
+    /// presentation state, can surface the sheet.
+    static let snorecardImportSDCard = Notification.Name("Snorecard.ImportSDCard")
 }
 
 struct ContentView: View {
     @Environment(Library.self) private var library
     @State private var isConfirmingRebuild = false
     @State private var isShowingSettings = false
+    @State private var isShowingFolderPicker = false
     @State private var knownDevices: [Library.DeviceFolder] = []
 
     #if os(macOS)
@@ -276,6 +282,14 @@ struct ContentView: View {
                 isConfirmingRebuild = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardImportSDCard)) { _ in
+            isShowingFolderPicker = true
+        }
+        .fileImporter(
+            isPresented: $isShowingFolderPicker,
+            allowedContentTypes: [.folder],
+            onCompletion: handleFolderImport
+        )
         .task(id: library.card?.rootURL) {
             knownDevices = Library.iCloudDeviceFolders()
         }
@@ -545,18 +559,19 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func openSDCard() {
-        #if os(macOS)
-        if let url = presentFolderPicker(
-            prompt: "Open",
-            message: "Select a ResMed PAP-device SD card or DATALOG export folder"
-        ) {
-            library.load(url)
-        }
-        #else
-        presentIOSFolderPicker { url in
-            library.load(url)
-        }
+        isShowingFolderPicker = true
+    }
+
+    /// Handler for the shared `.fileImporter` sheet. On iOS the
+    /// returned URL is security-scoped against the external volume,
+    /// so access is started and left open for the lifetime of the
+    /// process — matches the prior UIDocumentPicker behaviour.
+    private func handleFolderImport(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result else { return }
+        #if os(iOS)
+        _ = url.startAccessingSecurityScopedResource()
         #endif
+        library.load(url)
     }
 
     @ViewBuilder
