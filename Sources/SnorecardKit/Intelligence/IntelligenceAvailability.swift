@@ -14,18 +14,44 @@ import Observation
 @Observable
 @MainActor
 public final class IntelligenceAvailability {
-    public private(set) var isReady: Bool
+    /// UserDefaults key backing the Appearance ▸ Apple Intelligence
+    /// toggle. Absent-key default is "on", so existing installs that
+    /// had the feature enabled continue to see it after upgrading.
+    private static let userEnabledKey = "appleIntelligenceEnabled"
 
-    public init() {
-        self.isReady = Self.probe()
+    /// Hardware + OS can run Apple Intelligence on-device.
+    /// Independent of the user preference — a Mac without the
+    /// supporting hardware reports `isSupported == false` regardless
+    /// of what the toggle says.
+    public private(set) var isSupported: Bool
+
+    /// User preference, mutated by the Appearance-tab toggle.
+    /// Persisted to UserDefaults so it survives relaunches.
+    public var isEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isEnabled, forKey: Self.userEnabledKey)
+        }
     }
 
-    /// Re-evaluate availability. Call from an `NSApplication`
+    /// Combined gate every Intelligence-backed surface checks —
+    /// both the hardware probe and the user's preference must
+    /// agree before any AI UI renders.
+    public var isReady: Bool {
+        isSupported && isEnabled
+    }
+
+    public init() {
+        let defaults = UserDefaults.standard
+        self.isEnabled = (defaults.object(forKey: Self.userEnabledKey) as? Bool) ?? true
+        self.isSupported = Self.probe()
+    }
+
+    /// Re-evaluate hardware availability. Call from an `NSApplication`
     /// foreground observer (macOS) or `UIApplication.didBecomeActive`
     /// (iOS) so the UI updates cleanly if the user toggled Apple
-    /// Intelligence while the app was backgrounded.
+    /// Intelligence in System Settings while the app was backgrounded.
     public func refresh() {
-        isReady = Self.probe()
+        isSupported = Self.probe()
     }
 
     private static func probe() -> Bool {

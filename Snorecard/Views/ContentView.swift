@@ -45,7 +45,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case appSettings, notes, deviceNotes, settings, explainMetric, sleepAnalysis, trendsAnalysis }
+    enum InspectorPane { case notes, deviceNotes, settings, explainMetric, sleepAnalysis, trendsAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -280,13 +280,12 @@ struct ContentView: View {
             knownDevices = Library.iCloudDeviceFolders()
         }
         #if os(macOS)
-        // Bridges from the macOS File menu, Options menu, and the
-        // day-detail toolbar. All routes funnel into the same
-        // inspector state so the third column is the one surface
-        // hosting these accessory views.
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardShowSettings)) { _ in
-            toggleInspector(.appSettings)
-        }
+        // Bridges from the macOS View menu and the day-detail
+        // toolbar. All routes funnel into the same inspector
+        // state so the third column is the one surface hosting
+        // these accessory views. App-wide Settings is *not* in
+        // this list — it opens a standalone window via the
+        // SwiftUI `Settings { }` scene declared in SnorecardApp.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
             if case .day = library.selection {
                 toggleInspector(.notes)
@@ -339,15 +338,6 @@ struct ContentView: View {
     @ViewBuilder
     private var inspectorContent: some View {
         switch inspectorPane {
-        case .appSettings:
-            SettingsSheet(
-                onClose: {
-                    withAnimation(.smooth(duration: 0.32)) {
-                        inspectorPane = nil
-                    }
-                }
-            )
-            .environment(library)
         case .notes:
             if let day = library.selectedDay {
                 NotesCard(day: day)
@@ -542,11 +532,7 @@ struct ContentView: View {
 
             Divider()
             Button {
-                #if os(macOS)
-                toggleInspector(.appSettings)
-                #else
                 isShowingSettings = true
-                #endif
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }
