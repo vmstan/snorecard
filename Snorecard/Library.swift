@@ -43,6 +43,13 @@ final class Library {
     /// `NSUbiquitousKeyValueStore` so the override syncs automatically
     /// across all of the user's Macs and iOS devices.
     private(set) var deviceNameOverrides: [String: String] = [:]
+    /// Map of CPAP serial number → per-device compliance-hour target.
+    /// The threshold (in hours/night) used to decide whether a night
+    /// counts toward compliance and to tint the usage chart. Unset
+    /// serials fall back to `Library.defaultComplianceHours`, which
+    /// matches the insurer/clinic standard. Synced via iCloud KVS so
+    /// the user doesn't have to re-pick their target on each device.
+    private(set) var complianceTargets: [String: Double] = [:]
     /// Non-nil while iCloud placeholder sidecars are being fetched so
     /// the sidebar can show a "Downloading from iCloud — N/M" hint
     /// instead of looking stuck.
@@ -81,7 +88,14 @@ final class Library {
 
     private static let lastPathKey = "SnorecardLastSDPath"
     private static let deviceNamesKey = "deviceNameOverrides"
+    private static let complianceTargetsKey = "complianceTargets"
     private static let lastOpenedSerialKey = "lastOpenedSerial"
+
+    /// Fallback target when the user hasn't set one for a device.
+    /// 4 hours is the CMS/Medicare threshold and the one every
+    /// ResMed + insurer dashboard uses, so it's the least-surprising
+    /// default for a fresh card.
+    static let defaultComplianceHours: Double = 4
 
     init() {
         self.intelligence = IntelligenceAvailability()
@@ -94,6 +108,8 @@ final class Library {
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
             as? [String: String] ?? [:]
+        complianceTargets = (kvs.dictionary(forKey: Self.complianceTargetsKey)
+            as? [String: Double]) ?? [:]
 
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -101,7 +117,7 @@ final class Library {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.refreshDeviceNameOverrides()
+                self?.refreshiCloudPreferences()
             }
         }
         // Kick off an initial pull so any value already synced to this
@@ -156,10 +172,39 @@ final class Library {
         kvs.synchronize()
     }
 
-    private func refreshDeviceNameOverrides() {
+    private func refreshiCloudPreferences() {
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
             as? [String: String] ?? [:]
+        complianceTargets = (kvs.dictionary(forKey: Self.complianceTargetsKey)
+            as? [String: Double]) ?? [:]
+    }
+
+    // MARK: - Compliance target
+
+    /// Hours-per-night threshold the user considers a "compliant"
+    /// night for this device. Falls back to `defaultComplianceHours`
+    /// when the user hasn't customized it.
+    func complianceTarget(for serial: String?) -> Double {
+        guard let serial, let value = complianceTargets[serial] else {
+            return Self.defaultComplianceHours
+        }
+        return value
+    }
+
+    /// Persist a new compliance target for a serial. Passing the
+    /// default value clears the override so we don't bloat iCloud
+    /// KVS with entries that duplicate the fallback.
+    func setComplianceTarget(_ hours: Double, for serial: String) {
+        let clamped = min(max(hours, 1), 12)
+        if clamped == Self.defaultComplianceHours {
+            complianceTargets.removeValue(forKey: serial)
+        } else {
+            complianceTargets[serial] = clamped
+        }
+        let kvs = NSUbiquitousKeyValueStore.default
+        kvs.set(complianceTargets, forKey: Self.complianceTargetsKey)
+        kvs.synchronize()
     }
 
     /// Re-run the scan on the currently loaded card's folder without
@@ -388,7 +433,10 @@ final class Library {
         let input = IntelligenceInputBuilder.trendsNarrative(
             stats: stats,
             rangeStart: rangeStart,
-            rangeEnd: rangeEnd
+            rangeEnd: rangeEnd,
+            complianceTargetHours: complianceTarget(
+                for: card?.identification?.serialNumber
+            )
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsNarrative(
