@@ -158,15 +158,19 @@ public enum IntelligenceInputBuilder {
 
     /// Shape a `TrendsNarrativeInput` from the filtered stats in
     /// a range. `sampleSize` is the count of days with usage; the
-    /// model calibrates confidence against that.
+    /// model calibrates confidence against that. `complianceTargetHours`
+    /// is the user-chosen hours/night threshold — defaults to the
+    /// insurer standard of 4 so callers that don't know the device's
+    /// preference still get sensible numbers.
     public static func trendsNarrative(
         stats: [DailyStatistics],
         rangeStart: Date,
-        rangeEnd: Date
+        rangeEnd: Date,
+        complianceTargetHours: Double = 4
     ) -> TrendsNarrativeInput {
         let days = stats.filter(\.hasUsage)
         let sample = days.count
-        let compliantDays = days.filter { $0.usageHours >= 4 }.count
+        let compliantDays = days.filter { $0.usageHours >= complianceTargetHours }.count
         let compliance = sample == 0
             ? 0
             : Double(compliantDays) / Double(sample) * 100

@@ -51,6 +51,23 @@ struct TrendsView: View {
         }
     }
 
+    /// Hours-per-night threshold for this card. Reads the user's
+    /// per-device preference (iCloud-synced) and falls back to the
+    /// insurer-standard 4h when they haven't set one.
+    private var complianceTargetHours: Double {
+        library.complianceTarget(for: card.identification?.serialNumber)
+    }
+
+    /// Format a target as a short label — integers render without a
+    /// decimal ("4h") and half-hour values keep one digit ("4.5h").
+    /// Used in chart subtitles and compliance-card captions.
+    private func formatComplianceTarget(_ hours: Double) -> String {
+        if hours.rounded() == hours {
+            return "\(Int(hours))h"
+        }
+        return String(format: "%.1fh", hours)
+    }
+
     private var rangeEnd: Date {
         let cal = Calendar.current
         switch rangeKind {
@@ -237,7 +254,8 @@ struct TrendsView: View {
         let days = stats.count
         let totalUsage = stats.reduce(0) { $0 + $1.usageMinutes }
         let avgUsageMinutes = days == 0 ? 0 : totalUsage / Double(days)
-        let compliantDays = stats.filter { $0.usageHours >= 4 }.count
+        let target = complianceTargetHours
+        let compliantDays = stats.filter { $0.usageHours >= target }.count
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
         // Per-event-class indices averaged across the same set of
@@ -279,14 +297,15 @@ struct TrendsView: View {
                 )
             )
             let compliancePct = (compliance * 100).rounded()
+            let targetLabel = formatComplianceTarget(target)
             card(
                 "Compliance",
                 value: "\(Int(compliancePct))%",
-                subtitle: "\(compliantDays) of \(days) days ≥ 4h",
+                subtitle: "\(compliantDays) of \(days) days ≥ \(targetLabel)",
                 tint: compliance >= 0.7 ? .severityGood : .severityMedium,
                 explain: TrendsExplainContext(
                     metric: .compliance,
-                    displayValue: "\(Int(compliancePct))% of nights ≥ 4h",
+                    displayValue: "\(Int(compliancePct))% of nights ≥ \(targetLabel)",
                     averageValue: compliancePct
                 )
             )
@@ -542,14 +561,19 @@ struct TrendsView: View {
     }
 
     private var usageChart: some View {
-        chartSection(title: "Usage", subtitle: "hours per night (dashed line: 4h compliance)") {
+        let target = complianceTargetHours
+        let targetLabel = formatComplianceTarget(target)
+        return chartSection(
+            title: "Usage",
+            subtitle: "hours per night (dashed line: \(targetLabel) compliance)"
+        ) {
             Chart(stats, id: \.date) { stat in
                 BarMark(
                     x: .value("Day", stat.date, unit: .day),
                     y: .value("Hours", stat.usageHours)
                 )
-                .foregroundStyle(stat.usageHours >= 4 ? Color.chartUsageStrong : Color.chartUsageWeak)
-                RuleMark(y: .value("Compliance", 4))
+                .foregroundStyle(stat.usageHours >= target ? Color.chartUsageStrong : Color.chartUsageWeak)
+                RuleMark(y: .value("Compliance", target))
                     .foregroundStyle(Color.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
             }

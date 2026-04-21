@@ -135,6 +135,15 @@ struct SettingsSheet: View {
         return (value?.isEmpty ?? true) ? nil : value
     }
 
+    /// Fixed row-content height for every trailing value on the
+    /// Device tab — TextField, plain Text, monospaced Text, and
+    /// the Compliance Stepper. A hard-coded height is the
+    /// simplest way to get a TextField (which has its own
+    /// intrinsic height on macOS) and a plain Text to share the
+    /// same vertical center so the labels in the leading column
+    /// line up row-to-row.
+    private var detailRowHeight: CGFloat { 22 }
+
     var body: some View {
         #if os(iOS)
         // iOS mirrors the macOS TabView split — four top-level
@@ -208,18 +217,33 @@ struct SettingsSheet: View {
     private var deviceSection: some View {
         if hasCard, let serial = currentSerial {
             Section {
-                LabeledContent("Alias") {
-                    TextField(currentDefaultName, text: $deviceNameDraft)
-                        .autocorrectionDisabled()
-                        .multilineTextAlignment(.trailing)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.words)
-                        .submitLabel(.done)
-                        #endif
-                        .onSubmit(commitDeviceName)
+                detailRow("Alias") {
+                    // Borderless TextField with an explicit `.secondary`
+                    // prompt (lighter weight) so the default-device-name
+                    // hint reads as a subdued placeholder and vanishes
+                    // on first keystroke — matching the iOS Settings
+                    // look on both platforms.
+                    TextField(
+                        "",
+                        text: $deviceNameDraft,
+                        prompt: Text(currentDefaultName)
+                            .foregroundStyle(.secondary)
+                            .fontWeight(.light)
+                    )
+                    .autocorrectionDisabled()
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    #endif
+                    .onSubmit(commitDeviceName)
                 }
-                LabeledContent("Model", value: currentDefaultName)
-                LabeledContent("Serial") {
+                detailRow("Model") {
+                    Text(currentDefaultName)
+                }
+                detailRow("Serial") {
                     Text(serial).monospaced()
                 }
                 if currentOverride != nil {
@@ -241,6 +265,94 @@ struct SettingsSheet: View {
                 Text("Shown in the sidebar. Syncs between your devices via iCloud.")
             }
         }
+    }
+
+    /// Label-on-left + content-on-right row with both sides
+    /// vertically centered in a fixed-height frame. Written as an
+    /// explicit HStack (rather than `LabeledContent`) because
+    /// `LabeledContent` baselines a TextField's text differently
+    /// from a plain `Text`, which visibly shifted the "Alias"
+    /// leading label off the Model / Serial row baselines.
+    @ViewBuilder
+    private func detailRow<Content: View>(
+        _ label: LocalizedStringKey,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(label)
+            Spacer(minLength: 8)
+            content()
+        }
+        .frame(minHeight: detailRowHeight)
+    }
+
+    /// Per-device compliance-hours target. A Stepper keeps the UI
+    /// small on both platforms; the range (1–12 in 0.5-hour steps)
+    /// is wide enough to cover the insurer-standard 4h, typical
+    /// 6–8h user goals, and unusually long-usage outliers without
+    /// offering meaningless values (< 1h is noise, > 12h is the
+    /// mask-on-while-awake bucket).
+    @ViewBuilder
+    private var complianceSection: some View {
+        if let serial = currentSerial {
+            let current = library.complianceTarget(for: serial)
+            let binding = Binding<Double>(
+                get: { library.complianceTarget(for: serial) },
+                set: { library.setComplianceTarget($0, for: serial) }
+            )
+            Section {
+                LabeledContent("Compliance Target") {
+                    #if os(macOS)
+                    // On macOS, the stepper's own label renders next to
+                    // the arrows (and we want to hide it so it doesn't
+                    // duplicate the LabeledContent leading label), so
+                    // the value has to live in a sibling Text.
+                    HStack(spacing: 8) {
+                        Text(complianceTargetLabel(current))
+                            .monospacedDigit()
+                        Stepper("", value: binding, in: 1...12, step: 0.5)
+                            .labelsHidden()
+                    }
+                    .frame(height: detailRowHeight)
+                    #else
+                    Stepper(
+                        value: binding,
+                        in: 1...12,
+                        step: 0.5
+                    ) {
+                        Text(complianceTargetLabel(current))
+                            .monospacedDigit()
+                    }
+                    #endif
+                }
+                if current != Library.defaultComplianceHours {
+                    Button(role: .destructive) {
+                        library.setComplianceTarget(
+                            Library.defaultComplianceHours,
+                            for: serial
+                        )
+                    } label: {
+                        #if os(iOS)
+                        Text("Reset to 4 Hours")
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        #else
+                        Text("Reset to 4 Hours")
+                        #endif
+                    }
+                }
+            } header: {
+                Text("Compliance")
+            } footer: {
+                Text("Hours of usage per night that count a night as compliant. Insurers and sleep clinics typically use 4 hours. Applies only to this device and syncs across your devices via iCloud.")
+            }
+        }
+    }
+
+    private func complianceTargetLabel(_ hours: Double) -> String {
+        if hours.rounded() == hours {
+            return "\(Int(hours)) hr"
+        }
+        return String(format: "%.1f hr", hours)
     }
 
     @ViewBuilder
@@ -330,8 +442,9 @@ struct SettingsSheet: View {
         }
     }
 
-    /// Device tab — PAP-device alias + model + serial. Falls back
-    /// to an empty-state message when no card is loaded so the tab
+    /// Device tab — PAP-device alias + model + serial plus the
+    /// per-device compliance-hours target. Falls back to an
+    /// empty-state message when no card is loaded so the tab
     /// isn't a blank pane. Shared by the macOS TabView and the
     /// iOS NavigationLink destination.
     @ViewBuilder
@@ -339,6 +452,7 @@ struct SettingsSheet: View {
         Form {
             if hasCard {
                 deviceSection
+                complianceSection
             } else {
                 settingsEmptyState(
                     icon: "externaldrive",
