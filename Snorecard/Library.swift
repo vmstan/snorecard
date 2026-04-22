@@ -1311,7 +1311,7 @@ final class Library {
                     return nil
                 }
                 let parsedDate: Date? = parts.count == 2
-                    ? backupFilenameFormatter.date(from: String(parts[1]))
+                    ? parseBackupStamp(String(parts[1]))
                     : nil
                 let mtime = (try? url.resourceValues(
                     forKeys: [.contentModificationDateKey]
@@ -1401,7 +1401,26 @@ final class Library {
         try? FileManager.default.removeItem(at: backup.url)
     }
 
+    /// UTC formatter used to *write* new backup filename stamps. The
+    /// trailing `Z` marks the value as UTC so readers on any device
+    /// parse back to the instant the archive was created, regardless
+    /// of the local time zone either side of the transfer.
     private static let backupFilenameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss'Z'"
+        return formatter
+    }()
+
+    /// Legacy filename stamps (pre-UTC fix) were written in the
+    /// author's local time zone with no suffix. We still need to
+    /// render something sensible for those archives when they roam
+    /// between devices — parsing them as `TimeZone.current` matches
+    /// the old behaviour and avoids shifting any backup's displayed
+    /// `createdAt` compared to prior builds.
+    private static let legacyBackupFilenameFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -1409,4 +1428,15 @@ final class Library {
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         return formatter
     }()
+
+    /// Try the UTC form first, then fall back to the legacy local-TZ
+    /// form. New archives all use UTC, so the legacy branch is only
+    /// exercised for filenames written by builds that predate the
+    /// time-zone fix.
+    private static func parseBackupStamp(_ stamp: String) -> Date? {
+        if let date = backupFilenameFormatter.date(from: stamp) {
+            return date
+        }
+        return legacyBackupFilenameFormatter.date(from: stamp)
+    }
 }
