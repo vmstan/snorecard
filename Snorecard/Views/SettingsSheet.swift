@@ -74,6 +74,13 @@ struct SettingsSheet: View {
                 } label: {
                     Label("Advanced", systemImage: "wrench.and.screwdriver")
                 }
+                NavigationLink {
+                    AboutView()
+                        .navigationTitle("About")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("About", systemImage: "info.circle")
+                }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")

@@ -21,6 +21,9 @@ struct SnorecardApp: App {
         }
         .windowResizability(.contentSize)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                AboutMenuItem()
+            }
             CommandGroup(replacing: .newItem) {
                 fileCommands
             }
@@ -61,6 +64,32 @@ struct SnorecardApp: App {
             if let payload {
                 AdvancedChartingView(payload: payload)
                     .frame(minWidth: 960, minHeight: 640)
+            }
+        }
+
+        // Standalone About window opened from the overridden
+        // Snorecard ▸ About Snorecard menu item. `Window` (vs
+        // `WindowGroup`) is a singleton, so repeat triggers bring
+        // the existing window forward instead of stacking copies.
+        Window("About Snorecard", id: "about") {
+            AboutView()
+                .frame(width: 420, height: 620)
+        }
+        .windowResizability(.contentSize)
+    }
+
+    /// `CommandGroup(replacing: .appInfo)` body — routes the default
+    /// Snorecard ▸ About Snorecard menu item to our SwiftUI About
+    /// window via `openWindow(id:)` instead of the AppKit-supplied
+    /// standard About panel.
+    private struct AboutMenuItem: View {
+        @Environment(\.openWindow) private var openWindow
+
+        var body: some View {
+            Button {
+                openWindow(id: "about")
+            } label: {
+                Label("About Snorecard", systemImage: "info.circle")
             }
         }
     }
