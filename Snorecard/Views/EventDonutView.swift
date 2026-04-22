@@ -6,21 +6,52 @@ import SnorecardKit
 ///
 /// Shows the AHI number and a horizontal stacked bar of OAI / CAI / HI
 /// proportions, with the by-hour events chart below when available.
+/// Used at the top of both the daily view (for one night) and the
+/// Trends view (for range averages).
 struct EventDonutView: View {
-    let stats: DailyStatistics
+    let ahi: Double
+    let obstructiveApneaIndex: Double
+    let centralApneaIndex: Double
+    let hypopneaIndex: Double
+    let headline: String
+    let onTap: (() -> Void)?
+
+    init(
+        ahi: Double,
+        obstructiveApneaIndex: Double,
+        centralApneaIndex: Double,
+        hypopneaIndex: Double,
+        headline: String = "APNEA HYPOPNEA INDEX",
+        onTap: (() -> Void)? = nil
+    ) {
+        self.ahi = ahi
+        self.obstructiveApneaIndex = obstructiveApneaIndex
+        self.centralApneaIndex = centralApneaIndex
+        self.hypopneaIndex = hypopneaIndex
+        self.headline = headline
+        self.onTap = onTap
+    }
+
+    init(stats: DailyStatistics, onTap: (() -> Void)? = nil) {
+        self.init(
+            ahi: stats.ahi,
+            obstructiveApneaIndex: stats.obstructiveApneaIndex,
+            centralApneaIndex: stats.centralApneaIndex,
+            hypopneaIndex: stats.hypopneaIndex,
+            onTap: onTap
+        )
+    }
 
     private var hasData: Bool {
-        stats.obstructiveApneaIndex
-            + stats.centralApneaIndex
-            + stats.hypopneaIndex > 0
+        obstructiveApneaIndex + centralApneaIndex + hypopneaIndex > 0
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let content = VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.1f", stats.ahi))
+                Text(String(format: "%.1f", ahi))
                     .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
-                Text("APNEA HYPOPNEA INDEX")
+                Text(headline)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -29,6 +60,15 @@ struct EventDonutView: View {
             stackedBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+
+        if let onTap {
+            Button(action: onTap) {
+                content
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
     }
 
     /// Fully custom stacked bar — replaces a SwiftUI Chart so we
@@ -43,19 +83,19 @@ struct EventDonutView: View {
                 if hasData {
                     segment(
                         "OA",
-                        value: stats.obstructiveApneaIndex,
+                        value: obstructiveApneaIndex,
                         color: .eventObstructive,
                         availableWidth: geo.size.width
                     )
                     segment(
                         "H",
-                        value: stats.hypopneaIndex,
+                        value: hypopneaIndex,
                         color: .eventHypopnea,
                         availableWidth: geo.size.width
                     )
                     segment(
                         "CA",
-                        value: stats.centralApneaIndex,
+                        value: centralApneaIndex,
                         color: .eventCentral,
                         availableWidth: geo.size.width
                     )
@@ -85,9 +125,9 @@ struct EventDonutView: View {
         color: Color,
         availableWidth: CGFloat
     ) -> some View {
-        let total = stats.obstructiveApneaIndex
-            + stats.centralApneaIndex
-            + stats.hypopneaIndex
+        let total = obstructiveApneaIndex
+            + centralApneaIndex
+            + hypopneaIndex
         let share = total > 0 ? value / total : 0
         let width = max(0, availableWidth * CGFloat(share))
         Rectangle()
@@ -107,9 +147,9 @@ struct EventDonutView: View {
     /// Only label segments that take up at least ~8 % of the bar so the
     /// text doesn't overflow its slice.
     private func shouldLabel(_ value: Double) -> Bool {
-        let total = stats.obstructiveApneaIndex
-            + stats.centralApneaIndex
-            + stats.hypopneaIndex
+        let total = obstructiveApneaIndex
+            + centralApneaIndex
+            + hypopneaIndex
         guard total > 0 else { return false }
         return value / total > 0.08
     }

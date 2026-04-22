@@ -10,10 +10,54 @@ import Foundation
 /// Original code licensed under GPLv3.
 public enum GlasgowIndex {
 
+    /// Per-sub-index fractions that sum to the overall Glasgow
+    /// Index. Each field is in 0–1 and represents the fraction of
+    /// analysed breaths that triggered that sub-index's criterion
+    /// (e.g. `flatTop = 0.42` means 42% of breaths had a flat peak).
+    /// The 9 fields added together equal the overall score.
+    public struct Breakdown: Codable, Hashable, Sendable {
+        public let skew: Double
+        public let topHeavy: Double
+        public let flatTop: Double
+        public let spike: Double
+        public let multiPeak: Double
+        public let noPause: Double
+        public let inspirRate: Double
+        public let multiBreath: Double
+        public let ampVar: Double
+
+        public init(
+            skew: Double,
+            topHeavy: Double,
+            flatTop: Double,
+            spike: Double,
+            multiPeak: Double,
+            noPause: Double,
+            inspirRate: Double,
+            multiBreath: Double,
+            ampVar: Double
+        ) {
+            self.skew = skew
+            self.topHeavy = topHeavy
+            self.flatTop = flatTop
+            self.spike = spike
+            self.multiPeak = multiPeak
+            self.noPause = noPause
+            self.inspirRate = inspirRate
+            self.multiBreath = multiBreath
+            self.ampVar = ampVar
+        }
+
+        public var total: Double {
+            skew + topHeavy + flatTop + spike + multiPeak
+                + noPause + inspirRate + multiBreath + ampVar
+        }
+    }
+
     /// Compute the overall Glasgow Index from a single Flow signal.
-    /// Returns the score and number of inspirations analysed, or `nil`
-    /// when the data is too short.
-    public static func compute(flowSamples: [Double]) -> (score: Double, inspirationCount: Int)? {
+    /// Returns the score, the 9 sub-index breakdown, and the number
+    /// of inspirations analysed, or `nil` when the data is too short.
+    public static func compute(flowSamples: [Double]) -> (score: Double, breakdown: Breakdown, inspirationCount: Int)? {
         guard flowSamples.count > minWindow * 4 else { return nil }
 
         var samples = flowSamples.enumerated().map {
@@ -27,14 +71,16 @@ public enum GlasgowIndex {
         calcCycleBasedIndicators(samples: samples, inspirations: &inspirations)
         calcAmplitudeVariance(inspirations: &inspirations)
 
-        return (overallIndex(inspirations: inspirations), inspirations.count)
+        let breakdown = subIndices(inspirations: inspirations)
+        return (breakdown.total, breakdown, inspirations.count)
     }
 
     /// Compute the Glasgow Index for a full day of BRP sessions.
     /// Each file is scored independently; the results are
     /// weighted-averaged by inspiration count.
-    public static func computeDay(brpFiles: [ResMedDataFile]) -> Double? {
+    public static func computeDay(brpFiles: [ResMedDataFile]) -> (score: Double, breakdown: Breakdown)? {
         var totalScore: Double = 0
+        var weightedSums = BreakdownAccumulator()
         var totalInspirations = 0
 
         for file in brpFiles {
@@ -50,12 +96,59 @@ public enum GlasgowIndex {
             let flowLPerMin = decoded.map { $0 * scale }
 
             guard let result = compute(flowSamples: flowLPerMin) else { continue }
-            totalScore += result.score * Double(result.inspirationCount)
+            let weight = Double(result.inspirationCount)
+            totalScore += result.score * weight
+            weightedSums.add(result.breakdown, weight: weight)
             totalInspirations += result.inspirationCount
         }
 
         guard totalInspirations > 0 else { return nil }
-        return totalScore / Double(totalInspirations)
+        let n = Double(totalInspirations)
+        return (totalScore / n, weightedSums.finalize(totalWeight: n))
+    }
+
+    /// Mutable accumulator for weighted-averaging breakdowns across
+    /// multiple BRP files. Exposed publicly so the `DailyStatistics`
+    /// aggregate pass can reuse the same weighting logic the
+    /// stand-alone `computeDay` path uses.
+    public struct BreakdownAccumulator {
+        var skew: Double = 0
+        var topHeavy: Double = 0
+        var flatTop: Double = 0
+        var spike: Double = 0
+        var multiPeak: Double = 0
+        var noPause: Double = 0
+        var inspirRate: Double = 0
+        var multiBreath: Double = 0
+        var ampVar: Double = 0
+
+        public init() {}
+
+        public mutating func add(_ b: Breakdown, weight: Double) {
+            skew += b.skew * weight
+            topHeavy += b.topHeavy * weight
+            flatTop += b.flatTop * weight
+            spike += b.spike * weight
+            multiPeak += b.multiPeak * weight
+            noPause += b.noPause * weight
+            inspirRate += b.inspirRate * weight
+            multiBreath += b.multiBreath * weight
+            ampVar += b.ampVar * weight
+        }
+
+        public func finalize(totalWeight: Double) -> Breakdown {
+            Breakdown(
+                skew: skew / totalWeight,
+                topHeavy: topHeavy / totalWeight,
+                flatTop: flatTop / totalWeight,
+                spike: spike / totalWeight,
+                multiPeak: multiPeak / totalWeight,
+                noPause: noPause / totalWeight,
+                inspirRate: inspirRate / totalWeight,
+                multiBreath: multiBreath / totalWeight,
+                ampVar: ampVar / totalWeight
+            )
+        }
     }
 
     // MARK: - Constants (matching the JS reference)
@@ -320,9 +413,9 @@ public enum GlasgowIndex {
         }
     }
 
-    // MARK: - Step 5: Score and produce overall index
+    // MARK: - Step 5: Score and produce sub-index breakdown
 
-    private static func overallIndex(inspirations: [Inspiration]) -> Double {
+    private static func subIndices(inspirations: [Inspiration]) -> Breakdown {
         var skew = 0, topHeavy = 0, flatTop = 0, spike = 0
         var multiPeak = 0, noPause = 0, inspirRate = 0
         var multiBreath = 0, ampVar = 0
@@ -340,8 +433,16 @@ public enum GlasgowIndex {
         }
 
         let n = Double(inspirations.count)
-        let indices = [skew, topHeavy, flatTop, spike, multiPeak,
-                       noPause, inspirRate, multiBreath, ampVar]
-        return indices.reduce(0.0) { $0 + Double($1) / n }
+        return Breakdown(
+            skew: Double(skew) / n,
+            topHeavy: Double(topHeavy) / n,
+            flatTop: Double(flatTop) / n,
+            spike: Double(spike) / n,
+            multiPeak: Double(multiPeak) / n,
+            noPause: Double(noPause) / n,
+            inspirRate: Double(inspirRate) / n,
+            multiBreath: Double(multiBreath) / n,
+            ampVar: Double(ampVar) / n
+        )
     }
 }

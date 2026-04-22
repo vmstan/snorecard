@@ -9,6 +9,7 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case glasgowIndex
     case epap95
     case ipap95
+    case maskPressureMedian
     case leak95
     case largeLeak
     case tidalVolume
@@ -148,6 +149,7 @@ extension ExplainableMetric {
         case .glasgowIndex:     return "Glasgow Index"
         case .epap95:           return "EPAP (95th percentile target)"
         case .ipap95:           return "IPAP (95th percentile target)"
+        case .maskPressureMedian: return "Mask pressure (median during usage)"
         case .leak95:           return "Leak (95th percentile)"
         case .largeLeak:        return "Large leak (percent of usage)"
         case .tidalVolume:      return "Tidal volume (median)"

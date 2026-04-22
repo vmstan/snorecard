@@ -97,6 +97,7 @@ struct TrendsView: View {
                         )
                         .frame(maxWidth: .infinity, minHeight: 160)
                     } else {
+                        ahiHero
                         summaryCards
                         if library.intelligence.isReady {
                             CorrelationHintsCard(
@@ -257,6 +258,31 @@ struct TrendsView: View {
 
     // MARK: - Aggregate cards
 
+    /// Range-scoped hero mirroring the daily view's `EventDonutView` —
+    /// big AHI number plus a stacked OA / H / CA bar across the whole
+    /// range instead of a single night. Sits above the stat grid so the
+    /// headline metric reads first, matching the Daily layout.
+    private var ahiHero: some View {
+        let days = stats.count
+        let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
+        let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
+        let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
+        let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
+        let explainCtx = TrendsExplainContext(
+            metric: .ahi,
+            displayValue: String(format: "%.1f events/hr", avgAHI),
+            averageValue: avgAHI
+        )
+        return EventDonutView(
+            ahi: avgAHI,
+            obstructiveApneaIndex: avgOAI,
+            centralApneaIndex: avgCAI,
+            hypopneaIndex: avgHI,
+            headline: "AVG APNEA HYPOPNEA INDEX",
+            onTap: explainTap(explainCtx)
+        )
+    }
+
     private var summaryCards: some View {
         let days = stats.count
         let totalUsage = stats.reduce(0) { $0 + $1.usageMinutes }
@@ -264,14 +290,6 @@ struct TrendsView: View {
         let target = complianceTargetHours
         let compliantDays = stats.filter { $0.usageHours >= target }.count
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
-        let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
-        // Per-event-class indices averaged across the same set of
-        // nights AHI is computed over. Surfaced as a subtitle on
-        // the Avg AHI card so the user can see which event type
-        // is driving the overall index.
-        let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
-        let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
-        let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgApnea = averaging(\.timeInApneaSeconds)
@@ -282,10 +300,14 @@ struct TrendsView: View {
         // is "what the mask actually held".
         let avgEPAP = averaging(\.epap95)
         let avgIPAP = averaging(\.ipap95)
+        // Median-sourced per-day metrics stay in the median family
+        // end-to-end — mean-of-medians would be a statistically
+        // odd hybrid. See `medianAcrossDays(_:)` below.
+        let medianMask = medianAcrossDays(\.pressureMedian)
         let avgFlow = averaging(\.flowLimit95)
         let avgLeak = averaging(\.leak95LPerMin)
         let avgLargeLeakPct = avgLargeLeakPercent()
-        let avgTidal = averaging(\.tidalVolume50)
+        let medianTidal = medianAcrossDays(\.tidalVolume50)
         let avgSnore = averaging(\.snore95)
 
         return LazyVGrid(
@@ -317,8 +339,9 @@ struct TrendsView: View {
                 )
             )
             card(
-                "Avg usage / night",
+                "Usage / Night (AVG)",
                 value: formatMinutes(avgUsageMinutes),
+                subtitle: avgSessions.map { String(format: "%.1f sessions / night", $0) },
                 tint: usageColor(avgUsageMinutes / 60),
                 explain: TrendsExplainContext(
                     metric: .usage,
@@ -326,35 +349,10 @@ struct TrendsView: View {
                     averageValue: avgUsageMinutes / 60
                 )
             )
-            if let avgSessions {
-                card(
-                    "Avg sessions / night",
-                    value: String(format: "%.1f", avgSessions),
-                    explain: TrendsExplainContext(
-                        metric: .sessionsPerNight,
-                        displayValue: String(format: "%.1f per night", avgSessions),
-                        averageValue: avgSessions
-                    )
-                )
-            }
-            card(
-                "Avg AHI",
-                value: String(format: "%.1f", avgAHI),
-                subtitle: String(
-                    format: "OA %.1f · H %.1f · CA %.1f",
-                    avgOAI, avgHI, avgCAI
-                ),
-                tint: ahiColor(avgAHI),
-                explain: TrendsExplainContext(
-                    metric: .ahi,
-                    displayValue: String(format: "%.1f events/hr", avgAHI),
-                    averageValue: avgAHI
-                )
-            )
             if let apnea = avgApnea {
                 let pct = avgApneaPercent() ?? 0
                 card(
-                    "Avg time in apnea",
+                    "Time in Apnea (AVG)",
                     value: formatDurationShort(apnea),
                     subtitle: "per night",
                     tint: apneaColor(pct),
@@ -367,7 +365,7 @@ struct TrendsView: View {
             }
             if let epap = avgEPAP {
                 card(
-                    "Avg EPAP (95%)",
+                    "EPAP (AVG/95%)",
                     value: String(format: "%.1f cmH₂O", epap),
                     explain: TrendsExplainContext(
                         metric: .epap95,
@@ -386,7 +384,7 @@ struct TrendsView: View {
                ipap > epap + 0.05
             {
                 card(
-                    "Avg IPAP (95%)",
+                    "IPAP (AVG/95%)",
                     value: String(format: "%.1f cmH₂O", ipap),
                     explain: TrendsExplainContext(
                         metric: .ipap95,
@@ -395,9 +393,25 @@ struct TrendsView: View {
                     )
                 )
             }
+            // Median across nights of each night's median mask
+            // pressure. Stays in the median family to avoid a
+            // mean-of-medians hybrid; reads as the "typical working
+            // pressure" complement to the 95%-target EPAP/IPAP
+            // averages above.
+            if let maskMedian = medianMask {
+                card(
+                    "Mask Pressure (Median)",
+                    value: String(format: "%.1f cmH₂O", maskMedian),
+                    explain: TrendsExplainContext(
+                        metric: .maskPressureMedian,
+                        displayValue: String(format: "%.1f cmH₂O", maskMedian),
+                        averageValue: maskMedian
+                    )
+                )
+            }
             if let flow = avgFlow {
                 card(
-                    "Avg flow limit 95th",
+                    "Flow Limit (AVG/95%)",
                     value: String(format: "%.2f", flow),
                     tint: flowLimitColor(flow),
                     explain: TrendsExplainContext(
@@ -409,7 +423,7 @@ struct TrendsView: View {
             }
             if let gi = avgGI {
                 card(
-                    "Avg Glasgow Index",
+                    "Glasgow Index (AVG)",
                     value: String(format: "%.2f", gi),
                     tint: glasgowColor(gi),
                     explain: TrendsExplainContext(
@@ -419,10 +433,10 @@ struct TrendsView: View {
                     )
                 )
             }
-            if let tidal = avgTidal {
+            if let tidal = medianTidal {
                 let mL = tidal * 1000
                 card(
-                    "Avg tidal volume",
+                    "Tidal Volume (Median)",
                     value: String(format: "%.0f mL", mL),
                     tint: tidalVolumeColor(mL),
                     explain: TrendsExplainContext(
@@ -434,7 +448,7 @@ struct TrendsView: View {
             }
             if let snore = avgSnore {
                 card(
-                    "Avg snore 95th",
+                    "Snore (AVG/95%)",
                     value: String(format: "%.1f", snore),
                     tint: snoreColor(snore),
                     explain: TrendsExplainContext(
@@ -446,7 +460,7 @@ struct TrendsView: View {
             }
             if let leak = avgLeak {
                 card(
-                    "Avg leak 95th",
+                    "Leak (AVG/95%)",
                     value: String(format: "%.0f L/min", leak),
                     tint: leakColor(leak),
                     explain: TrendsExplainContext(
@@ -458,7 +472,7 @@ struct TrendsView: View {
             }
             if let largeLeak = avgLargeLeakPct {
                 card(
-                    "Avg large leak",
+                    "Large Leak (AVG)",
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
                     tint: largeLeak < 0.5 ? .severityGood : .severityHigh,
@@ -526,20 +540,21 @@ struct TrendsView: View {
     /// that goes into the prompt.
     static func displayLabel(for metric: ExplainableMetric) -> String {
         switch metric {
-        case .ahi:              return "Avg AHI"
-        case .glasgowIndex:     return "Avg Glasgow Index"
-        case .epap95:           return "Avg EPAP (95%)"
-        case .ipap95:           return "Avg IPAP (95%)"
-        case .leak95:           return "Avg Leak (95%)"
-        case .largeLeak:        return "Avg Large Leak"
-        case .tidalVolume:      return "Avg Tidal Volume"
-        case .snore95:          return "Avg Snore (95%)"
-        case .usage:            return "Avg Usage"
-        case .timeInApnea:      return "Avg Time in Apnea"
-        case .flowLimit:        return "Avg Flow Limit (95%)"
+        case .ahi:              return "AHI (AVG)"
+        case .glasgowIndex:     return "Glasgow Index (AVG)"
+        case .epap95:           return "EPAP (AVG/95%)"
+        case .ipap95:           return "IPAP (AVG/95%)"
+        case .maskPressureMedian: return "Mask Pressure (Median)"
+        case .leak95:           return "Leak (AVG/95%)"
+        case .largeLeak:        return "Large Leak (AVG)"
+        case .tidalVolume:      return "Tidal Volume (Median)"
+        case .snore95:          return "Snore (AVG/95%)"
+        case .usage:            return "Usage / Night (AVG)"
+        case .timeInApnea:      return "Time in Apnea (AVG)"
+        case .flowLimit:        return "Flow Limit (AVG/95%)"
         case .compliance:       return "Compliance"
         case .daysWithData:     return "Days with Data"
-        case .sessionsPerNight: return "Avg Sessions / Night"
+        case .sessionsPerNight: return "Sessions / Night (AVG)"
         }
     }
 
@@ -629,7 +644,14 @@ struct TrendsView: View {
 
     private var pressureChart: some View {
         let hasData = stats.contains { $0.pressure95 != nil }
-        return chartSection(title: "Pressure", subtitle: "median and 95th percentile (cmH₂O)") {
+        let pressureValues = stats.flatMap { [$0.pressureMedian, $0.pressure95].compactMap { $0 } }
+        let yDomain: ClosedRange<Double> = {
+            guard let lo = pressureValues.min(), let hi = pressureValues.max() else {
+                return 0 ... 20
+            }
+            return (lo - 1) ... (hi + 1)
+        }()
+        return chartSection(title: "Mask Pressure", subtitle: "median and 95th percentile (cmH₂O)") {
             if hasData {
                 Chart(stats, id: \.date) { stat in
                     if let p95 = stat.pressure95 {
@@ -651,6 +673,7 @@ struct TrendsView: View {
                         .symbol(Circle())
                     }
                 }
+                .chartYScale(domain: yDomain)
                 .chartForegroundStyleScale([
                     "95th": Color.chartOrange,
                     "Median": Color.chartBlue
@@ -726,6 +749,13 @@ struct TrendsView: View {
 
     private var tidalVolumeChart: some View {
         let has = stats.contains { $0.tidalVolume50 != nil }
+        let tidalValues = stats.compactMap { $0.tidalVolume50.map { $0 * 1000 } }
+        let yDomain: ClosedRange<Double> = {
+            guard let lo = tidalValues.min(), let hi = tidalValues.max() else {
+                return 0 ... 800
+            }
+            return (lo - 100) ... (hi + 100)
+        }()
         return chartSection(title: "Tidal Volume", subtitle: "median (mL)") {
             if has {
                 Chart(stats, id: \.date) { stat in
@@ -738,6 +768,7 @@ struct TrendsView: View {
                         .symbol(Circle())
                     }
                 }
+                .chartYScale(domain: yDomain)
             } else {
                 emptyPlaceholder("No tidal-volume data recorded.")
             }
@@ -911,6 +942,20 @@ struct TrendsView: View {
         let values = stats.compactMap { $0[keyPath: keyPath] }
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// Median across days of a per-day `Double?` keyPath. Used for
+    /// sources that are themselves per-night medians (Mask Pressure,
+    /// Tidal Volume) — taking the mean of medians is a statistically
+    /// awkward hybrid, so we stay in the median family end-to-end.
+    private func medianAcrossDays(_ keyPath: KeyPath<DailyStatistics, Double?>) -> Double? {
+        let values = stats.compactMap { $0[keyPath: keyPath] }.sorted()
+        guard !values.isEmpty else { return nil }
+        let count = values.count
+        if count.isMultiple(of: 2) {
+            return (values[count / 2 - 1] + values[count / 2]) / 2
+        }
+        return values[count / 2]
     }
 
     private func largeLeakPercent(for stat: DailyStatistics) -> Double? {

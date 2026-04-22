@@ -317,6 +317,12 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: nil,
                 description: "IPAP stands for Inspiratory Positive Airway Pressure — the pressure the CPAP delivers while the user is breathing in, making inhalation feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. The gap in IPAP−EPAP is considered Pressure Support delivered on inhalation."
             )
+        case .maskPressureMedian:
+            return MetricExplainInput.Norms(
+                goodMax: nil,
+                elevatedMax: nil,
+                description: "The median mask pressure measured during on-therapy usage — a typical / middle-of-the-distribution read of what the mask actually held, as distinct from the 95th-percentile target the algorithm is aiming for. Useful for sanity-checking that the device is settling at a comfortable working pressure between its EPAP floor and occasional IPAP peaks."
+            )
         case .leak95:
             return MetricExplainInput.Norms(
                 goodMax: 5.0,
@@ -417,6 +423,7 @@ public enum IntelligenceInputBuilder {
         // of the sheet matches the card the user tapped.
         case .epap95:           return stats.epap95
         case .ipap95:           return stats.ipap95
+        case .maskPressureMedian: return stats.pressureMedian
         case .leak95:           return stats.leak95LPerMin
         case .largeLeak:
             guard let seconds = stats.largeLeakSeconds,
@@ -475,6 +482,7 @@ public enum IntelligenceInputBuilder {
         case .glasgowIndex:     return "score"
         case .epap95:           return "cmH₂O"
         case .ipap95:           return "cmH₂O"
+        case .maskPressureMedian: return "cmH₂O"
         case .leak95:           return "L/min"
         case .largeLeak:        return "percent of usage"
         case .tidalVolume:      return "mL"
