@@ -45,9 +45,9 @@ extension EventColorPalette {
     var obstructive: Color {
         switch self {
         case .defaultPalette: return .eventObstructive
-        case .nick:           return Color(red: 0.92, green: 0.75, blue: 0.35)
-        case .oscar:          return Color(red: 0.55, green: 0.78, blue: 0.92)
-        case .christopher:    return Color(red: 0.94, green: 0.45, blue: 0.36)
+        case .nick:           return Color(red: 0.988, green: 0.824, blue: 0.447)
+        case .oscar:          return Color(red: 0.000, green: 0.757, blue: 1.000)
+        case .christopher:    return Color(red: 1.000, green: 0.322, blue: 0.251)
         }
     }
 
@@ -55,9 +55,9 @@ extension EventColorPalette {
     var hypopnea: Color {
         switch self {
         case .defaultPalette: return .eventHypopnea
-        case .nick:           return Color(red: 0.62, green: 0.52, blue: 0.82)
-        case .oscar:          return Color(red: 0.28, green: 0.46, blue: 0.78)
-        case .christopher:    return Color(red: 0.38, green: 0.82, blue: 0.72)
+        case .nick:           return Color(red: 0.757, green: 0.682, blue: 0.984)
+        case .oscar:          return Color(red: 0.173, green: 0.000, blue: 1.000)
+        case .christopher:    return Color(red: 0.216, green: 0.651, blue: 0.553)
         }
     }
 
@@ -65,9 +65,9 @@ extension EventColorPalette {
     var central: Color {
         switch self {
         case .defaultPalette: return .eventCentral
-        case .nick:           return Color(red: 0.50, green: 0.74, blue: 0.50)
-        case .oscar:          return Color(red: 0.62, green: 0.52, blue: 0.82)
-        case .christopher:    return Color(red: 0.25, green: 0.45, blue: 0.92)
+        case .nick:           return Color(red: 0.490, green: 0.882, blue: 0.718)
+        case .oscar:          return Color(red: 0.537, green: 0.000, blue: 0.522)
+        case .christopher:    return Color(red: 0.251, green: 0.451, blue: 0.918)
         }
     }
 }
