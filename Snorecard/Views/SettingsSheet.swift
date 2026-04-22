@@ -262,6 +262,39 @@ struct SettingsSheet: View {
         }
     }
 
+    /// Cadence picker for the in-app auto-reload. Mirrors the
+    /// existing Apple Intelligence toggle pattern (Binding wrapping
+    /// a Library property) so both controls read from one source of
+    /// truth without `@AppStorage` in the view.
+    @ViewBuilder
+    private var backgroundReloadSection: some View {
+        Section {
+            Picker(
+                "Background Refresh",
+                selection: Binding(
+                    get: { library.backgroundReloadIntervalMinutes },
+                    set: { library.backgroundReloadIntervalMinutes = $0 }
+                )
+            ) {
+                ForEach(Library.backgroundReloadIntervalChoices, id: \.self) { minutes in
+                    Text(backgroundReloadLabel(minutes)).tag(minutes)
+                }
+            }
+        } header: {
+            Text("Background Refresh")
+        } footer: {
+            Text("Automatically populates the Snorecard interface with new sleep data via iCloud while Snorecard is open, so new nights imported on another device show up without you hitting Reload.")
+        }
+    }
+
+    private func backgroundReloadLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: return "Off"
+        case 60: return "Every hour"
+        default: return "Every \(minutes) min"
+        }
+    }
+
     @ViewBuilder
     private var maintenanceSection: some View {
         Section {
@@ -340,6 +373,7 @@ struct SettingsSheet: View {
     private var advancedTab: some View {
         Form {
             appleIntelligenceSection
+            backgroundReloadSection
             maintenanceSection
         }
         .formStyle(.grouped)

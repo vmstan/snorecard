@@ -90,12 +90,43 @@ final class Library {
     private static let deviceNamesKey = "deviceNameOverrides"
     private static let complianceTargetsKey = "complianceTargets"
     private static let lastOpenedSerialKey = "lastOpenedSerial"
+    private static let backgroundReloadIntervalKey = "backgroundReloadIntervalMinutes"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
     /// ResMed + insurer dashboard uses, so it's the least-surprising
     /// default for a fresh card.
     static let defaultComplianceHours: Double = 4
+
+    /// How often (minutes) to automatically re-run `reloadCurrent()`
+    /// while the app is open. 15 min matches the cadence at which
+    /// ResMed PAP devices flush new day folders to the SD card / the
+    /// iCloud container, so users see fresh data without having to
+    /// hit Reload manually after a nap or an early wake.
+    static let defaultBackgroundReloadIntervalMinutes = 15
+
+    /// Valid selections for the Advanced-settings picker. 0 disables
+    /// the background refresh entirely; the rest march in 15-minute
+    /// increments up to an hour.
+    static let backgroundReloadIntervalChoices = [0, 15, 30, 45, 60]
+
+    /// Current interval between automatic reloads, in minutes. Zero
+    /// means disabled. Persisted per-device (local responsiveness
+    /// preference — no reason to sync across machines). Setting this
+    /// cancels any in-flight refresh task and restarts the loop with
+    /// the new cadence.
+    var backgroundReloadIntervalMinutes: Int {
+        didSet {
+            guard oldValue != backgroundReloadIntervalMinutes else { return }
+            UserDefaults.standard.set(
+                backgroundReloadIntervalMinutes,
+                forKey: Self.backgroundReloadIntervalKey
+            )
+            restartBackgroundReload()
+        }
+    }
+
+    private var backgroundReloadTask: Task<Void, Never>?
 
     init() {
         self.intelligence = IntelligenceAvailability()
@@ -104,6 +135,13 @@ final class Library {
         // If the model flips to unavailable mid-session, the service
         // throws `sessionFailed` and the caller hides its card.
         self.narration = FoundationNarrationService()
+
+        let storedInterval = UserDefaults.standard.object(
+            forKey: Self.backgroundReloadIntervalKey
+        ) as? Int
+        self.backgroundReloadIntervalMinutes = Self.normalizedBackgroundReloadInterval(
+            storedInterval ?? Self.defaultBackgroundReloadIntervalMinutes
+        )
 
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
@@ -123,6 +161,49 @@ final class Library {
         // Kick off an initial pull so any value already synced to this
         // device is picked up on first launch.
         kvs.synchronize()
+
+        restartBackgroundReload()
+    }
+
+    /// Clamp a stored/externally-supplied interval to the picker's
+    /// allowed choices so a corrupted UserDefaults entry (or a build
+    /// from before a future picker change) can't produce a timer at
+    /// an unexpected cadence.
+    private static func normalizedBackgroundReloadInterval(_ minutes: Int) -> Int {
+        backgroundReloadIntervalChoices.contains(minutes)
+            ? minutes
+            : defaultBackgroundReloadIntervalMinutes
+    }
+
+    /// Cancel any in-flight auto-reload task and — if the user hasn't
+    /// disabled the feature — spawn a fresh one that re-runs
+    /// `reloadCurrent()` on the configured cadence. Skips firing
+    /// while a load is already in flight so a slow refresh can't
+    /// stack with the next tick.
+    private func restartBackgroundReload() {
+        backgroundReloadTask?.cancel()
+        backgroundReloadTask = nil
+        let minutes = backgroundReloadIntervalMinutes
+        guard minutes > 0 else { return }
+        let sleepNanos = UInt64(minutes) * 60 * 1_000_000_000
+        backgroundReloadTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: sleepNanos)
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    guard let self else { return }
+                    switch self.state {
+                    case .loading, .hydrating:
+                        // A user-initiated or prior auto reload is
+                        // still resolving — skip this tick rather
+                        // than stacking work on the import pipeline.
+                        return
+                    default:
+                        self.reloadCurrent()
+                    }
+                }
+            }
+        }
     }
 
     var card: ResMedSDCard? {
