@@ -31,6 +31,8 @@
 		37DD6071D630B3789CEAD2B0 /* FloatingActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D01BD9D312161180297342B /* FloatingActionBar.swift */; };
 		3B2BC9F64A3B10FB028B88D4 /* Snorecard.icon in Resources */ = {isa = PBXBuildFile; fileRef = B7D3A08725D70B6A35104190 /* Snorecard.icon */; };
 		44E6157A799CFD9FABE10136 /* DeviceNotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAAD964BB003BB6ECF52278 /* DeviceNotesCard.swift */; };
+		A1B2C3D4E5F600000A1B0002 /* JournalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000A1B0001 /* JournalEditor.swift */; };
+		A1B2C3D4E5F600000A1B0003 /* JournalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000A1B0001 /* JournalEditor.swift */; };
 		46625453E1E56CB0E06D63E7 /* Snorecard-Inverted.icon in Resources */ = {isa = PBXBuildFile; fileRef = C7263BF411326B541811D4A3 /* Snorecard-Inverted.icon */; };
 		47BDAC9F935239C87D79FB5C /* FloatingActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D01BD9D312161180297342B /* FloatingActionBar.swift */; };
 		4D9BE8677A85742874DB8EAC /* NightSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A45553900FBA215B415695 /* NightSummaryCard.swift */; };
@@ -115,6 +117,7 @@
 		54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupsView.swift; sourceTree = "<group>"; };
 		60A45553900FBA215B415695 /* NightSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightSummaryCard.swift; sourceTree = "<group>"; };
 		6AAAD964BB003BB6ECF52278 /* DeviceNotesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNotesCard.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000A1B0001 /* JournalEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalEditor.swift; sourceTree = "<group>"; };
 		6AF56B9E1D066E90C067AE57 /* Snorecard-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Snorecard-iOS.entitlements"; sourceTree = "<group>"; };
 		722D23C564C439409491B429 /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
 		73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
@@ -257,6 +260,7 @@
 				4D01BD9D312161180297342B /* FloatingActionBar.swift */,
 				ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */,
 				2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */,
+				A1B2C3D4E5F600000A1B0001 /* JournalEditor.swift */,
 				73A185B054E2C91ABE8F9DFF /* SettingsSheet.swift */,
 				29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */,
 				0F85425A6C4E977C75813A1E /* LoadingView.swift */,
@@ -414,6 +418,7 @@
 				37DD6071D630B3789CEAD2B0 /* FloatingActionBar.swift in Sources */,
 				DA60A103DAFC2FF97CEBCF96 /* FlowLayout.swift in Sources */,
 				58EA56F42785887A575234D9 /* HourlySignalCharts.swift in Sources */,
+				A1B2C3D4E5F600000A1B0003 /* JournalEditor.swift in Sources */,
 				A2C6179E5EC7090AA3A4604E /* SettingsSheet.swift in Sources */,
 				15F314042E6CECBE694C5032 /* InspectorPaneHeader.swift in Sources */,
 				6BE2F7C24C6199A50A408A71 /* Library.swift in Sources */,
@@ -452,6 +457,7 @@
 				47BDAC9F935239C87D79FB5C /* FloatingActionBar.swift in Sources */,
 				1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */,
 				02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */,
+				A1B2C3D4E5F600000A1B0002 /* JournalEditor.swift in Sources */,
 				09E9B6F3D594E5549162467E /* SettingsSheet.swift in Sources */,
 				B958BA5F93D5A0546E7C1697 /* InspectorPaneHeader.swift in Sources */,
 				D88A174919214544AD7A4BB6 /* Library.swift in Sources */,

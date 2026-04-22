@@ -40,24 +40,9 @@ struct DeviceNotesCard: View {
                 }
             }
 
-            #if os(macOS)
-            Text("Press ⌥ + ↩ for a new line")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            #endif
-
-            TextField(
-                "Overall notes for this PAP-device — mask changes, pressure tweaks, anything not tied to a single night…",
-                text: $text,
-                axis: .vertical
-            )
-            .textFieldStyle(.plain)
-            .lineLimit(6, reservesSpace: true)
-            .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(
-                Color.primary.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 10)
+            JournalEditor(
+                placeholder: "Overall notes for this PAP-device — mask changes, pressure tweaks, anything not tied to a single night…",
+                text: $text
             )
         }
         .task(id: deviceSerial) {

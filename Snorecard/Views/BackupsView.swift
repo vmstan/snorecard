@@ -142,15 +142,8 @@ struct BackupsFormSections: View {
                 }
             }
 
-            Button {
+            Button("Backup Now") {
                 runBackup()
-            } label: {
-                #if os(iOS)
-                Text("Backup Now")
-                    .frame(maxWidth: .infinity, alignment: .center)
-                #else
-                Label("Backup Now", systemImage: "arrow.up.doc")
-                #endif
             }
             .disabled(library.card == nil || busyMessage != nil)
         } header: {
