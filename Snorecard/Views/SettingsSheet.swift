@@ -362,11 +362,11 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var appearanceTab: some View {
         Form {
+            sidebarAppearanceSection
+            eventPaletteSection
             #if os(iOS)
             appIconSection
             #endif
-            sidebarAppearanceSection
-            eventPaletteSection
         }
         .formStyle(.grouped)
     }
