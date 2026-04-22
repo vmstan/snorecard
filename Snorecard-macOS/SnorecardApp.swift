@@ -1,8 +1,21 @@
 import SwiftUI
+import AppKit
 
 @main
 struct SnorecardApp: App {
     @State private var library = Library()
+
+    /// Disable AppKit's automatic window tabbing. SwiftUI doesn't
+    /// expose `NSWindow.tabbingMode`, so without this the View menu
+    /// shows Show Tab Bar / Merge All Windows / tab-cycling
+    /// shortcuts that do nothing useful — every one of our windows
+    /// is a distinct scene (Main, Settings, Detailed Statistics,
+    /// Advanced Charting, About) keyed on its own payload, so
+    /// grouping them as tabs has no meaningful UX. Runs in `init`
+    /// so the flag is set before any `NSWindow` is created.
+    init() {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
 
     var body: some Scene {
         WindowGroup {
