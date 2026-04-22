@@ -534,7 +534,7 @@ struct ContentView: View {
             Button {
                 openSDCard()
             } label: {
-                Label("Import SD Card", systemImage: "externaldrive.badge.plus")
+                Label("Import Sleep Data", systemImage: "externaldrive.badge.plus")
             }
             #if os(macOS)
             .keyboardShortcut("o", modifiers: [.command])
