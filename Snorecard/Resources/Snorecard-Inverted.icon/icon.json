@@ -7,17 +7,7 @@
       "layers" : [
         {
           "fill" : {
-            "automatic-gradient" : "srgb:0.58188,0.21569,1.00000,1.00000",
-            "orientation" : {
-              "start" : {
-                "x" : 0.5,
-                "y" : 0
-              },
-              "stop" : {
-                "x" : 0.5,
-                "y" : 0.7
-              }
-            }
+            "solid" : "display-p3:0.42276,0.13308,0.78482,1.00000"
           },
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",

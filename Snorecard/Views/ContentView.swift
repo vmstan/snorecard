@@ -56,6 +56,13 @@ struct ContentView: View {
     #endif
     #if os(iOS)
     @State private var isShowingDeviceNotes = false
+    /// Drives whether the detail pane carries its own Options menu.
+    /// On iPad regular-width the sidebar is always on screen and
+    /// already hosts the same menu, so duplicating it in the detail
+    /// toolbar would show the ellipsis twice. Compact / iPhone
+    /// layouts stack the columns, so the detail pane needs its own
+    /// copy for when the sidebar isn't visible.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
 
     private var otherDevices: [Library.DeviceFolder] {
@@ -70,7 +77,7 @@ struct ContentView: View {
         if let product = folder.productName, !product.isEmpty {
             return "\(product) (\(folder.serial))"
         }
-        return "Device \(folder.serial)"
+        return "Machine \(folder.serial)"
     }
 
     /// Best-effort display name to show while a given URL is loading —
@@ -378,7 +385,8 @@ struct ContentView: View {
                     productName: day.stats?.productName
                         ?? library.card?.identification?.productName,
                     serialNumber: library.card?.identification?.serialNumber,
-                    deviceAlias: deviceAliasForInspector
+                    deviceAlias: deviceAliasForInspector,
+                    deviceType: library.deviceType(for: library.card).displayName
                 )
             } else {
                 EmptyView()
@@ -441,13 +449,14 @@ struct ContentView: View {
     /// rather than treating it as a trivial refresh button.
     private var rebuildCacheWarning: String {
         let dayCount = library.card?.days.count ?? 0
+        let typeName = library.deviceType(for: library.card).displayName
         let scope: String
         if dayCount == 0 {
-            scope = "every day of data on this PAP-device"
+            scope = "every day of data on this \(typeName)"
         } else if dayCount == 1 {
-            scope = "the one day of data on this PAP-device"
+            scope = "the one day of data on this \(typeName)"
         } else {
-            scope = "all \(dayCount) days of data on this PAP-device"
+            scope = "all \(dayCount) days of data on this \(typeName)"
         }
 
         return """
@@ -455,7 +464,7 @@ struct ContentView: View {
 
         Your sleep journal entries are never touched.
 
-        While charting, AHI, computed percentiles and other scoring data will still be available, the Therapy Details for nights your PAP-device no longer keeps in its rolling summary, may be lost.
+        While charting, AHI, computed percentiles and other scoring data will still be available, the Therapy Details for nights your \(typeName) no longer keeps in its rolling summary, may be lost.
 
         Based on your dataset this process may take \(estimatedRebuildDuration(dayCount: dayCount)).
         """
@@ -493,7 +502,7 @@ struct ContentView: View {
                 Button {
                     openSDCard()
                 } label: {
-                    Label("Import SD Card", systemImage: "externaldrive.badge.plus")
+                    Label("Import Sleep Data", systemImage: "externaldrive.badge.plus")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
                 .help("Import a ResMed SD card or DATALOG folder")
@@ -540,7 +549,7 @@ struct ContentView: View {
                         }
                     }
                 } label: {
-                    Label("Switch PAP Device", systemImage: "rectangle.2.swap")
+                    Label("Swap Machines", systemImage: "rectangle.2.swap")
                 }
             }
 
@@ -662,7 +671,11 @@ struct ContentView: View {
             }
         }
         #if os(iOS)
-        .toolbar { detailToolbarButtonsForiOS }
+        .toolbar {
+            if horizontalSizeClass == .compact {
+                detailToolbarButtonsForiOS
+            }
+        }
         #endif
     }
 
@@ -680,7 +693,7 @@ struct ContentView: View {
             VStack(spacing: 4) {
                 Text("Opening Snorecard")
                     .font(.headline)
-                Text("Checking iCloud for your PAP-device data…")
+                Text("Checking iCloud for your sleep data…")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

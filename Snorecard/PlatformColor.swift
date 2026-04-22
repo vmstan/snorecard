@@ -2,11 +2,13 @@ import SwiftUI
 
 extension Color {
     /// Muted colour palette for apnea / hypopnea event markers. Softer
-    /// than the primary `.red` / `.yellow` / `.purple` so stacked bars
-    /// and timeline overlays don't look harsh.
+    /// than the primary `.red` / `.yellow` / `.blue` so stacked bars
+    /// and timeline overlays don't look harsh. The Central-apnea blue
+    /// matches `chartBlue` so the CA marker reads as the same hue
+    /// wherever it appears across the app's charts.
     static let eventObstructive = Color(red: 0.85, green: 0.42, blue: 0.42)
     static let eventHypopnea    = Color(red: 0.92, green: 0.75, blue: 0.35)
-    static let eventCentral     = Color(red: 0.62, green: 0.52, blue: 0.82)
+    static let eventCentral     = Color(red: 0.42, green: 0.60, blue: 0.82)
 
     /// Neutral-by-default session bar for the day timeline so the
     /// coloured event markers and viewport indicator remain legible
@@ -36,4 +38,36 @@ extension Color {
     /// saturation.
     static let chartUsageStrong = Color.accentColor.opacity(0.75)
     static let chartUsageWeak   = Color.accentColor.opacity(0.3)
+}
+
+extension EventColorPalette {
+    /// Colour for obstructive-apnea markers in this palette.
+    var obstructive: Color {
+        switch self {
+        case .defaultPalette: return .eventObstructive
+        case .nick:           return Color(red: 0.988, green: 0.824, blue: 0.447)
+        case .oscar:          return Color(red: 0.000, green: 0.757, blue: 1.000)
+        case .christopher:    return Color(red: 1.000, green: 0.322, blue: 0.251)
+        }
+    }
+
+    /// Colour for hypopnea markers in this palette.
+    var hypopnea: Color {
+        switch self {
+        case .defaultPalette: return .eventHypopnea
+        case .nick:           return Color(red: 0.757, green: 0.682, blue: 0.984)
+        case .oscar:          return Color(red: 0.173, green: 0.000, blue: 1.000)
+        case .christopher:    return Color(red: 0.216, green: 0.651, blue: 0.553)
+        }
+    }
+
+    /// Colour for central-apnea markers in this palette.
+    var central: Color {
+        switch self {
+        case .defaultPalette: return .eventCentral
+        case .nick:           return Color(red: 0.490, green: 0.882, blue: 0.718)
+        case .oscar:          return Color(red: 0.537, green: 0.000, blue: 0.522)
+        case .christopher:    return Color(red: 0.251, green: 0.451, blue: 0.918)
+        }
+    }
 }

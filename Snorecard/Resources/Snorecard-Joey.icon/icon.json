@@ -1,23 +1,13 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.80543,0.29125,0.60434,1.00000",
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
-      }
-    }
+    "solid" : "display-p3:0.80543,0.29125,0.60434,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
           "fill" : {
-            "solid" : "display-p3:0.47330,0.25304,0.88424,1.00000"
+            "solid" : "extended-gray:1.00000,1.00000"
           },
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",

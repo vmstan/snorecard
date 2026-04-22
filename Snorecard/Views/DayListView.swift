@@ -171,6 +171,10 @@ struct DayListView: View {
         let hasData = !day.files.isEmpty || day.stats?.hasUsage == true
         let calendarTint: Color = {
             guard let stats = day.stats, stats.hasUsage else { return .secondary }
+            // Severity colouring is opt-out via Appearance settings —
+            // when disabled the calendar glyph falls back to the
+            // accent tint so the sidebar reads as a flat list.
+            guard library.sidebarSeverityColorsEnabled else { return .accentColor }
             return iconSeverityColor(stats.ahi)
         }()
         HStack(alignment: .center, spacing: 10) {
@@ -189,14 +193,15 @@ struct DayListView: View {
                 }
             }
             Spacer()
-            if let stats = day.stats, stats.hasUsage {
+            if let stats = day.stats, stats.hasUsage,
+               let display = sidebarMetricValue(for: stats) {
                 VStack(alignment: .trailing, spacing: 1) {
                     // Colour lives on the calendar glyph to the
                     // left now; the number stays in the row's
                     // default foreground so it reads cleanly.
-                    Text(String(format: "%.1f", stats.ahi))
+                    Text(display)
                         .font(.body.monospacedDigit())
-                    Text("AHI")
+                    Text(library.sidebarRowMetric.rowCaption)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -206,6 +211,26 @@ struct DayListView: View {
         .padding(.vertical, 4)
         .foregroundStyle(hasData ? .primary : .tertiary)
         .compactiOSRowInsets()
+    }
+
+    /// Format the currently-selected sidebar metric for a day's
+    /// stats. Returns `nil` when the metric isn't available (e.g.
+    /// Glasgow Index on STR-only AirSense 11 nights) so the caller
+    /// can drop the trailing value stack rather than render an
+    /// em-dash placeholder.
+    private func sidebarMetricValue(for stats: DailyStatistics) -> String? {
+        switch library.sidebarRowMetric {
+        case .ahi:
+            return String(format: "%.1f", stats.ahi)
+        case .glasgowIndex:
+            guard let g = stats.glasgowIndex else { return nil }
+            return String(format: "%.1f", g)
+        case .maskPressure:
+            guard let p = stats.pressure95 else { return nil }
+            return String(format: "%.1f", p)
+        case .sessions:
+            return "\(stats.maskEvents)"
+        }
     }
 
     /// Trailing tap-affordance shown on iOS only — pairs with the

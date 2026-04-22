@@ -25,6 +25,11 @@ struct DailySettingsInspector: View {
     /// the manufacturer / product / alias / serial stack reads
     /// in descending specificity.
     var deviceAlias: String? = nil
+    /// Resolved device-type label ("CPAP", "APAP", "BiPAP", "ASV")
+    /// used in the empty-state copy when neither alias nor product
+    /// name is known. Resolved by the caller from `Library` so this
+    /// view stays Library-agnostic.
+    var deviceType: String? = nil
 
     var body: some View {
         #if os(iOS)
@@ -81,7 +86,7 @@ struct DailySettingsInspector: View {
     private func settingsForm(for s: DeviceSettings) -> some View {
         Form {
             if hasDeviceIdentity {
-                Section("Device") {
+                Section("Machine") {
                     LabeledContent("Manufacturer", value: "ResMed")
                     if let product = productName, !product.isEmpty {
                         LabeledContent("Model", value: product)
@@ -382,7 +387,8 @@ struct DailySettingsInspector: View {
     private var friendlyDeviceName: String {
         if let alias = deviceAlias, !alias.isEmpty { return alias }
         if let product = productName, !product.isEmpty { return product }
-        return "PAP-device"
+        if let deviceType, !deviceType.isEmpty { return deviceType }
+        return "Machine"
     }
 
     /// `true` when we have enough identity data to justify showing

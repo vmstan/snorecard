@@ -4,10 +4,12 @@ import SnorecardKit
 
 /// Stacked column chart of apnea / hypopnea events bucketed by clock hour
 /// across the night. Colour coding matches the event donut: red for
-/// obstructive, purple for central, yellow for hypopnea. Bucketing walks
+/// obstructive, blue for central, yellow for hypopnea. Bucketing walks
 /// the events list and groups into whole-hour slots starting from
 /// `dayStart`'s first full hour.
 struct AHIHourlyChart: View {
+    @Environment(Library.self) private var library
+
     let events: [TimedEvent]
     let dayStart: Date
     /// Total night duration in seconds. Drives the bucket range so
@@ -93,9 +95,9 @@ struct AHIHourlyChart: View {
                 }
             }
             .chartForegroundStyleScale([
-                "Obstructive": Color.eventObstructive,
-                "Central": Color.eventCentral,
-                "Hypopnea": Color.eventHypopnea
+                "Obstructive": library.eventColorPalette.obstructive,
+                "Central": library.eventColorPalette.central,
+                "Hypopnea": library.eventColorPalette.hypopnea
             ])
             .chartLegend(.hidden)
             .chartXScale(domain: buckets.map(\.clockLabel))

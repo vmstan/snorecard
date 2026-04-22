@@ -27,7 +27,11 @@ struct SettingsSheet: View {
     }
 
     private var currentDefaultName: String {
-        library.card?.identification?.productName ?? "ResMed PAP-device"
+        if let product = library.card?.identification?.productName,
+           !product.isEmpty {
+            return product
+        }
+        return "ResMed \(library.deviceType(for: library.card).displayName)"
     }
 
     private var currentOverride: String? {
@@ -48,10 +52,10 @@ struct SettingsSheet: View {
             List {
                 NavigationLink {
                     deviceTab
-                        .navigationTitle("Device")
+                        .navigationTitle("Machine")
                         .navigationBarTitleDisplayMode(.inline)
                 } label: {
-                    Label("Device", systemImage: "externaldrive")
+                    Label("Machine", systemImage: "externaldrive")
                 }
                 NavigationLink {
                     backupsTab
@@ -98,7 +102,7 @@ struct SettingsSheet: View {
         // context instead of the content repeating it.
         TabView {
             deviceTab
-                .tabItem { Label("Device", systemImage: "externaldrive") }
+                .tabItem { Label("Machine", systemImage: "externaldrive") }
             backupsTab
                 .tabItem { Label("Backups", systemImage: "icloud") }
             appearanceTab
@@ -133,6 +137,18 @@ struct SettingsSheet: View {
                     .onSubmit(commitDeviceName)
                 }
                 LabeledContent("Model", value: currentDefaultName)
+                Picker("Type", selection: Binding(
+                    get: { library.deviceType(for: library.card) },
+                    set: { library.setDeviceType(
+                        $0,
+                        for: serial,
+                        productName: library.card?.identification?.productName
+                    ) }
+                )) {
+                    ForEach(DeviceType.allCases) { type in
+                        Text(type.displayName).tag(type)
+                    }
+                }
                 LabeledContent("Serial") {
                     Text(serial).monospaced()
                 }
@@ -150,48 +166,34 @@ struct SettingsSheet: View {
         }
     }
 
-    /// Per-device compliance-hours target. A Stepper keeps the UI
-    /// small on both platforms; the range (1–12 in 0.5-hour steps)
-    /// is wide enough to cover the insurer-standard 4h, typical
-    /// 6–8h user goals, and unusually long-usage outliers without
-    /// offering meaningless values (< 1h is noise, > 12h is the
-    /// mask-on-while-awake bucket).
+    /// Per-device compliance-hours target. A Picker with whole-hour
+    /// choices from 2–8 covers the insurer-standard 4h plus the
+    /// typical user-goal band without offering meaningless values.
+    /// The binding rounds any legacy half-hour values to the nearest
+    /// valid choice on read, so previously-saved overrides still
+    /// resolve to a selected row.
     @ViewBuilder
     private var complianceSection: some View {
         if let serial = currentSerial {
-            let current = library.complianceTarget(for: serial)
-            let binding = Binding<Double>(
-                get: { library.complianceTarget(for: serial) },
-                set: { library.setComplianceTarget($0, for: serial) }
+            let binding = Binding<Int>(
+                get: {
+                    let raw = library.complianceTarget(for: serial)
+                    return min(max(Int(raw.rounded()), 2), 8)
+                },
+                set: { library.setComplianceTarget(Double($0), for: serial) }
             )
             Section {
-                Stepper(value: binding, in: 1...12, step: 0.5) {
-                    LabeledContent(
-                        "Compliance Target",
-                        value: complianceTargetLabel(current)
-                    )
-                }
-                if current != Library.defaultComplianceHours {
-                    Button("Reset to 4 Hours", role: .destructive) {
-                        library.setComplianceTarget(
-                            Library.defaultComplianceHours,
-                            for: serial
-                        )
+                Picker("Compliance Target", selection: binding) {
+                    ForEach(2...8, id: \.self) { hours in
+                        Text("\(hours) hr").tag(hours)
                     }
                 }
             } header: {
                 Text("Compliance")
             } footer: {
-                Text("Hours of usage per night that count a night as compliant. Insurers and sleep clinics typically use 4 hours. Applies only to this device and syncs across your devices via iCloud.")
+                Text("Hours of usage per night that count a night as compliant. Insurers and sleep clinics typically use 4 hours. Applies only to this machine and syncs across your devices via iCloud.")
             }
         }
-    }
-
-    private func complianceTargetLabel(_ hours: Double) -> String {
-        if hours.rounded() == hours {
-            return "\(Int(hours)) hr"
-        }
-        return String(format: "%.1f hr", hours)
     }
 
     @ViewBuilder
@@ -307,7 +309,7 @@ struct SettingsSheet: View {
             }
             .disabled(!hasCard)
         } footer: {
-            Text("Rebuilds the cached analysis for this PAP device from the original source data. Useful if the analysis appears stale or incorrect.")
+            Text("Rebuilds the cached analysis for this \(library.deviceType(for: library.card).displayName) from the original source data. Useful if the analysis appears stale or incorrect.")
         }
     }
 
@@ -325,8 +327,8 @@ struct SettingsSheet: View {
             } else {
                 settingsEmptyState(
                     icon: "externaldrive",
-                    title: "No PAP Device Loaded",
-                    message: "Import a ResMed SD card to see device details here."
+                    title: "No Machine Loaded",
+                    message: "Import a ResMed SD card to see machine details here."
                 )
             }
         }
@@ -343,7 +345,7 @@ struct SettingsSheet: View {
             } else {
                 settingsEmptyState(
                     icon: "icloud",
-                    title: "No PAP Device Loaded",
+                    title: "No Machine Loaded",
                     message: "Import a ResMed SD card to back it up to iCloud Drive."
                 )
             }
@@ -351,15 +353,84 @@ struct SettingsSheet: View {
         .formStyle(.grouped)
     }
 
-    /// Appearance tab — app-icon picker. Available regardless of
-    /// whether a card is loaded since it's a purely presentational
-    /// preference.
+    /// Appearance tab — app-icon picker (iOS-only) followed by the
+    /// sidebar appearance controls on both platforms. Alternate app
+    /// icons on macOS depend on `NSApp.applicationIconImage`, which
+    /// doesn't play nicely with `.icon` packages and isn't worth an
+    /// AppKit bridge for a cosmetic feature, so that section stays
+    /// iOS-only.
     @ViewBuilder
     private var appearanceTab: some View {
         Form {
+            #if os(iOS)
             appIconSection
+            #endif
+            sidebarAppearanceSection
+            eventPaletteSection
         }
         .formStyle(.grouped)
+    }
+
+    /// Picker for the event-marker colour palette — drives the OA /
+    /// H / CA colours in the event donut and the Events-by-Hour
+    /// chart. Named presets swap in alternative schemes for users
+    /// who find the default muted red/yellow/blue hard to read.
+    @ViewBuilder
+    private var eventPaletteSection: some View {
+        Section {
+            Picker(
+                "AHI Color Theme",
+                selection: Binding(
+                    get: { library.eventColorPalette },
+                    set: { library.eventColorPalette = $0 }
+                )
+            ) {
+                ForEach(EventColorPalette.allCases) { palette in
+                    Text(palette.displayName).tag(palette)
+                }
+            }
+        } header: {
+            Text("Charting")
+        } footer: {
+            Text("Applies to the AHI event bar and the Events by Hour chart. Each palette uses a different trio of colors for obstructive apneas, hypopneas, and central apneas.")
+        }
+    }
+
+    /// Sidebar row styling — AHI-severity color toggle plus the
+    /// right-hand metric picker. Both prefs live on `Library` and
+    /// are persisted via `UserDefaults` so the controls read/write
+    /// a single source of truth.
+    @ViewBuilder
+    private var sidebarAppearanceSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { library.sidebarSeverityColorsEnabled },
+                set: { library.sidebarSeverityColorsEnabled = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Color Code by AHI")
+                    Text("Tints each day's icon green, orange, or red based on AHI.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker(
+                "Show in Sidebar",
+                selection: Binding(
+                    get: { library.sidebarRowMetric },
+                    set: { library.sidebarRowMetric = $0 }
+                )
+            ) {
+                ForEach(SidebarRowMetric.allCases) { metric in
+                    Text(metric.displayName).tag(metric)
+                }
+            }
+        } header: {
+            Text("Sidebar")
+        } footer: {
+            Text("Controls how each day appears in the sidebar. The selected metric is shown on the right side of every day row.")
+        }
     }
 
     /// Advanced tab — Apple Intelligence master switch at the top,
@@ -433,12 +504,10 @@ struct SettingsSheet: View {
 
     @ViewBuilder
     private func preview(for option: AppIconOption) -> some View {
-        // Pre-rendered PNG from the asset catalog. Plain imageset
-        // (not a `.icon` package), so SwiftUI's `.resizable()`
-        // works cleanly on both platforms.
-        Image(option.previewAssetName)
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
+        // Live SwiftUI composition of the shared waveform SVG over
+        // the option's background fill — avoids shipping per-icon
+        // preview PNGs and stays in step with the `.icon` package
+        // automatically.
+        AppIconPreview(option: option)
     }
 }
