@@ -30,7 +30,7 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 - Switch between multiple ResMed machines if you have more than one
 - Give each device a friendly name that follows you to your other Apple devices
 - Everything syncs through your iCloud account — import once on your Mac, see it on your iPhone
-- Pick from six app-icon variants built in Icon Composer
+- Pick from eight app-icon variants built in Icon Composer
 
 **Backup**
 
