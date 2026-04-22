@@ -414,39 +414,34 @@ struct GlasgowBreakdownChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Glasgow Breakdown",
-            subtitle: String(format: "overall %.2f · fraction of breaths per sub-index", breakdown.total)
+            subtitle: String(format: "overall %.2f · lower is better", breakdown.total)
         ) {
             Chart(rows) { row in
                 BarMark(
                     x: .value("Fraction", row.value),
                     y: .value("Sub-index", row.label)
                 )
-                .foregroundStyle(Color.chartTeal)
+                .foregroundStyle(Color.chartGreen)
+                .annotation(position: .trailing, alignment: .leading) {
+                    Text(row.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .chartXScale(domain: 0 ... 1)
             .chartXAxis {
-                AxisMarks(values: [0, 0.25, 0.5, 0.75, 1]) { value in
+                AxisMarks(values: [0, 0.2, 0.4, 0.6, 0.8, 1]) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {
                         if let fraction = value.as(Double.self) {
-                            Text(String(format: "%.0f%%", fraction * 100))
+                            Text(String(format: "%.2f", fraction))
                                 .font(.caption2.monospacedDigit())
                         }
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisValueLabel(horizontalSpacing: 8) {
-                        if let label = value.as(String.self) {
-                            Text(label)
-                                .font(.caption)
-                                .frame(width: 110, alignment: .leading)
-                        }
-                    }
-                }
-            }
+            .chartYAxis(.hidden)
             .frame(minHeight: 220)
         }
     }

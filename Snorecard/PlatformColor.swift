@@ -30,6 +30,7 @@ extension Color {
     static let chartPink   = Color(red: 0.86, green: 0.55, blue: 0.70)
     static let chartMint   = Color(red: 0.50, green: 0.78, blue: 0.72)
     static let chartIndigo = Color(red: 0.55, green: 0.55, blue: 0.80)
+    static let chartGreen  = Color(red: 0.45, green: 0.72, blue: 0.48)
     /// Soft version of the accent used for Usage bars so compliant
     /// and non-compliant nights remain distinguishable without vivid
     /// saturation.
