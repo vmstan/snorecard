@@ -39,8 +39,8 @@ public enum CardSnapshot {
     /// Load the most recent snapshot for `serial`, returning `nil`
     /// when absent, unreadable, or written by an incompatible schema.
     public static func load(forSerial serial: String) -> ResMedSDCard? {
-        let url = snapshotURL(forSerial: serial)
-        guard FileManager.default.fileExists(atPath: url.path),
+        guard let url = snapshotURL(forSerial: serial),
+              FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
               let payload = try? decoder.decode(Payload.self, from: data),
               payload.schemaVersion == schemaVersion
@@ -70,8 +70,15 @@ public enum CardSnapshot {
         return snapshotURL(forSerial: serial)
     }
 
-    private static func snapshotURL(forSerial serial: String) -> URL {
-        let sanitized = serial.replacingOccurrences(of: "/", with: "_")
+    /// Resolves to `nil` — rather than a rooted path — when `serial`
+    /// can't be sanitized into a safe filename component. Previously
+    /// this only replaced `/`, which let `..` segments escape the
+    /// snapshots directory. Callers treat `nil` as "no snapshot to
+    /// read or write," which is the safe default.
+    private static func snapshotURL(forSerial serial: String) -> URL? {
+        guard let sanitized = ResMedIdentification.sanitizedSerial(serial) else {
+            return nil
+        }
         let base = snapshotsDirectory() ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base.appendingPathComponent("last-card-\(sanitized).json")
     }
