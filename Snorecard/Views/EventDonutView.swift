@@ -9,6 +9,8 @@ import SnorecardKit
 /// Used at the top of both the daily view (for one night) and the
 /// Trends view (for range averages).
 struct EventDonutView: View {
+    @Environment(Library.self) private var library
+
     let ahi: Double
     let obstructiveApneaIndex: Double
     let centralApneaIndex: Double
@@ -81,22 +83,23 @@ struct EventDonutView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 if hasData {
+                    let palette = library.eventColorPalette
                     segment(
                         "OA",
                         value: obstructiveApneaIndex,
-                        color: .eventObstructive,
+                        color: palette.obstructive,
                         availableWidth: geo.size.width
                     )
                     segment(
                         "H",
                         value: hypopneaIndex,
-                        color: .eventHypopnea,
+                        color: palette.hypopnea,
                         availableWidth: geo.size.width
                     )
                     segment(
                         "CA",
                         value: centralApneaIndex,
-                        color: .eventCentral,
+                        color: palette.central,
                         availableWidth: geo.size.width
                     )
                 } else {

@@ -1,16 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.85633,0.41433,0.27193,1.00000",
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
-      }
-    }
+    "solid" : "display-p3:0.91657,0.64250,0.42990,1.00000"
   },
   "groups" : [
     {

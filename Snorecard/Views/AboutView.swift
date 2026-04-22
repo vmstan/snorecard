@@ -11,12 +11,8 @@ struct AboutView: View {
         Form {
             Section {
                 VStack(spacing: 10) {
-                    Image("IconPreview-Default")
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
+                    AppIconPreview(option: AppIconController.current)
                         .frame(width: 96, height: 96)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     Text("Snorecard")
                         .font(.title2.weight(.semibold))
                     Text(versionLine)

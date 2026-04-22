@@ -121,7 +121,7 @@ struct SnorecardApp: App {
         Button {
             NotificationCenter.default.post(name: .snorecardImportSDCard, object: nil)
         } label: {
-            Label("Import SD Card", systemImage: "externaldrive.badge.plus")
+            Label("Import Sleep Data", systemImage: "externaldrive.badge.plus")
         }
         .keyboardShortcut("o", modifiers: [.command])
 
@@ -134,7 +134,7 @@ struct SnorecardApp: App {
                     }
                 }
             } label: {
-                Label("Switch PAP Device", systemImage: "rectangle.2.swap")
+                Label("Swap Machines", systemImage: "rectangle.2.swap")
             }
         }
     }
@@ -249,6 +249,6 @@ struct SnorecardApp: App {
         if let product = folder.productName, !product.isEmpty {
             return "\(product) (\(folder.serial))"
         }
-        return "Device \(folder.serial)"
+        return "Machine \(folder.serial)"
     }
 }

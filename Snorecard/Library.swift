@@ -11,6 +11,118 @@ enum SidebarSelection: Hashable, Sendable {
     case day(Date)
 }
 
+/// Which per-day metric the sidebar renders on the right side of
+/// each day row. Defaults to AHI (the therapy signal most users
+/// check first) but can be swapped for any of the other three
+/// values we already compute per night. Storing the choice as a
+/// string lets us persist it via `UserDefaults` without a Codable
+/// shim.
+enum SidebarRowMetric: String, CaseIterable, Identifiable, Sendable {
+    case ahi
+    case glasgowIndex
+    case maskPressure
+    case sessions
+
+    var id: String { rawValue }
+
+    /// Long form used in the Settings picker — describes the metric
+    /// the way it's referred to elsewhere in the app.
+    var displayName: String {
+        switch self {
+        case .ahi:           return "AHI"
+        case .glasgowIndex:  return "Glasgow Index"
+        case .maskPressure:  return "Mask Pressure"
+        case .sessions:      return "Sessions"
+        }
+    }
+
+    /// Short caption rendered under the value in the sidebar row.
+    /// Chosen so the two-line stack still fits the narrow right
+    /// column on iPhone without squeezing the weekday / usage
+    /// stack to its left.
+    var rowCaption: String {
+        switch self {
+        case .ahi:           return "AHI"
+        case .glasgowIndex:  return "Glasgow"
+        case .maskPressure:  return "Pressure"
+        case .sessions:      return "Sessions"
+        }
+    }
+}
+
+/// Named colour scheme for apnea / hypopnea event markers — picks
+/// the OA/H/CA colours used by the event donut and the Events-by-Hour
+/// chart. `.defaultPalette` matches the muted red/yellow/blue the app
+/// has always shipped with; named presets swap in alternative schemes
+/// requested by users who find the defaults hard to read. The enum
+/// lives here (no SwiftUI import) and the Color resolution is added
+/// via an extension in `PlatformColor.swift` so Library stays
+/// dependency-free.
+enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
+    case defaultPalette = "default"
+    case nick
+    case oscar
+    case christopher
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .defaultPalette: return "Michael"
+        case .nick:           return "Nick"
+        case .oscar:          return "Oscar"
+        case .christopher:    return "Christopher"
+        }
+    }
+}
+
+/// User-facing category for a PAP device — shown in the Settings
+/// Device section as a dropdown, used anywhere copy refers to the
+/// machine generically ("this CPAP", "this BiPAP"), and synced
+/// per-serial via iCloud so the user only picks once. `infer(from:)`
+/// handles the standard ResMed product-name patterns so most devices
+/// resolve correctly without the user touching the picker.
+enum DeviceType: String, CaseIterable, Identifiable, Sendable {
+    case cpap = "CPAP"
+    case apap = "APAP"
+    case bipap = "BiPAP"
+    case asv = "ASV"
+
+    var id: String { rawValue }
+    var displayName: String { rawValue }
+
+    /// Best-effort mapping from a ResMed product name (e.g.
+    /// "AirSense 10 AutoSet", "AirCurve 10 VAuto") to a `DeviceType`.
+    /// Returns `nil` on unknown names so callers can decide whether
+    /// to fall back to a default rather than guess silently.
+    static func infer(fromProductName name: String?) -> DeviceType? {
+        guard let name else { return nil }
+        let lower = name.lowercased()
+        // AirCurve family — BiLevel + ASV machines. ASV variants
+        // (ASV / ASVauto) map to .asv; everything else AirCurve
+        // (VAuto, S, ST, iVAPS) is BiPAP-family.
+        if lower.contains("aircurve") {
+            if lower.contains("asv") { return .asv }
+            return .bipap
+        }
+        // AirSense family — CPAP machines. "AutoSet" is ResMed's
+        // APAP product line; bare "AirSense 10/11" is plain CPAP.
+        if lower.contains("airsense") {
+            if lower.contains("autoset") { return .apap }
+            return .cpap
+        }
+        // Keyword fallbacks for older / relabelled models where
+        // the family prefix is missing.
+        if lower.contains("asv") { return .asv }
+        if lower.contains("vauto") || lower.contains("bilevel") || lower.contains("bipap") {
+            return .bipap
+        }
+        if lower.contains("autoset") || lower.contains("apap") { return .apap }
+        if lower.contains("cpap") { return .cpap }
+        return nil
+    }
+}
+
 /// App-wide state: which SD card is loaded, which day is selected, and
 /// whether an iCloud sync is in flight. Platform-agnostic — all picker
 /// UI lives in the view layer so this type can compile unchanged on
@@ -50,6 +162,12 @@ final class Library {
     /// matches the insurer/clinic standard. Synced via iCloud KVS so
     /// the user doesn't have to re-pick their target on each device.
     private(set) var complianceTargets: [String: Double] = [:]
+    /// Map of CPAP serial number → user-selected `DeviceType` raw
+    /// value. Only populated when the user explicitly overrides the
+    /// auto-detected type, so absence means "trust what `DeviceType`
+    /// infers from the product name". Synced via iCloud KVS so the
+    /// pick follows the user across devices.
+    private(set) var deviceTypeOverrides: [String: String] = [:]
     /// Non-nil while iCloud placeholder sidecars are being fetched so
     /// the sidebar can show a "Downloading from iCloud — N/M" hint
     /// instead of looking stuck.
@@ -89,8 +207,12 @@ final class Library {
     private static let lastPathKey = "SnorecardLastSDPath"
     private static let deviceNamesKey = "deviceNameOverrides"
     private static let complianceTargetsKey = "complianceTargets"
+    private static let deviceTypesKey = "deviceTypeOverrides"
     private static let lastOpenedSerialKey = "lastOpenedSerial"
     private static let backgroundReloadIntervalKey = "backgroundReloadIntervalMinutes"
+    private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
+    private static let sidebarRowMetricKey = "sidebarRowMetric"
+    private static let eventColorPaletteKey = "eventColorPalette"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
@@ -126,6 +248,50 @@ final class Library {
         }
     }
 
+    /// Whether the sidebar tints each day's calendar glyph with an
+    /// AHI-severity color (green/orange/red). Disabling falls back to
+    /// the accent color so the sidebar reads as a flat list without
+    /// the user having to squint past the traffic-light palette.
+    /// Local-only preference — visual taste, not therapy data, so
+    /// there's no reason to sync it across devices.
+    var sidebarSeverityColorsEnabled: Bool {
+        didSet {
+            guard oldValue != sidebarSeverityColorsEnabled else { return }
+            UserDefaults.standard.set(
+                sidebarSeverityColorsEnabled,
+                forKey: Self.sidebarSeverityColorsKey
+            )
+        }
+    }
+
+    /// Which metric the sidebar renders in each day's right-hand
+    /// stack. Defaults to AHI but can be swapped for Glasgow Index,
+    /// 95th-percentile mask pressure, or session count depending on
+    /// what the user cares to scan by at a glance. Local-only.
+    var sidebarRowMetric: SidebarRowMetric {
+        didSet {
+            guard oldValue != sidebarRowMetric else { return }
+            UserDefaults.standard.set(
+                sidebarRowMetric.rawValue,
+                forKey: Self.sidebarRowMetricKey
+            )
+        }
+    }
+
+    /// Current colour scheme for OA / H / CA markers in the event
+    /// donut and the Events-by-Hour chart. Defaults to the muted
+    /// red/yellow/blue palette the app has always shipped with.
+    /// Local-only — a visual preference, not sync-worthy.
+    var eventColorPalette: EventColorPalette {
+        didSet {
+            guard oldValue != eventColorPalette else { return }
+            UserDefaults.standard.set(
+                eventColorPalette.rawValue,
+                forKey: Self.eventColorPaletteKey
+            )
+        }
+    }
+
     private var backgroundReloadTask: Task<Void, Never>?
 
     init() {
@@ -143,11 +309,40 @@ final class Library {
             storedInterval ?? Self.defaultBackgroundReloadIntervalMinutes
         )
 
+        // Default both sidebar appearance prefs to their "classic"
+        // values — severity colors on, AHI in the right-hand column —
+        // so an existing user sees no change after upgrading.
+        if let storedSeverity = UserDefaults.standard.object(
+            forKey: Self.sidebarSeverityColorsKey
+        ) as? Bool {
+            self.sidebarSeverityColorsEnabled = storedSeverity
+        } else {
+            self.sidebarSeverityColorsEnabled = true
+        }
+
+        if let rawMetric = UserDefaults.standard.string(
+            forKey: Self.sidebarRowMetricKey
+        ), let metric = SidebarRowMetric(rawValue: rawMetric) {
+            self.sidebarRowMetric = metric
+        } else {
+            self.sidebarRowMetric = .ahi
+        }
+
+        if let rawPalette = UserDefaults.standard.string(
+            forKey: Self.eventColorPaletteKey
+        ), let palette = EventColorPalette(rawValue: rawPalette) {
+            self.eventColorPalette = palette
+        } else {
+            self.eventColorPalette = .defaultPalette
+        }
+
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
             as? [String: String] ?? [:]
         complianceTargets = (kvs.dictionary(forKey: Self.complianceTargetsKey)
             as? [String: Double]) ?? [:]
+        deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
+            as? [String: String] ?? [:]
 
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -236,7 +431,8 @@ final class Library {
            !override.isEmpty {
             return override
         }
-        return card.identification?.productName ?? "ResMed PAP-device"
+        return card.identification?.productName
+            ?? "ResMed \(deviceType(for: card).displayName)"
     }
 
     /// Set or clear a custom name for a given serial. Passing an empty /
@@ -259,6 +455,8 @@ final class Library {
             as? [String: String] ?? [:]
         complianceTargets = (kvs.dictionary(forKey: Self.complianceTargetsKey)
             as? [String: Double]) ?? [:]
+        deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
+            as? [String: String] ?? [:]
     }
 
     // MARK: - Compliance target
@@ -283,6 +481,59 @@ final class Library {
     /// both the reader and writer agree on what "valid" means.
     private static func clampedComplianceHours(_ hours: Double) -> Double {
         min(max(hours, 1), 12)
+    }
+
+    // MARK: - Device type
+
+    /// Resolved `DeviceType` for a card. Prefers the iCloud-synced
+    /// user override, falls back to `DeviceType.infer` on the product
+    /// name, and finally lands on `.cpap` when neither is available.
+    /// `.cpap` is the least-surprising fallback since plain CPAP is
+    /// the baseline therapy every other PAP mode builds on.
+    func deviceType(for card: ResMedSDCard?) -> DeviceType {
+        if let serial = card?.identification?.serialNumber,
+           let raw = deviceTypeOverrides[serial],
+           let type = DeviceType(rawValue: raw) {
+            return type
+        }
+        if let inferred = DeviceType.infer(
+            fromProductName: card?.identification?.productName
+        ) {
+            return inferred
+        }
+        return .cpap
+    }
+
+    /// Resolved type for a bare serial — used by views that only
+    /// have a serial in hand. Shares resolution with the card-based
+    /// lookup when the serial belongs to the currently-loaded card
+    /// so the two entry points never disagree.
+    func deviceType(for serial: String?) -> DeviceType {
+        if serial == card?.identification?.serialNumber {
+            return deviceType(for: card)
+        }
+        if let serial, let raw = deviceTypeOverrides[serial],
+           let type = DeviceType(rawValue: raw) {
+            return type
+        }
+        return .cpap
+    }
+
+    /// Persist a user-picked `DeviceType` for a serial. When the pick
+    /// matches what `DeviceType.infer` would produce from the product
+    /// name, the override is cleared so iCloud KVS doesn't store
+    /// values that just duplicate inference — mirrors the compliance-
+    /// target pattern.
+    func setDeviceType(_ type: DeviceType, for serial: String, productName: String?) {
+        let inferred = DeviceType.infer(fromProductName: productName)
+        if type == inferred {
+            deviceTypeOverrides.removeValue(forKey: serial)
+        } else {
+            deviceTypeOverrides[serial] = type.rawValue
+        }
+        let kvs = NSUbiquitousKeyValueStore.default
+        kvs.set(deviceTypeOverrides, forKey: Self.deviceTypesKey)
+        kvs.synchronize()
     }
 
     /// Persist a new compliance target for a serial. Passing the
@@ -1306,7 +1557,7 @@ final class Library {
         var description: String {
             switch self {
             case .noCard:
-                return "No device is loaded. Open a device before backing up."
+                return "No machine is loaded. Open one before backing up."
             case .noCloudContainer:
                 return "iCloud Drive is unavailable on this device."
             case .untrustedBackup:

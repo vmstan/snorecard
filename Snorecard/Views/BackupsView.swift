@@ -219,8 +219,9 @@ struct BackupsFormSections: View {
         switch pending {
         case .restore(let backup):
             let stamp = backup.createdAt.formatted(.dateTime.year().month().day().hour().minute())
+            let typeName = library.deviceType(for: library.card).displayName
             return """
-            This will replace the current data for the PAP-device with the contents of the backup from \(stamp).
+            This will replace the current data for the \(typeName) with the contents of the backup from \(stamp).
 
             The current version is moved aside during the swap and discarded once the restore completes successfully.
             """

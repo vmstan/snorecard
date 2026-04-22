@@ -11,9 +11,11 @@ wait for explicit confirmation before adding a UIKit/AppKit bridge.
 Existing intentional exceptions — do not "clean these up" without
 asking:
 
-- `Snorecard/AppIconController.swift` — alternate-icon switching has
-  no SwiftUI equivalent on either platform (`UIApplication.setAlternateIconName`
-  on iOS, `NSApp.applicationIconImage` on macOS).
+- `Snorecard/AppIconController.swift` — iOS-only alternate-icon
+  switching via `UIApplication.setAlternateIconName`, which has no
+  SwiftUI equivalent. macOS intentionally has no picker; the
+  controller's `apply` / `applyStoredOnLaunch` entry points are
+  no-ops there so callers can invoke them unconditionally.
 - `Snorecard-macOS/SnorecardApp.swift` `init()` — sets
   `NSWindow.allowsAutomaticWindowTabbing = false` to strip the
   no-op Show Tab Bar / Merge All Windows menu items. SwiftUI

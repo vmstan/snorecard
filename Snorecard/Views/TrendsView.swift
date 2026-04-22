@@ -166,7 +166,7 @@ struct TrendsView: View {
                 } label: {
                     Label("Sleep Journal", systemImage: "note.text")
                 }
-                .help("Add or edit overall notes for this PAP-device")
+                .help("Add or edit overall notes for this \(library.deviceType(for: library.card).displayName)")
             }
         }
         #endif

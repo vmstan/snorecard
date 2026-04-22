@@ -36,12 +36,12 @@ struct DeviceNotesCard: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Clear the device-wide journal entry")
+                    .help("Clear the machine-wide journal entry")
                 }
             }
 
             JournalEditor(
-                placeholder: "Overall notes for this PAP-device — mask changes, pressure tweaks, anything not tied to a single night…",
+                placeholder: journalPlaceholder,
                 text: $text
             )
         }
@@ -78,7 +78,12 @@ struct DeviceNotesCard: View {
                 return product
             }
         }
-        return "This PAP-device"
+        return "This \(library.deviceType(for: library.card).displayName)"
+    }
+
+    private var journalPlaceholder: String {
+        let type = library.deviceType(for: library.card).displayName
+        return "Overall notes for this \(type) — mask changes, pressure tweaks, anything not tied to a single night…"
     }
 
     private var deviceSerial: String {
