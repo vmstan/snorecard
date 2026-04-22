@@ -99,7 +99,7 @@ if let lastDay = card.days.last(where: { !$0.files(of: .physiological).isEmpty }
 // Glasgow Index debug
 if let lastDay = card.days.last(where: { !$0.files(of: .breath).isEmpty }) {
     let gi = GlasgowIndex.computeDay(brpFiles: lastDay.files(of: .breath))
-    print("Glasgow Index (weighted): \(gi.map { String(format: "%.4f", $0) } ?? "nil")")
+    print("Glasgow Index (weighted): \(gi.map { String(format: "%.4f", $0.score) } ?? "nil")")
     for file in lastDay.files(of: .breath) {
         guard let edf = try? EDFFile(contentsOf: file.url),
               edf.header.recordCount > 0,

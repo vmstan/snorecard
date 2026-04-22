@@ -258,7 +258,7 @@ struct DayDetailView: View {
     private var header: some View {
         if let stats = day.stats, stats.hasUsage {
             VStack(alignment: .leading, spacing: 12) {
-                EventDonutView(stats: stats)
+                EventDonutView(stats: stats, onTap: explainTap(.ahi))
 
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 170), spacing: 12)],
@@ -302,6 +302,19 @@ struct DayDetailView: View {
                             label: "IPAP (95%)",
                             value: String(format: "%.1f cmH₂O", ipap),
                             onTap: explainTap(.ipap95)
+                        )
+                    }
+                    // Median mask pressure (50th percentile of the
+                    // on-therapy waveform, or MaskPress.50 on
+                    // AirSense 11 summary) so the card is populated
+                    // on every device type. Reads as a "typical"
+                    // mask pressure complement to the 95%-target
+                    // EPAP/IPAP cards above.
+                    if let median = stats.pressureMedian {
+                        StatCard(
+                            label: "Mask Pressure (Median)",
+                            value: String(format: "%.1f cmH₂O", median),
+                            onTap: explainTap(.maskPressureMedian)
                         )
                     }
                     if let fl = stats.flowLimit95 {
@@ -391,6 +404,16 @@ struct DayDetailView: View {
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
+                }
+                if let bundle = loadedWaveform, !bundle.flatTidalVolume.isEmpty {
+                    TidalVolumeHourlyChart(
+                        tidalVolume: bundle.flatTidalVolume,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                if let breakdown = day.stats?.glasgowBreakdown {
+                    GlasgowBreakdownChart(breakdown: breakdown)
                 }
 
                 // Detailed Statistics + Advanced Charting both
@@ -486,6 +509,7 @@ struct DayDetailView: View {
         case .glasgowIndex:     return "Glasgow Index"
         case .epap95:           return "EPAP (95%)"
         case .ipap95:           return "IPAP (95%)"
+        case .maskPressureMedian: return "Mask Pressure (Median)"
         case .leak95:           return "Leak (95%)"
         case .largeLeak:        return "Large Leak"
         case .tidalVolume:      return "Tidal Volume"
@@ -512,6 +536,8 @@ struct DayDetailView: View {
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .ipap95:
             return stats.ipap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
+        case .maskPressureMedian:
+            return stats.pressureMedian.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .leak95:
             return stats.leak95LPerMin.map { String(format: "%.0f L/min", $0) } ?? "—"
         case .largeLeak:

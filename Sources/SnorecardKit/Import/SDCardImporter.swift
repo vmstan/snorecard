@@ -441,8 +441,11 @@ public enum SDCardImporter {
                 productName: merged.productName
             )
             // Rebuilt struct above dropped back to the `snore95`
-            // default — carry the PLD-derived value forward.
+            // default — carry the PLD-derived value forward. Same
+            // goes for the Glasgow breakdown (nil default on the
+            // synthesized init).
             merged.snore95 = aggregate.snore95
+            merged.glasgowBreakdown = aggregate.glasgowBreakdown
         }
         // Carry the STR-derived settings block through. Field-level
         // merge (rather than wholesale swap) so a newer STR record

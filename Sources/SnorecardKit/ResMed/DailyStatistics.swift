@@ -28,6 +28,11 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     /// threshold, summed across all PLD samples on therapy.
     public internal(set) var largeLeakSeconds: Double? = nil
     public internal(set) var glasgowIndex: Double? = nil
+    /// 9-sub-index breakdown that drives `glasgowIndex`. `nil` on
+    /// nights without BRP coverage (e.g. AirSense 11 STR-only days)
+    /// or when the cached payload predates this field. The 9 values
+    /// sum to `glasgowIndex`.
+    public internal(set) var glasgowBreakdown: GlasgowIndex.Breakdown? = nil
     public internal(set) var flowLimit95: Double?
     /// 95th-percentile snore index from the PLD `Snore` signal,
     /// on-therapy samples only. ResMed reports snore on a 0–5
@@ -331,6 +336,7 @@ extension DailyStatistics {
         // BRP pass: session duration + Glasgow Index per file.
         var usageSeconds: Double = 0
         var totalGlasgowScore: Double = 0
+        var weightedBreakdown = GlasgowIndex.BreakdownAccumulator()
         var totalInspirations = 0
         for file in brpFiles {
             guard let edf = try? EDFFile(contentsOf: file.url),
@@ -345,7 +351,9 @@ extension DailyStatistics {
             let scale: Double = unit.contains("l/s") ? 60 : 1
             let flowLPerMin = scale == 1 ? flowSamples : flowSamples.map { $0 * scale }
             if let result = GlasgowIndex.compute(flowSamples: flowLPerMin) {
-                totalGlasgowScore += result.score * Double(result.inspirationCount)
+                let weight = Double(result.inspirationCount)
+                totalGlasgowScore += result.score * weight
+                weightedBreakdown.add(result.breakdown, weight: weight)
                 totalInspirations += result.inspirationCount
             }
         }
@@ -353,6 +361,9 @@ extension DailyStatistics {
         let usageHours = usageMinutes / 60
         let glasgowIndex: Double? = totalInspirations > 0
             ? totalGlasgowScore / Double(totalInspirations)
+            : nil
+        let glasgowBreakdown: GlasgowIndex.Breakdown? = totalInspirations > 0
+            ? weightedBreakdown.finalize(totalWeight: Double(totalInspirations))
             : nil
 
         // EVE pass: apnea/hypopnea counts + total time in events.
@@ -476,6 +487,7 @@ extension DailyStatistics {
             productName: productName
         )
         stats.snore95 = percentile(snores, 95)
+        stats.glasgowBreakdown = glasgowBreakdown
         return stats
     }
 

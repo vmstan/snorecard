@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import SnorecardKit
 
 /// Hourly breakdown charts for the night's PLD signals. Mirrors the
 /// visual treatment of `AHIHourlyChart` — same card chrome, same
@@ -7,8 +8,9 @@ import Charts
 /// the day view read as one set. Leak and Flow Limit use peak-per-
 /// hour (95th percentile) bars because the clinical framing of
 /// both metrics is "how bad was the worst hour". Pressure uses a
-/// mean-per-hour line so the titration trajectory across the night
-/// is visible at a glance.
+/// median-per-hour line — matches the "Mask Pressure (Median)"
+/// stat card and the Trends median line so the same quantity is
+/// surfaced at every granularity.
 
 // MARK: - Shared helpers
 
@@ -21,6 +23,7 @@ private struct HourlyBucket: Identifiable {
 
 private enum HourlyStat {
     case mean
+    case median
     case p95
 
     func reduce(_ values: [Double]) -> Double {
@@ -28,6 +31,13 @@ private enum HourlyStat {
         switch self {
         case .mean:
             return values.reduce(0, +) / Double(values.count)
+        case .median:
+            let sorted = values.sorted()
+            let count = sorted.count
+            if count.isMultiple(of: 2) {
+                return (sorted[count / 2 - 1] + sorted[count / 2]) / 2
+            }
+            return sorted[count / 2]
         case .p95:
             let sorted = values.sorted()
             let rank = Double(sorted.count - 1) * 0.95
@@ -229,6 +239,75 @@ struct FlowLimitHourlyChart: View {
     }
 }
 
+// MARK: - Tidal Volume by Hour (line)
+
+/// Per-hour median tidal volume. Matches the "Tidal Volume (Median)"
+/// stat card and the Trends median line so the same quantity is
+/// surfaced at every granularity. Rendered as a line for the same
+/// reason Pressure is — it's a slowly-moving therapy signal whose
+/// trajectory across the night is more informative than hour-by-hour
+/// deltas.
+struct TidalVolumeHourlyChart: View {
+    let tidalVolume: [FlatPoint]
+    let dayStart: Date
+    let totalDuration: TimeInterval
+
+    private var buckets: [HourlyBucket] {
+        hourlyBuckets(tidalVolume, dayStart: dayStart, totalDuration: totalDuration, stat: .median)
+    }
+
+    private var plottedBuckets: [HourlyBucket] {
+        buckets.filter { $0.value > 0 }
+    }
+
+    private var valueRange: ClosedRange<Double> {
+        let values = plottedBuckets.map(\.value)
+        guard let minValue = values.min(),
+              let maxValue = values.max() else {
+            return 0 ... 800
+        }
+        let pad = Swift.max(25, (maxValue - minValue) * 0.15)
+        return Swift.max(0, minValue - pad) ... (maxValue + pad)
+    }
+
+    var body: some View {
+        HourlyChartCard(title: "Tidal Volume by Hour", subtitle: "median · mL") {
+            Chart(plottedBuckets) { bucket in
+                LineMark(
+                    x: .value("Hour", bucket.clockLabel),
+                    y: .value("Tidal Volume", bucket.value)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(Color.chartIndigo)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+
+                PointMark(
+                    x: .value("Hour", bucket.clockLabel),
+                    y: .value("Tidal Volume", bucket.value)
+                )
+                .foregroundStyle(Color.chartIndigo)
+                .symbolSize(28)
+            }
+            .chartXScale(domain: buckets.map(\.clockLabel))
+            .chartYScale(domain: valueRange)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Pressure by Hour (line)
 
 struct PressureHourlyChart: View {
@@ -237,7 +316,7 @@ struct PressureHourlyChart: View {
     let totalDuration: TimeInterval
 
     private var buckets: [HourlyBucket] {
-        hourlyBuckets(pressure, dayStart: dayStart, totalDuration: totalDuration, stat: .mean)
+        hourlyBuckets(pressure, dayStart: dayStart, totalDuration: totalDuration, stat: .median)
     }
 
     /// Line chart values — skips zero-filled empty hours so the
@@ -261,7 +340,7 @@ struct PressureHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Mask Pressure by Hour", subtitle: "average · cmH₂O") {
+        HourlyChartCard(title: "Mask Pressure by Hour", subtitle: "median · cmH₂O") {
             Chart(plottedBuckets) { bucket in
                 LineMark(
                     x: .value("Hour", bucket.clockLabel),
@@ -294,6 +373,81 @@ struct PressureHourlyChart: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Glasgow Index Breakdown
+
+/// Per-night breakdown of the 9 sub-indices that sum to the overall
+/// Glasgow Index. Shows the fraction of breaths that triggered each
+/// criterion so users can see *which* characteristics are driving
+/// their score — a flat-top-dominant night reads very differently
+/// from a no-pause-dominant one, even at the same overall index.
+///
+/// Bars are sorted by magnitude descending so the dominant
+/// contributors sit at the top and scan first.
+struct GlasgowBreakdownChart: View {
+    let breakdown: GlasgowIndex.Breakdown
+
+    private struct Row: Identifiable {
+        let id: String
+        let label: String
+        let value: Double
+    }
+
+    private var rows: [Row] {
+        [
+            Row(id: "flatTop", label: "Flat-top", value: breakdown.flatTop),
+            Row(id: "topHeavy", label: "Top-heavy", value: breakdown.topHeavy),
+            Row(id: "skew", label: "Skewed", value: breakdown.skew),
+            Row(id: "spike", label: "Spiky", value: breakdown.spike),
+            Row(id: "multiPeak", label: "Multi-peak", value: breakdown.multiPeak),
+            Row(id: "noPause", label: "No pause", value: breakdown.noPause),
+            Row(id: "inspirRate", label: "Fast rate", value: breakdown.inspirRate),
+            Row(id: "multiBreath", label: "Missed exhale", value: breakdown.multiBreath),
+            Row(id: "ampVar", label: "Variable amplitude", value: breakdown.ampVar)
+        ]
+        .sorted { $0.value > $1.value }
+    }
+
+    var body: some View {
+        HourlyChartCard(
+            title: "Glasgow Breakdown",
+            subtitle: String(format: "overall %.2f · fraction of breaths per sub-index", breakdown.total)
+        ) {
+            Chart(rows) { row in
+                BarMark(
+                    x: .value("Fraction", row.value),
+                    y: .value("Sub-index", row.label)
+                )
+                .foregroundStyle(Color.chartTeal)
+            }
+            .chartXScale(domain: 0 ... 1)
+            .chartXAxis {
+                AxisMarks(values: [0, 0.25, 0.5, 0.75, 1]) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let fraction = value.as(Double.self) {
+                            Text(String(format: "%.0f%%", fraction * 100))
+                                .font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisValueLabel(horizontalSpacing: 8) {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.caption)
+                                .frame(width: 110, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 220)
         }
     }
 }
