@@ -114,6 +114,30 @@ public struct ResMedIdentification: Sendable, Equatable, Codable {
         )
     }
 
+    /// Return `raw` reduced to characters safe to use as a single
+    /// path component or filename segment — ASCII letters, digits,
+    /// and underscore. Returns `nil` when the input collapses to
+    /// empty, so callers can fall back to a literal placeholder
+    /// (e.g. "Unknown Device") instead of a traversal vector.
+    ///
+    /// Real ResMed serials are short alphanumeric strings (e.g.
+    /// "22242512345", "2302P01LF4F"), so this allowlist doesn't
+    /// discard any legitimate character. It exists to defang
+    /// attacker-controlled Identification files / backup filenames
+    /// that try to smuggle `..`, `/`, or null bytes into path
+    /// construction.
+    public static func sanitizedSerial(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let scalars = raw.unicodeScalars.filter { scalar in
+            (scalar >= "A" && scalar <= "Z") ||
+            (scalar >= "a" && scalar <= "z") ||
+            (scalar >= "0" && scalar <= "9") ||
+            scalar == "_"
+        }
+        let cleaned = String(String.UnicodeScalarView(scalars))
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
     public static func parse(_ text: String) -> ResMedIdentification {
         var fields: [String: String] = [:]
         // Swift treats \r\n as a single grapheme cluster, so character-level

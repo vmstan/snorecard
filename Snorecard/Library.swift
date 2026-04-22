@@ -184,19 +184,31 @@ final class Library {
 
     /// Hours-per-night threshold the user considers a "compliant"
     /// night for this device. Falls back to `defaultComplianceHours`
-    /// when the user hasn't customized it.
+    /// when the user hasn't customized it. Clamps on read as well as
+    /// on write so an anomalous KVS payload from another device
+    /// (corruption, or a compromised iCloud account) can't drive UI
+    /// that assumes the range.
     func complianceTarget(for serial: String?) -> Double {
-        guard let serial, let value = complianceTargets[serial] else {
+        guard let serial,
+              let value = complianceTargets[serial],
+              value.isFinite
+        else {
             return Self.defaultComplianceHours
         }
-        return value
+        return Self.clampedComplianceHours(value)
+    }
+
+    /// Pin `hours` to the same 1–12h range the Stepper offers so
+    /// both the reader and writer agree on what "valid" means.
+    private static func clampedComplianceHours(_ hours: Double) -> Double {
+        min(max(hours, 1), 12)
     }
 
     /// Persist a new compliance target for a serial. Passing the
     /// default value clears the override so we don't bloat iCloud
     /// KVS with entries that duplicate the fallback.
     func setComplianceTarget(_ hours: Double, for serial: String) {
-        let clamped = min(max(hours, 1), 12)
+        let clamped = Self.clampedComplianceHours(hours)
         if clamped == Self.defaultComplianceHours {
             complianceTargets.removeValue(forKey: serial)
         } else {
@@ -233,6 +245,7 @@ final class Library {
                 return
             case .loading, .hydrating:
                 try? await Task.sleep(nanoseconds: 150_000_000)
+                if Task.isCancelled { return }
             }
         }
     }
@@ -345,7 +358,7 @@ final class Library {
         }
         pendingTagExtractions[folder]?.cancel()
         let service = narration
-        pendingTagExtractions[folder] = Task { @MainActor in
+        pendingTagExtractions[folder] = Task { @MainActor [weak self] in
             do {
                 let result = try await service.extractNoteTags(
                     NoteTagInput(text: text)
@@ -371,6 +384,13 @@ final class Library {
             } catch {
                 // Best-effort — swallow failures. The next save
                 // attempt will try again.
+            }
+            // Self-evict on natural completion so the dict doesn't
+            // grow for the life of the session. Replacement calls
+            // cancel the prior task first (see above), so a non-
+            // cancelled end means we're still the entry at `folder`.
+            if !Task.isCancelled {
+                self?.pendingTagExtractions.removeValue(forKey: folder)
             }
         }
     }
@@ -1093,8 +1113,20 @@ final class Library {
             for dayDir in dayDirs {
                 let dayDest = datalogDst.appendingPathComponent(dayDir.lastPathComponent)
                 if fm.fileExists(atPath: dayDest.path) {
-                    skippedCount += 1
-                    continue
+                    // A prior partial sync can leave an empty day
+                    // folder in iCloud. Treat those as missing so the
+                    // SD card's fresh copy actually lands, instead of
+                    // short-circuiting the merge on existence alone.
+                    let existing = (try? fm.contentsOfDirectory(
+                        at: dayDest,
+                        includingPropertiesForKeys: nil,
+                        options: []
+                    )) ?? []
+                    if !existing.isEmpty {
+                        skippedCount += 1
+                        continue
+                    }
+                    try? fm.removeItem(at: dayDest)
                 }
                 do {
                     try fm.copyItem(at: dayDir, to: dayDest)
@@ -1155,9 +1187,10 @@ final class Library {
 
     /// Folder name for iCloud Drive syncs — keyed on serial only so a
     /// given device has exactly one folder that mirrors its current SD card.
-    /// Falls back to `Unknown Device` when the SD card has no serial.
+    /// Falls back to `Unknown Device` when the SD card has no serial
+    /// or the serial is unsafe for a single path component.
     private static func iCloudDeviceFolderName(for card: ResMedSDCard) -> String {
-        card.identification?.serialNumber.flatMap { $0.isEmpty ? nil : $0 }
+        ResMedIdentification.sanitizedSerial(card.identification?.serialNumber)
             ?? "Unknown Device"
     }
 
@@ -1187,6 +1220,7 @@ final class Library {
     enum BackupError: Error, CustomStringConvertible {
         case noCard
         case noCloudContainer
+        case untrustedBackup
 
         var description: String {
             switch self {
@@ -1194,6 +1228,8 @@ final class Library {
                 return "No device is loaded. Open a device before backing up."
             case .noCloudContainer:
                 return "iCloud Drive is unavailable on this device."
+            case .untrustedBackup:
+                return "This backup's filename is malformed and can't be restored safely."
             }
         }
     }
@@ -1218,9 +1254,9 @@ final class Library {
         let fm = FileManager.default
         try fm.createDirectory(at: backupsDir, withIntermediateDirectories: true)
 
-        let serial = card.identification?.serialNumber
-            .flatMap { $0.isEmpty ? nil : $0 }
-            ?? "Unknown"
+        let serial = ResMedIdentification.sanitizedSerial(
+            card.identification?.serialNumber
+        ) ?? "Unknown"
         let stamp = Self.backupFilenameFormatter.string(from: Date())
         let filename = "\(serial)-\(stamp).aar"
         let destination = backupsDir.appendingPathComponent(filename)
@@ -1263,11 +1299,19 @@ final class Library {
                 // unparseable.
                 let parts = name.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
                 let rawSerial = parts.first.map(String.init) ?? name
-                if let requested = serial, requested != rawSerial {
+                // Drop any archive whose filename can't yield a
+                // serial safe to feed back into path construction
+                // (e.g. one containing `..`). Without this, the
+                // Restore flow could be tricked into writing outside
+                // the iCloud backup root.
+                guard let parsedSerial = ResMedIdentification.sanitizedSerial(rawSerial),
+                      parsedSerial == rawSerial
+                else { return nil }
+                if let requested = serial, requested != parsedSerial {
                     return nil
                 }
                 let parsedDate: Date? = parts.count == 2
-                    ? backupFilenameFormatter.date(from: String(parts[1]))
+                    ? parseBackupStamp(String(parts[1]))
                     : nil
                 let mtime = (try? url.resourceValues(
                     forKeys: [.contentModificationDateKey]
@@ -1277,7 +1321,7 @@ final class Library {
                 ).fileSize) ?? 0
                 return BackupFile(
                     url: url,
-                    serial: rawSerial,
+                    serial: parsedSerial,
                     createdAt: parsedDate ?? mtime ?? Date.distantPast,
                     byteSize: size
                 )
@@ -1295,10 +1339,20 @@ final class Library {
         guard let root = Self.iCloudBackupRoot else {
             throw BackupError.noCloudContainer
         }
+        // Defence in depth: `listBackups` already filters to safe
+        // serials, but the BackupFile type itself doesn't enforce
+        // it. Re-validate here so `appendingPathComponent` below
+        // can't be coerced into resolving outside `root` by a
+        // handcrafted BackupFile.
+        guard let safeSerial = ResMedIdentification.sanitizedSerial(backup.serial),
+              safeSerial == backup.serial
+        else {
+            throw BackupError.untrustedBackup
+        }
         let fm = FileManager.default
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
 
-        let deviceURL = root.appendingPathComponent(backup.serial, isDirectory: true)
+        let deviceURL = root.appendingPathComponent(safeSerial, isDirectory: true)
         let sidelineURL = root.appendingPathComponent(
             ".restore-old-\(UUID().uuidString)",
             isDirectory: true
@@ -1347,7 +1401,26 @@ final class Library {
         try? FileManager.default.removeItem(at: backup.url)
     }
 
+    /// UTC formatter used to *write* new backup filename stamps. The
+    /// trailing `Z` marks the value as UTC so readers on any device
+    /// parse back to the instant the archive was created, regardless
+    /// of the local time zone either side of the transfer.
     private static let backupFilenameFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss'Z'"
+        return formatter
+    }()
+
+    /// Legacy filename stamps (pre-UTC fix) were written in the
+    /// author's local time zone with no suffix. We still need to
+    /// render something sensible for those archives when they roam
+    /// between devices — parsing them as `TimeZone.current` matches
+    /// the old behaviour and avoids shifting any backup's displayed
+    /// `createdAt` compared to prior builds.
+    private static let legacyBackupFilenameFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -1355,4 +1428,15 @@ final class Library {
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         return formatter
     }()
+
+    /// Try the UTC form first, then fall back to the legacy local-TZ
+    /// form. New archives all use UTC, so the legacy branch is only
+    /// exercised for filenames written by builds that predate the
+    /// time-zone fix.
+    private static func parseBackupStamp(_ stamp: String) -> Date? {
+        if let date = backupFilenameFormatter.date(from: stamp) {
+            return date
+        }
+        return legacyBackupFilenameFormatter.date(from: stamp)
+    }
 }
