@@ -149,13 +149,7 @@ struct TrendsView: View {
         .toolbar {
             if library.intelligence.isReady {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        library.pendingTrendsAnalysis = TrendsAnalysisRequest(
-                            stats: stats,
-                            rangeStart: rangeStart,
-                            rangeEnd: rangeEnd
-                        )
-                    } label: {
+                    Button(action: toggleTrendsAnalysis) {
                         Label("Sleep Analysis", systemImage: "sparkles")
                     }
                     .disabled(stats.isEmpty)
@@ -180,13 +174,26 @@ struct TrendsView: View {
         // through `library.pendingTrendsAnalysis`; iOS does the
         // same, and the sheet binding at ContentView picks it up.
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenTrendsAnalysis)) { _ in
-            guard !stats.isEmpty else { return }
-            library.pendingTrendsAnalysis = TrendsAnalysisRequest(
-                stats: stats,
-                rangeStart: rangeStart,
-                rangeEnd: rangeEnd
-            )
+            toggleTrendsAnalysis()
         }
+    }
+
+    /// Open Sleep Analysis when closed, close it when open. Keeps
+    /// the Trends toolbar button, the floating-bar item on iOS, and
+    /// the View-menu / ⌘⇧A shortcut in sync so a second tap on any
+    /// of them dismisses the inspector/sheet instead of silently
+    /// re-issuing the same request.
+    private func toggleTrendsAnalysis() {
+        if library.pendingTrendsAnalysis != nil {
+            library.pendingTrendsAnalysis = nil
+            return
+        }
+        guard !stats.isEmpty else { return }
+        library.pendingTrendsAnalysis = TrendsAnalysisRequest(
+            stats: stats,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd
+        )
     }
 
     #if os(iOS)

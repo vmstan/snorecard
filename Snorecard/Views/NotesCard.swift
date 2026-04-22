@@ -40,50 +40,10 @@ struct NotesCard: View {
                 }
             }
 
-            #if os(macOS)
-            // AppKit's NSTextField submits on a plain Return;
-            // ⌥+↩ inserts a line break. Keep the hint visible on
-            // its own row just above the editor so the shortcut
-            // stays discoverable without crowding the header.
-            Text("Press ⌥ + ↩ for a new line")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            #endif
-
-            // Multi-line TextField (vertical axis) has native
-            // placeholder rendering — the first glyph you type
-            // lands exactly where the placeholder's first glyph
-            // sat, with no alignment math required.
-            //
-            // `reservesSpace: true` holds open the full 6-line
-            // footprint from the first render, so the control
-            // feels like a writing surface rather than a tiny
-            // one-line input that only grows once you start
-            // typing. Combined with `maxHeight: .infinity` the
-            // field fills the sheet/popover it's hosted in and
-            // grows with content up to the container's bounds.
-            // Negative horizontal padding cancels part of the
-            // caller's `.padding(16)` so the editor's rounded
-            // rectangle sits closer to the inspector column edges,
-            // matching the wider horizontal span of the grouped
-            // Form sections on Therapy Details. The header keeps
-            // its full 16pt shared pane margin; only the writing
-            // surface widens to line up with the other inspector
-            // pane's table width.
-            TextField(
-                "How did you sleep? Add any context about last night…",
-                text: $text,
-                axis: .vertical
+            JournalEditor(
+                placeholder: "How did you sleep? Add any context about last night…",
+                text: $text
             )
-            .textFieldStyle(.plain)
-            .lineLimit(6, reservesSpace: true)
-            .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(
-                Color.primary.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 10)
-            )
-            .padding(.horizontal, -4)
         }
         .task(id: day.id) {
             // When the viewed day changes, flush any pending save
@@ -110,6 +70,7 @@ struct NotesCard: View {
     private var dateCaption: String {
         day.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
+
 
     /// Cancel any queued autosave and schedule a fresh one for 750 ms
     /// from now. The task writes through to `Library.setNote` which

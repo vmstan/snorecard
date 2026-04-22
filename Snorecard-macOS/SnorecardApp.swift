@@ -193,7 +193,7 @@ struct SnorecardApp: App {
 
         var body: some View {
             SettingsSheet(onClose: { dismiss() })
-                .frame(width: 560, height: 460)
+                .frame(width: 560, height: 500)
         }
     }
 

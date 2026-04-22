@@ -37,15 +37,6 @@ struct SettingsSheet: View {
         return (value?.isEmpty ?? true) ? nil : value
     }
 
-    /// Fixed row-content height for every trailing value on the
-    /// Device tab — TextField, plain Text, monospaced Text, and
-    /// the Compliance Stepper. A hard-coded height is the
-    /// simplest way to get a TextField (which has its own
-    /// intrinsic height on macOS) and a plain Text to share the
-    /// same vertical center so the labels in the leading column
-    /// line up row-to-row.
-    private var detailRowHeight: CGFloat { 22 }
-
     var body: some View {
         #if os(iOS)
         // iOS mirrors the macOS TabView split — four top-level
@@ -119,46 +110,29 @@ struct SettingsSheet: View {
     private var deviceSection: some View {
         if hasCard, let serial = currentSerial {
             Section {
-                detailRow("Alias") {
-                    // Borderless TextField with an explicit `.secondary`
-                    // prompt (lighter weight) so the default-device-name
-                    // hint reads as a subdued placeholder and vanishes
-                    // on first keystroke — matching the iOS Settings
-                    // look on both platforms.
+                LabeledContent("Alias") {
                     TextField(
                         "",
                         text: $deviceNameDraft,
                         prompt: Text(currentDefaultName)
-                            .foregroundStyle(.secondary)
-                            .fontWeight(.light)
                     )
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
                     .textFieldStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                     #if os(iOS)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
                     #endif
                     .onSubmit(commitDeviceName)
                 }
-                detailRow("Model") {
-                    Text(currentDefaultName)
-                }
-                detailRow("Serial") {
+                LabeledContent("Model", value: currentDefaultName)
+                LabeledContent("Serial") {
                     Text(serial).monospaced()
                 }
                 if currentOverride != nil {
-                    Button(role: .destructive) {
+                    Button("Use Default Name", role: .destructive) {
                         deviceNameDraft = ""
                         library.setDeviceName(nil, for: serial)
-                    } label: {
-                        #if os(iOS)
-                        Text("Use Default Name")
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        #else
-                        Text("Use Default Name")
-                        #endif
                     }
                 }
             } header: {
@@ -167,25 +141,6 @@ struct SettingsSheet: View {
                 Text("Shown in the sidebar. Syncs between your devices via iCloud.")
             }
         }
-    }
-
-    /// Label-on-left + content-on-right row with both sides
-    /// vertically centered in a fixed-height frame. Written as an
-    /// explicit HStack (rather than `LabeledContent`) because
-    /// `LabeledContent` baselines a TextField's text differently
-    /// from a plain `Text`, which visibly shifted the "Alias"
-    /// leading label off the Model / Serial row baselines.
-    @ViewBuilder
-    private func detailRow<Content: View>(
-        _ label: LocalizedStringKey,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(label)
-            Spacer(minLength: 8)
-            content()
-        }
-        .frame(minHeight: detailRowHeight)
     }
 
     /// Per-device compliance-hours target. A Stepper keeps the UI
@@ -203,43 +158,18 @@ struct SettingsSheet: View {
                 set: { library.setComplianceTarget($0, for: serial) }
             )
             Section {
-                LabeledContent("Compliance Target") {
-                    #if os(macOS)
-                    // On macOS, the stepper's own label renders next to
-                    // the arrows (and we want to hide it so it doesn't
-                    // duplicate the LabeledContent leading label), so
-                    // the value has to live in a sibling Text.
-                    HStack(spacing: 8) {
-                        Text(complianceTargetLabel(current))
-                            .monospacedDigit()
-                        Stepper("", value: binding, in: 1...12, step: 0.5)
-                            .labelsHidden()
-                    }
-                    .frame(height: detailRowHeight)
-                    #else
-                    Stepper(
-                        value: binding,
-                        in: 1...12,
-                        step: 0.5
-                    ) {
-                        Text(complianceTargetLabel(current))
-                            .monospacedDigit()
-                    }
-                    #endif
+                Stepper(value: binding, in: 1...12, step: 0.5) {
+                    LabeledContent(
+                        "Compliance Target",
+                        value: complianceTargetLabel(current)
+                    )
                 }
                 if current != Library.defaultComplianceHours {
-                    Button(role: .destructive) {
+                    Button("Reset to 4 Hours", role: .destructive) {
                         library.setComplianceTarget(
                             Library.defaultComplianceHours,
                             for: serial
                         )
-                    } label: {
-                        #if os(iOS)
-                        Text("Reset to 4 Hours")
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        #else
-                        Text("Reset to 4 Hours")
-                        #endif
                     }
                 }
             } header: {
@@ -328,15 +258,12 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var maintenanceSection: some View {
         Section {
-            Button(role: .destructive) {
+            Button("Rebuild Cache", role: .destructive) {
                 NotificationCenter.default.post(
                     name: .snorecardRebuildCache,
                     object: nil
                 )
                 onClose()
-            } label: {
-                Text("Rebuild Cache")
-                    .frame(maxWidth: .infinity, alignment: .center)
             }
             .disabled(!hasCard)
         } footer: {
@@ -406,11 +333,7 @@ struct SettingsSheet: View {
     private var advancedTab: some View {
         Form {
             appleIntelligenceSection
-            #if os(macOS)
-            macOSMaintenanceSection
-            #else
             maintenanceSection
-            #endif
         }
         .formStyle(.grouped)
     }
@@ -439,46 +362,6 @@ struct SettingsSheet: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
     }
-
-    #if os(macOS)
-    /// Two-column Maintenance row on macOS — description + caption
-    /// on the leading edge, destructive action on the trailing
-    /// edge. Kept inside the `Form` (instead of a sibling below it)
-    /// because grouped `Form` + sibling in the same `VStack`
-    /// triggers a layout loop in AppKit ("more Update Constraints
-    /// in Window passes than there are views"), which hangs then
-    /// crashes the app.
-    @ViewBuilder
-    private var macOSMaintenanceSection: some View {
-        Section {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Rebuild Cache")
-                        .font(.callout.weight(.medium))
-                    Text("Regenerate cached analysis for this PAP-device.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 16)
-                Button(role: .destructive) {
-                    onClose()
-                    NotificationCenter.default.post(
-                        name: .snorecardRebuildCache,
-                        object: nil
-                    )
-                } label: {
-                    Image(systemName: "hammer")
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasCard)
-                .help("Rebuild cache")
-            }
-            .padding(.vertical, 4)
-        }
-    }
-    #endif
 
     @ViewBuilder
     private func row(for option: AppIconOption) -> some View {
