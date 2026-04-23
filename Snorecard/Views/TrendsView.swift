@@ -331,7 +331,7 @@ struct TrendsView: View {
                 "Compliance",
                 value: "\(Int(compliancePct))%",
                 subtitle: "\(compliantDays) of \(days) days ≥ \(targetLabel)",
-                tint: compliance >= 0.7 ? .severityGood : .severityMedium,
+                tint: compliance >= 0.7 ? .severityGood : library.eventColorPalette.severityMedium,
                 explain: TrendsExplainContext(
                     metric: .compliance,
                     displayValue: "\(Int(compliancePct))% of nights ≥ \(targetLabel)",
@@ -475,7 +475,7 @@ struct TrendsView: View {
                     "Large Leak (AVG)",
                     value: String(format: "%.0f%%", largeLeak),
                     subtitle: "of usage",
-                    tint: largeLeak < 0.5 ? .severityGood : .severityHigh,
+                    tint: largeLeak < 0.5 ? .severityGood : library.eventColorPalette.severityHigh,
                     explain: TrendsExplainContext(
                         metric: .largeLeak,
                         displayValue: String(format: "%.1f%% of usage", largeLeak),
@@ -594,7 +594,7 @@ struct TrendsView: View {
                     x: .value("Day", stat.date, unit: .day),
                     y: .value("Hours", stat.usageHours)
                 )
-                .foregroundStyle(stat.usageHours >= target ? Color.chartUsageStrong : Color.chartUsageWeak)
+                .foregroundStyle(stat.usageHours >= target ? library.eventColorPalette.severityGood : library.eventColorPalette.severityHigh)
                 RuleMark(y: .value("Compliance", target))
                     .foregroundStyle(Color.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
@@ -613,7 +613,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Index", gi)
                         )
-                        .foregroundStyle(Color.chartTeal)
+                        .foregroundStyle(library.eventColorPalette.glasgowIndex)
                         .symbol(Circle())
                     }
                 }
@@ -633,7 +633,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Minutes", s / 60)
                         )
-                        .foregroundStyle(Color.eventObstructive)
+                        .foregroundStyle(library.eventColorPalette.obstructive)
                     }
                 }
             } else {
@@ -660,7 +660,7 @@ struct TrendsView: View {
                             y: .value("P95", p95),
                             series: .value("Series", "95th")
                         )
-                        .foregroundStyle(Color.chartOrange)
+                        .foregroundStyle(library.eventColorPalette.pressureP95)
                         .symbol(Circle())
                     }
                     if let median = stat.pressureMedian {
@@ -669,14 +669,14 @@ struct TrendsView: View {
                             y: .value("Median", median),
                             series: .value("Series", "Median")
                         )
-                        .foregroundStyle(Color.chartBlue)
+                        .foregroundStyle(library.eventColorPalette.pressureMedian)
                         .symbol(Circle())
                     }
                 }
                 .chartYScale(domain: yDomain)
                 .chartForegroundStyleScale([
-                    "95th": Color.chartOrange,
-                    "Median": Color.chartBlue
+                    "95th": library.eventColorPalette.pressureP95,
+                    "Median": library.eventColorPalette.pressureMedian
                 ])
             } else {
                 emptyPlaceholder("No pressure data recorded.")
@@ -694,7 +694,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Flow Limit", fl)
                         )
-                        .foregroundStyle(Color.chartPink)
+                        .foregroundStyle(library.eventColorPalette.flowLimit)
                         .symbol(Circle())
                     }
                 }
@@ -715,7 +715,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Leak", leak)
                         )
-                        .foregroundStyle(Color.chartMint)
+                        .foregroundStyle(library.eventColorPalette.leak)
                         .symbol(Circle())
                     }
                     RuleMark(y: .value("Threshold", 24))
@@ -738,7 +738,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Percent", pct)
                         )
-                        .foregroundStyle(pct > 5 ? Color.severityMedium : Color.severityLow)
+                        .foregroundStyle(pct > 5 ? library.eventColorPalette.severityMedium : library.eventColorPalette.severityLow)
                     }
                 }
             } else {
@@ -764,7 +764,7 @@ struct TrendsView: View {
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Tidal Volume", tv * 1000)
                         )
-                        .foregroundStyle(Color.chartIndigo)
+                        .foregroundStyle(library.eventColorPalette.tidalVolume)
                         .symbol(Circle())
                     }
                 }
@@ -991,20 +991,35 @@ struct TrendsView: View {
         return "\(total) sec"
     }
 
+    /// Threshold bands for the AHI trend chart. The bands themselves
+    /// (2 / 5 events-per-hour) are clinical, but which colours stand
+    /// in for "good/watch/bad" adapts to the active palette so the
+    /// chart blends into the themed Trends page instead of forcing
+    /// the global severity palette in.
     private func ahiColor(_ ahi: Double) -> Color {
+        let palette = library.eventColorPalette
         switch ahi {
-        case ..<2: .severityGood
-        case ..<5: .severityLow
-        default: .severityHigh
+        case ..<2: return palette.severityGood
+        case ..<5: return palette.severityLow
+        default:   return palette.severityHigh
         }
     }
+
+    // MARK: - Stat-card severity tints
+    //
+    // Clinical thresholds below stay fixed; only the amber/red
+    // cues route through `library.eventColorPalette` so the card
+    // backgrounds adapt to the active theme. `.severityGood` keeps
+    // the global neutral colour because StatCard treats it as the
+    // implicit default and doesn't tint the plate at all, so green
+    // never actually renders as a background.
 
     /// Leak-severity palette — green under 5 L/min, amber 5–23, red ≥ 24.
     private func leakColor(_ leak: Double) -> Color {
         switch leak {
-        case ..<5: .severityGood
-        case ..<24: .severityLow
-        default: .severityHigh
+        case ..<5:  return .severityGood
+        case ..<24: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 
@@ -1012,18 +1027,18 @@ struct TrendsView: View {
     /// 0.00, amber in between, red ≥ 0.10.
     private func flowLimitColor(_ value: Double) -> Color {
         switch value {
-        case ..<0.005: .severityGood
-        case ..<0.10: .severityLow
-        default: .severityHigh
+        case ..<0.005: return .severityGood
+        case ..<0.10:  return library.eventColorPalette.severityLow
+        default:       return library.eventColorPalette.severityHigh
         }
     }
 
     /// Glasgow Index palette — neutral under 2, amber 2–3, red ≥ 3.
     private func glasgowColor(_ value: Double) -> Color {
         switch value {
-        case ..<2.0: .severityGood
-        case ..<3.0: .severityLow
-        default: .severityHigh
+        case ..<2.0: return .severityGood
+        case ..<3.0: return library.eventColorPalette.severityLow
+        default:     return library.eventColorPalette.severityHigh
         }
     }
 
@@ -1031,11 +1046,11 @@ struct TrendsView: View {
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
     private func usageColor(_ hours: Double) -> Color {
         switch hours {
-        case ..<4: .severityHigh
-        case ..<7: .severityLow
-        case ..<9: .severityGood
-        case ..<10: .severityLow
-        default: .severityHigh
+        case ..<4:  return library.eventColorPalette.severityHigh
+        case ..<7:  return library.eventColorPalette.severityLow
+        case ..<9:  return .severityGood
+        case ..<10: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 
@@ -1043,9 +1058,9 @@ struct TrendsView: View {
     /// 1–3 %, red ≥ 3 %. Tighter than the clinical AHI bands.
     private func apneaColor(_ percent: Double) -> Color {
         switch percent {
-        case ..<1: .severityGood
-        case ..<3: .severityLow
-        default: .severityHigh
+        case ..<1: return .severityGood
+        case ..<3: return library.eventColorPalette.severityLow
+        default:   return library.eventColorPalette.severityHigh
         }
     }
 
@@ -1056,19 +1071,19 @@ struct TrendsView: View {
     /// average card tints the same way the per-night card would.
     private func snoreColor(_ index: Double) -> Color {
         switch index {
-        case ..<1: .severityGood
-        case ..<3: .severityLow
-        default: .severityHigh
+        case ..<1: return .severityGood
+        case ..<3: return library.eventColorPalette.severityLow
+        default:   return library.eventColorPalette.severityHigh
         }
     }
 
     private func tidalVolumeColor(_ mL: Double) -> Color {
         switch mL {
-        case ..<350: .severityHigh
-        case ..<420: .severityLow
-        case ...600: .severityGood
-        case ...700: .severityLow
-        default: .severityHigh
+        case ..<350: return library.eventColorPalette.severityHigh
+        case ..<420: return library.eventColorPalette.severityLow
+        case ...600: return .severityGood
+        case ...700: return library.eventColorPalette.severityLow
+        default:     return library.eventColorPalette.severityHigh
         }
     }
 

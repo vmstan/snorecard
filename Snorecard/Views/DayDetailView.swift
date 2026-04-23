@@ -365,7 +365,7 @@ struct DayDetailView: View {
                             label: "Large Leak",
                             value: String(format: "%.0f%%", percent),
                             subtitle: formatDurationShort(largeLeak),
-                            tint: percent < 0.5 ? .severityGood : .severityHigh,
+                            tint: percent < 0.5 ? .severityGood : library.eventColorPalette.severityHigh,
                             onTap: explainTap(.largeLeak)
                         )
                     }
@@ -607,20 +607,28 @@ struct DayDetailView: View {
         return Text(day.date, format: .dateTime.weekday(.wide).day().month(.wide).year())
     }
 
+    // MARK: - Stat-card severity tints
+    //
+    // Clinical thresholds stay fixed; amber/red cues route through
+    // `library.eventColorPalette` so card backgrounds adapt to the
+    // active theme. `.severityGood` keeps the global neutral colour
+    // because StatCard treats it as the implicit default and doesn't
+    // tint the plate at all — green never actually renders.
+
     private func ahiColor(_ ahi: Double) -> Color {
         switch ahi {
-        case ..<2: .severityGood
-        case ..<5: .severityLow
-        default: .severityHigh
+        case ..<2: return .severityGood
+        case ..<5: return library.eventColorPalette.severityLow
+        default:   return library.eventColorPalette.severityHigh
         }
     }
 
     /// Leak-severity palette — green under 5 L/min, amber 5–9, red ≥ 10.
     private func leakColor(_ leak: Double) -> Color {
         switch leak {
-        case ..<5: .severityGood
-        case ..<24: .severityLow
-        default: .severityHigh
+        case ..<5:  return .severityGood
+        case ..<24: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 
@@ -628,18 +636,18 @@ struct DayDetailView: View {
     /// 0.00, amber in between, red ≥ 0.10.
     private func flowLimitColor(_ value: Double) -> Color {
         switch value {
-        case ..<0.005: .severityGood
-        case ..<0.10: .severityLow
-        default: .severityHigh
+        case ..<0.005: return .severityGood
+        case ..<0.10:  return library.eventColorPalette.severityLow
+        default:       return library.eventColorPalette.severityHigh
         }
     }
 
     /// Glasgow Index palette — neutral under 2, amber 2–3, red ≥ 3.
     private func glasgowColor(_ value: Double) -> Color {
         switch value {
-        case ..<2.0: .severityGood
-        case ..<3.0: .severityLow
-        default: .severityHigh
+        case ..<2.0: return .severityGood
+        case ..<3.0: return library.eventColorPalette.severityLow
+        default:     return library.eventColorPalette.severityHigh
         }
     }
 
@@ -647,11 +655,11 @@ struct DayDetailView: View {
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
     private func usageColor(_ hours: Double) -> Color {
         switch hours {
-        case ..<4: .severityHigh
-        case ..<7: .severityLow
-        case ..<9: .severityGood
-        case ..<10: .severityLow
-        default: .severityHigh
+        case ..<4:  return library.eventColorPalette.severityHigh
+        case ..<7:  return library.eventColorPalette.severityLow
+        case ..<9:  return .severityGood
+        case ..<10: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 
@@ -659,9 +667,9 @@ struct DayDetailView: View {
     /// 1–3 %, red ≥ 3 %. Tighter than the clinical AHI bands.
     private func apneaColor(_ percent: Double) -> Color {
         switch percent {
-        case ..<1: .severityGood
-        case ..<3: .severityLow
-        default: .severityHigh
+        case ..<1: return .severityGood
+        case ..<3: return library.eventColorPalette.severityLow
+        default:   return library.eventColorPalette.severityHigh
         }
     }
 
@@ -671,9 +679,9 @@ struct DayDetailView: View {
     /// sheet so the card colour agrees with the AI description.
     private func snoreColor(_ index: Double) -> Color {
         switch index {
-        case ..<1: .severityGood
-        case ..<3: .severityLow
-        default: .severityHigh
+        case ..<1: return .severityGood
+        case ..<3: return library.eventColorPalette.severityLow
+        default:   return library.eventColorPalette.severityHigh
         }
     }
 
@@ -682,11 +690,11 @@ struct DayDetailView: View {
     /// amber on either side of the healthy window, red at the extremes.
     private func tidalVolumeColor(_ mL: Double) -> Color {
         switch mL {
-        case ..<350: .severityHigh
-        case ..<420: .severityLow
-        case ...600: .severityGood
-        case ...700: .severityLow
-        default: .severityHigh
+        case ..<350: return library.eventColorPalette.severityHigh
+        case ..<420: return library.eventColorPalette.severityLow
+        case ...600: return .severityGood
+        case ...700: return library.eventColorPalette.severityLow
+        default:     return library.eventColorPalette.severityHigh
         }
     }
 

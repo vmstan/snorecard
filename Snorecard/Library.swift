@@ -50,28 +50,25 @@ enum SidebarRowMetric: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Named colour scheme for apnea / hypopnea event markers — picks
-/// the OA/H/CA colours used by the event donut and the Events-by-Hour
-/// chart. `.defaultPalette` matches the muted red/yellow/blue the app
-/// has always shipped with; named presets swap in alternative schemes
-/// requested by users who find the defaults hard to read. The enum
-/// lives here (no SwiftUI import) and the Color resolution is added
-/// via an extension in `PlatformColor.swift` so Library stays
-/// dependency-free.
+/// Named colour scheme for apnea / hypopnea event markers and every
+/// palette-aware chart across the app. `.topher` is the default
+/// (WCAG-friendly iOS-primary set); `.nick` and `.oscar` swap in
+/// alternative schemes requested by users who prefer those hues.
+/// The enum lives here (no SwiftUI import) and the Color resolution
+/// is added via an extension in `PlatformColor.swift` so Library
+/// stays dependency-free.
 enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
-    case defaultPalette = "default"
+    case topher
     case nick
     case oscar
-    case christopher
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .defaultPalette: return "Michael"
-        case .nick:           return "Nick"
-        case .oscar:          return "Oscar"
-        case .christopher:    return "Christopher"
+        case .topher: return "Topher"
+        case .nick:   return "Nick"
+        case .oscar:  return "Oscar"
         }
     }
 }
@@ -279,8 +276,8 @@ final class Library {
     }
 
     /// Current colour scheme for OA / H / CA markers in the event
-    /// donut and the Events-by-Hour chart. Defaults to the muted
-    /// red/yellow/blue palette the app has always shipped with.
+    /// donut, every palette-aware chart, and the themed stat-card
+    /// severity tints. Defaults to `.topher` (iOS-primary set).
     /// Local-only — a visual preference, not sync-worthy.
     var eventColorPalette: EventColorPalette {
         didSet {
@@ -328,12 +325,16 @@ final class Library {
             self.sidebarRowMetric = .ahi
         }
 
+        // Legacy raw values ("default", "christopher", "chris") fall
+        // through to `.topher` — the colours of the original
+        // Christopher preset are what Topher now paints, so the
+        // default set just adopts a new name on next launch.
         if let rawPalette = UserDefaults.standard.string(
             forKey: Self.eventColorPaletteKey
         ), let palette = EventColorPalette(rawValue: rawPalette) {
             self.eventColorPalette = palette
         } else {
-            self.eventColorPalette = .defaultPalette
+            self.eventColorPalette = .topher
         }
 
         let kvs = NSUbiquitousKeyValueStore.default

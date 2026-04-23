@@ -379,7 +379,7 @@ struct SettingsSheet: View {
     private var eventPaletteSection: some View {
         Section {
             Picker(
-                "AHI Color Theme",
+                "Color Theme",
                 selection: Binding(
                     get: { library.eventColorPalette },
                     set: { library.eventColorPalette = $0 }
@@ -392,7 +392,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Charting")
         } footer: {
-            Text("Applies to the AHI event bar and the Events by Hour chart. Each palette uses a different trio of colors for obstructive apneas, hypopneas, and central apneas.")
+            Text("Controls the colors used in the Trend an Daily View charts.")
         }
     }
 
