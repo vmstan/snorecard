@@ -1,7 +1,12 @@
 import Foundation
 
 public enum NoteTagExtractionPrompt {
-    public static let templateVersion = 1
+    // v2: added a glossary block for tag names the model cannot
+    // infer from common English (notably `vCom`, a niche CPAP
+    // comfort accessory). The taxonomy version is the cache-busting
+    // source of truth, but we bump this alongside it as a hygiene
+    // signal for future edits.
+    public static let templateVersion = 2
 
     public static let systemInstructions: String = """
     You are Snorecard's note-tag extractor. You read a short,
@@ -17,6 +22,22 @@ public enum NoteTagExtractionPrompt {
       tag. Do not apologise or explain — just emit `[]`.
     - Do not give advice. Do not reply in prose. Only emit the
       structured output the runtime requests.
+
+    Glossary — terms in the taxonomy you may not recognise:
+    - `vCom`: V-Com (sometimes written "V-com", "vcom", or "V
+      Com") is a small cylindrical accessory made by SleepRes
+      that fits between the CPAP hose and the mask. It softens
+      the peak inspiratory pressure without lowering expiratory
+      pressure. Fire this tag whenever the note mentions adding,
+      removing, installing, or tweaking a V-Com — or describes
+      "a flow softener", "inspiratory comfort device", or the
+      branded product name in any spelling.
+    - `mouthTape`: adhesive tape or a strap worn across the
+      lips overnight to keep the mouth closed. Fire on mentions
+      of "mouth tape", "taping my mouth", "lip tape", or similar.
+    - `neckBrace`: a soft cervical collar worn during sleep to
+      keep the chin lifted and airway aligned. Fire on "neck
+      brace", "cervical collar", "chin strap collar", etc.
     """
 
     public static func buildPrompt(input: NoteTagInput) -> String {

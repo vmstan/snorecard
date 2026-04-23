@@ -7,13 +7,13 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    // v9: stop naming the night at all. The reader is already
-    // looking at a specific day's view, so the temporal anchor
-    // is implied. Earlier versions referred to "last night",
-    // which was wrong for older dates; spelling the date out was
-    // unnecessary noise. The summary now describes the night's
-    // character directly.
-    public static let templateVersion = 9
+    // v10: the journal now carries a subjective 1–5 rating and a
+    // user-asserted tag list. Both are shown to the model as
+    // additional context so the narrative can acknowledge the
+    // reader's own read of the night ("you rated it a 4/5" or
+    // "with allergies tagged") instead of only describing the raw
+    // metrics. The tags are labels, not fields to echo verbatim.
+    public static let templateVersion = 10
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe
@@ -56,6 +56,17 @@ public enum NightSummaryPrompt {
     - 2 to 4 sentences, one paragraph, no bullets, no headings.
     - British English spelling.
     - Omit metrics that are missing from the input.
+    - If the reader supplied a subjective rating, acknowledge it
+      qualitatively ("you rated it strongly", "you rated it as
+      mixed", "your 4 out of 5 reflects a steady night"). Do not
+      treat the rating as a therapy metric — it's the reader's
+      own feeling, so phrases like "agrees with your sense of
+      the night" or "contrasts with your sense of the night"
+      are appropriate when it diverges from the numbers.
+    - If the reader attached context tags, you may weave them in
+      as framing ("with travel tagged", "given the congestion
+      you noted") but must not claim the tag caused any metric.
+      Tags are context, not explanation.
     """
 
     /// Build the prompt body for the LLM. The input is rendered as

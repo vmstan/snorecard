@@ -29,16 +29,23 @@ public enum NoteTag: String, Codable, Hashable, Sendable, CaseIterable {
     case hotelBed
     case highAltitude
     case roomTooWarm
+    case kidsInBed
+    case petsInBed
 
     // Equipment
     case newMask
     case maskLeak
     case humidifierTweak
+    case vCom
+    case mouthTape
+    case neckBrace
 
     // Sleep hygiene
     case stress
     case lateNight
     case napToday
+    case exercised
+    case lateExercise
 
     // Sleeping position
     case sleepingOnBack
@@ -62,15 +69,74 @@ public enum NoteTag: String, Codable, Hashable, Sendable, CaseIterable {
         case .hotelBed:         return "Hotel bed"
         case .highAltitude:     return "High altitude"
         case .roomTooWarm:      return "Room too warm"
+        case .kidsInBed:        return "Kids in bed"
+        case .petsInBed:        return "Pets in bed"
         case .newMask:          return "New mask"
         case .maskLeak:         return "Mask leak"
         case .humidifierTweak:  return "Humidifier tweak"
+        case .vCom:             return "V-com"
+        case .mouthTape:        return "Mouth tape"
+        case .neckBrace:        return "Neck brace"
         case .stress:           return "Stress"
         case .lateNight:        return "Late night"
         case .napToday:         return "Nap today"
+        case .exercised:        return "Exercised today"
+        case .lateExercise:     return "Late exercise"
         case .sleepingOnBack:   return "Slept on back"
         case .sleepingOnSide:   return "Slept on side"
         }
+    }
+
+    /// Category the tag belongs to, used by the manual tag picker
+    /// in `NotesCard` to group the 22-tag list into meaningful
+    /// sections instead of a flat scroll.
+    public var category: NoteTagCategory {
+        switch self {
+        case .congestion, .allergies, .illness,
+             .mouthBreathing, .nasalBlocked:
+            return .respiratory
+        case .alcohol, .lateCaffeine, .lateMeal, .medicationChange:
+            return .substances
+        case .travel, .hotelBed, .highAltitude, .roomTooWarm,
+             .kidsInBed, .petsInBed:
+            return .environment
+        case .newMask, .maskLeak, .humidifierTweak,
+             .vCom, .mouthTape, .neckBrace:
+            return .equipment
+        case .stress, .lateNight, .napToday,
+             .exercised, .lateExercise:
+            return .sleepHygiene
+        case .sleepingOnBack, .sleepingOnSide:
+            return .position
+        }
+    }
+}
+
+/// Ordered grouping for the manual tag picker. Cases are declared
+/// in the order they should appear in the menu.
+public enum NoteTagCategory: String, CaseIterable, Sendable {
+    case respiratory
+    case substances
+    case environment
+    case equipment
+    case sleepHygiene
+    case position
+
+    /// Heading shown above the tag list for this category.
+    public var displayLabel: String {
+        switch self {
+        case .respiratory:  return "Respiratory"
+        case .substances:   return "Substances & Timing"
+        case .environment:  return "Environment"
+        case .equipment:    return "Equipment"
+        case .sleepHygiene: return "Sleep Hygiene"
+        case .position:     return "Sleeping Position"
+        }
+    }
+
+    /// Tags that belong to this category, in taxonomy order.
+    public var tags: [NoteTag] {
+        NoteTag.allCases.filter { $0.category == self }
     }
 }
 
@@ -79,7 +145,14 @@ public enum NoteTag: String, Codable, Hashable, Sendable, CaseIterable {
 /// invalidates old tags without requiring a manual migration.
 public enum NoteTagTaxonomy {
     /// Bump whenever `NoteTag` cases are added, renamed, or removed.
-    public static let version = 1
+    /// v2: added `kidsInBed`, `petsInBed`, `exercised`,
+    /// `lateExercise`. v3: added `vCom`, `mouthTape`, `neckBrace`
+    /// under equipment so accessories show up alongside mask /
+    /// humidifier events. Existing cached `DailyNote.extractedTags`
+    /// generated against an earlier version will re-run on next
+    /// read so the new cases have a chance to fire against older
+    /// notes.
+    public static let version = 3
 
     /// Hard cap on tags per note. The prompt asks for "up to 4" but
     /// we also truncate in Swift as a belt-and-braces guard.

@@ -210,6 +210,7 @@ final class Library {
     private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
+    private static let defaultJournalTagsKey = "defaultJournalTags"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
@@ -289,6 +290,22 @@ final class Library {
         }
     }
 
+    /// Tags the user wants auto-attached to every imported night.
+    /// Applied in `load()` as each day's stats are backfilled, but
+    /// only when the day has no existing journal sidecar — so manual
+    /// edits (including an intentionally empty tag list) always win
+    /// over this default. Local-only: a user's default tag picks are
+    /// a per-device workflow preference, not therapy data.
+    var defaultJournalTags: Set<NoteTag> {
+        didSet {
+            guard oldValue != defaultJournalTags else { return }
+            UserDefaults.standard.set(
+                defaultJournalTags.map(\.rawValue).sorted(),
+                forKey: Self.defaultJournalTagsKey
+            )
+        }
+    }
+
     private var backgroundReloadTask: Task<Void, Never>?
 
     init() {
@@ -335,6 +352,17 @@ final class Library {
             self.eventColorPalette = palette
         } else {
             self.eventColorPalette = .topher
+        }
+
+        // Default tags default to empty so upgrading users don't
+        // suddenly see every night pre-tagged. Raw values that no
+        // longer exist in the taxonomy are dropped silently.
+        if let rawTags = UserDefaults.standard.array(
+            forKey: Self.defaultJournalTagsKey
+        ) as? [String] {
+            self.defaultJournalTags = Set(rawTags.compactMap(NoteTag.init(rawValue:)))
+        } else {
+            self.defaultJournalTags = []
         }
 
         let kvs = NSUbiquitousKeyValueStore.default
@@ -638,8 +666,11 @@ final class Library {
     }
 
     /// Persist `text` as the note for `day`. A nil or whitespace-only
-    /// string removes the note entirely. The `updatedAt` timestamp is
-    /// stamped here so views don't need to care about it.
+    /// string removes the free-form prose but preserves any user-
+    /// asserted tags and rating, so clearing the editor doesn't
+    /// silently wipe the user's tag/rating assertions. The sidecar
+    /// is only fully deleted when text, user tags, and rating are
+    /// all empty (handled by `DailyNotesCache.save`).
     ///
     /// After persisting, schedules a best-effort tag extraction pass
     /// when Apple Intelligence is available. Existing
@@ -649,13 +680,27 @@ final class Library {
         guard let folder = day.files.first?.url.deletingLastPathComponent()
         else { return }
         let raw = text ?? ""
+        let prior = DailyNotesCache.load(for: folder)
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            DailyNotesCache.save(nil, to: folder)
             pendingTagExtractions.removeValue(forKey: folder)?.cancel()
+            // Preserve user-asserted tags and rating — the user may
+            // have tagged a night they never wrote about. Cancels
+            // any pending extraction because the text is gone.
+            DailyNotesCache.save(
+                DailyNote(
+                    text: "",
+                    updatedAt: Date(),
+                    extractedTags: nil,
+                    tagsInputHash: nil,
+                    taxonomyVersion: nil,
+                    userTags: prior?.userTags,
+                    subjectiveScore: prior?.subjectiveScore
+                ),
+                to: folder
+            )
             return
         }
-        let prior = DailyNotesCache.load(for: folder)
         let newHash = IntelligenceCache.hash(of: raw)
         let reuseTags = prior?.tagsInputHash == newHash
             && prior?.taxonomyVersion == NoteTagTaxonomy.version
@@ -665,11 +710,76 @@ final class Library {
                 updatedAt: Date(),
                 extractedTags: reuseTags ? prior?.extractedTags : nil,
                 tagsInputHash: reuseTags ? prior?.tagsInputHash : nil,
-                taxonomyVersion: reuseTags ? prior?.taxonomyVersion : nil
+                taxonomyVersion: reuseTags ? prior?.taxonomyVersion : nil,
+                userTags: prior?.userTags,
+                subjectiveScore: prior?.subjectiveScore
             ),
             to: folder
         )
         extractTagsIfNeeded(for: folder, text: raw, hash: newHash)
+    }
+
+    /// Persist `tags` as the user-asserted tag list for `day`. `nil`
+    /// clears the assertion so correlation falls back to whatever
+    /// the on-device extractor produced; an empty array is a
+    /// legitimate assertion ("no tags apply") and still suppresses
+    /// the extracted list for downstream use.
+    func setUserTags(_ tags: [NoteTag]?, for day: ResMedDay) {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return }
+        let prior = DailyNotesCache.load(for: folder) ?? DailyNote(text: "")
+        DailyNotesCache.save(
+            DailyNote(
+                text: prior.text,
+                updatedAt: Date(),
+                extractedTags: prior.extractedTags,
+                tagsInputHash: prior.tagsInputHash,
+                taxonomyVersion: prior.taxonomyVersion,
+                userTags: tags,
+                subjectiveScore: prior.subjectiveScore
+            ),
+            to: folder
+        )
+    }
+
+    /// Persist the user's subjective 1–5 rating for `day`. `nil`
+    /// clears the rating. The bounds aren't enforced here — the
+    /// stored `Int` is whatever the UI supplied — but views pin the
+    /// control to 1–5.
+    func setSubjectiveScore(_ score: Int?, for day: ResMedDay) {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return }
+        let prior = DailyNotesCache.load(for: folder) ?? DailyNote(text: "")
+        DailyNotesCache.save(
+            DailyNote(
+                text: prior.text,
+                updatedAt: Date(),
+                extractedTags: prior.extractedTags,
+                tagsInputHash: prior.tagsInputHash,
+                taxonomyVersion: prior.taxonomyVersion,
+                userTags: prior.userTags,
+                subjectiveScore: score
+            ),
+            to: folder
+        )
+    }
+
+    /// Seed a note sidecar with `defaultJournalTags` when the day has
+    /// no existing sidecar yet. Called from the backfill callback so
+    /// freshly-imported nights land with the user's default tags
+    /// already applied — never overwrites an existing sidecar, so
+    /// days the user has already touched (or that were default-tagged
+    /// on a prior import) are left alone.
+    private func applyDefaultJournalTagsIfNeeded(for day: ResMedDay) {
+        guard !defaultJournalTags.isEmpty,
+              let folder = day.files.first?.url.deletingLastPathComponent(),
+              DailyNotesCache.load(for: folder) == nil
+        else { return }
+        let ordered = NoteTag.allCases.filter { defaultJournalTags.contains($0) }
+        DailyNotesCache.save(
+            DailyNote(text: "", updatedAt: Date(), userTags: ordered),
+            to: folder
+        )
     }
 
     /// Kick off a best-effort tag-extraction pass for a note. Bails
@@ -743,11 +853,13 @@ final class Library {
             before: day.date,
             from: allStats
         )
-        let note = DailyNotesCache.load(for: folder)?.text
+        let note = DailyNotesCache.load(for: folder)
         let input = IntelligenceInputBuilder.nightSummary(
             stats: stats,
             baseline: baseline,
-            userNote: note
+            userNote: note?.text,
+            subjectiveScore: note?.subjectiveScore,
+            userTags: note?.effectiveTags ?? []
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadNightSummary(
@@ -956,7 +1068,12 @@ final class Library {
                   let folder = day.files.first?.url.deletingLastPathComponent()
             else { return nil }
             let note = DailyNotesCache.load(for: folder)
-            let tags = note?.extractedTags ?? []
+            // Prefer user-asserted tags over the extractor's guess —
+            // the person reading the correlation card is the same
+            // person who asserted the tags, so their labelling is
+            // authoritative. Falls back to `extractedTags` when the
+            // user hasn't overridden.
+            let tags = note?.effectiveTags ?? []
             return TagCorrelator.DayInput(
                 tags: Set(tags),
                 stats: stat
@@ -1302,6 +1419,7 @@ final class Library {
                     productName: productName
                 ) { @MainActor [weak self] updatedDay in
                     accumulated = accumulated.replacing(day: updatedDay)
+                    self?.applyDefaultJournalTagsIfNeeded(for: updatedDay)
                     // Keep publishing as `.hydrating` — the final
                     // `.loaded` transition runs once the group finishes.
                     self?.state = .hydrating(accumulated)

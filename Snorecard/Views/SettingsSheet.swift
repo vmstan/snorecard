@@ -1,4 +1,5 @@
 import SwiftUI
+import SnorecardKit
 
 /// Top-level Settings sheet / inspector pane. Currently hosts just
 /// the App Icon picker, but structured as a sectioned list so more
@@ -72,6 +73,13 @@ struct SettingsSheet: View {
                     Label("Appearance", systemImage: "paintpalette")
                 }
                 NavigationLink {
+                    journalTab
+                        .navigationTitle("Journal")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Journal", systemImage: "note.text")
+                }
+                NavigationLink {
                     advancedTab
                         .navigationTitle("Advanced")
                         .navigationBarTitleDisplayMode(.inline)
@@ -107,6 +115,8 @@ struct SettingsSheet: View {
                 .tabItem { Label("Backups", systemImage: "icloud") }
             appearanceTab
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
+            journalTab
+                .tabItem { Label("Journal", systemImage: "note.text") }
             advancedTab
                 .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
         }
@@ -430,6 +440,66 @@ struct SettingsSheet: View {
             Text("Sidebar")
         } footer: {
             Text("Controls how each day appears in the sidebar.")
+        }
+    }
+
+    /// Journal tab — lets the user pick tags to auto-attach to every
+    /// newly-imported night. Applied in `Library.load()` during the
+    /// stats-backfill pass, and only to days that don't already have
+    /// a journal sidecar, so manual edits always win.
+    @ViewBuilder
+    private var journalTab: some View {
+        Form {
+            Section {
+                ForEach(NoteTagCategory.allCases, id: \.self) { category in
+                    journalTagGroup(category)
+                }
+            } header: {
+                Text("Default Tags")
+            } footer: {
+                Text("These tags are added to every newly imported night. Edit a night's tags in the Sleep Journal to change them.")
+            }
+
+            if !library.defaultJournalTags.isEmpty {
+                Section {
+                    Button("Clear All Defaults", role: .destructive) {
+                        library.defaultJournalTags = []
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private func journalTagGroup(
+        _ category: NoteTagCategory
+    ) -> some View {
+        DisclosureGroup {
+            ForEach(category.tags, id: \.self) { tag in
+                Toggle(tag.displayLabel, isOn: Binding(
+                    get: { library.defaultJournalTags.contains(tag) },
+                    set: { isOn in
+                        var current = library.defaultJournalTags
+                        if isOn { current.insert(tag) }
+                        else { current.remove(tag) }
+                        library.defaultJournalTags = current
+                    }
+                ))
+            }
+        } label: {
+            HStack {
+                Text(category.displayLabel)
+                Spacer()
+                let count = category.tags.filter {
+                    library.defaultJournalTags.contains($0)
+                }.count
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

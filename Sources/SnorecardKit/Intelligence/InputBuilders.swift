@@ -15,7 +15,9 @@ public enum IntelligenceInputBuilder {
     public static func nightSummary(
         stats: DailyStatistics,
         baseline: Baseline?,
-        userNote: String?
+        userNote: String?,
+        subjectiveScore: Int? = nil,
+        userTags: [NoteTag] = []
     ) -> NightSummaryInput {
         let usageHours = PromptRounding.round1(stats.usageHours)
         let ahi = PromptRounding.round1(stats.ahi)
@@ -81,6 +83,12 @@ public enum IntelligenceInputBuilder {
             return String(prefix) + "…"
         }()
 
+        // Clamp the subjective score into the 1–5 range the UI
+        // produces — defensive in case a future caller passes
+        // unclamped input, but a no-op today.
+        let clampedScore: Int? = subjectiveScore.map { min(max($0, 1), 5) }
+        let tagLabels = userTags.map(\.displayLabel)
+
         return NightSummaryInput(
             date: stats.date,
             usageHours: usageHours,
@@ -93,7 +101,9 @@ public enum IntelligenceInputBuilder {
             timeInApneaPercent: apneaPercent,
             tidalVolumeMedianML: tidalMedianML,
             baselineDiff: diff,
-            userNote: trimmedNote
+            userNote: trimmedNote,
+            subjectiveScore: clampedScore,
+            userTags: tagLabels
         )
     }
 

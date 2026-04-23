@@ -19,6 +19,16 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
     public let tidalVolumeMedianML: Int?   // integer
     public let baselineDiff: BaselineDiff?
     public let userNote: String?
+    /// User's subjective rating for the night on a 1–5 scale, or
+    /// `nil` when they haven't rated it. Surfaced so the narrative
+    /// can acknowledge "you rated this a 4/5" without inventing a
+    /// rating the user never provided.
+    public let subjectiveScore: Int?
+    /// Tags the user (or the extraction pass) has associated with
+    /// the night, in display-label form. Empty when neither is
+    /// present. Rendered as a comma-separated line so the model
+    /// treats them as context, not fields to echo verbatim.
+    public let userTags: [String]
 
     public struct BaselineDiff: Codable, Hashable, Sendable {
         public let ahiDelta: Double        // 1 dp, signed
@@ -51,7 +61,9 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
         timeInApneaPercent: Double?,
         tidalVolumeMedianML: Int?,
         baselineDiff: BaselineDiff?,
-        userNote: String?
+        userNote: String?,
+        subjectiveScore: Int? = nil,
+        userTags: [String] = []
     ) {
         self.date = date
         self.usageHours = usageHours
@@ -65,6 +77,8 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
         self.tidalVolumeMedianML = tidalVolumeMedianML
         self.baselineDiff = baselineDiff
         self.userNote = userNote
+        self.subjectiveScore = subjectiveScore
+        self.userTags = userTags
     }
 }
 
@@ -128,6 +142,16 @@ extension NightSummaryInput {
             }
             body += "\n\nChange versus the trailing 14-day average:\n"
                 + diffLines.map { "- \($0)" }.joined(separator: "\n")
+        }
+
+        if let score = subjectiveScore {
+            body += "\n\nYour subjective rating for the night: "
+                + "\(score) out of 5."
+        }
+
+        if !userTags.isEmpty {
+            body += "\n\nContext tags you attached to the night: "
+                + userTags.joined(separator: ", ") + "."
         }
 
         if let note = userNote {
