@@ -27,19 +27,57 @@ public struct DailyNote: Codable, Sendable, Equatable {
     /// was generated. Bumping the taxonomy version triggers bulk
     /// re-extraction on next read.
     public var taxonomyVersion: Int?
+    /// Tags the user has explicitly asserted via the Sleep Journal
+    /// tag picker. When non-nil this takes precedence over
+    /// `extractedTags` for correlation and prompt context — the
+    /// user's own labelling is authoritative. `nil` means "the user
+    /// hasn't overridden"; `[]` means "the user has asserted that
+    /// no tags apply", which also suppresses the AI extraction.
+    public var userTags: [NoteTag]?
+    /// Subjective 1–5 rating the user gave the night. `nil` means
+    /// the user hasn't rated it yet. Kept as an `Int` rather than an
+    /// enum so future re-scaling (1–10, 0–100) doesn't require a
+    /// migration — the bounds are enforced at the UI layer.
+    public var subjectiveScore: Int?
 
     public init(
         text: String,
         updatedAt: Date = Date(),
         extractedTags: [NoteTag]? = nil,
         tagsInputHash: String? = nil,
-        taxonomyVersion: Int? = nil
+        taxonomyVersion: Int? = nil,
+        userTags: [NoteTag]? = nil,
+        subjectiveScore: Int? = nil
     ) {
         self.text = text
         self.updatedAt = updatedAt
         self.extractedTags = extractedTags
         self.tagsInputHash = tagsInputHash
         self.taxonomyVersion = taxonomyVersion
+        self.userTags = userTags
+        self.subjectiveScore = subjectiveScore
+    }
+
+    /// Tags that downstream consumers (correlation, AI prompts)
+    /// should treat as authoritative for this night. Prefers the
+    /// user-asserted list so a user override always wins over the
+    /// AI extraction — even when the user has explicitly said "no
+    /// tags" by clearing the picker.
+    public var effectiveTags: [NoteTag] {
+        if let userTags { return userTags }
+        return extractedTags ?? []
+    }
+
+    /// True when the sidecar has nothing worth persisting — no
+    /// text, no user tags, no rating. The cache uses this to
+    /// decide whether to delete the file on save.
+    public var isEmpty: Bool {
+        let blankText = text.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty
+        let noTags = (userTags ?? []).isEmpty
+        let noScore = subjectiveScore == nil
+        return blankText && noTags && noScore
     }
 }
 
@@ -65,17 +103,15 @@ public enum DailyNotesCache {
         return note
     }
 
-    /// Persist `note` for the day folder. Passing `nil` or a note
-    /// whose `text` is whitespace-only deletes the sidecar so empty
-    /// notes don't clutter up iCloud. Writes are atomic so a crash
-    /// mid-write never leaves a corrupt sidecar on disk.
+    /// Persist `note` for the day folder. Passing `nil`, or a note
+    /// whose `text`, user tags and rating are all empty, deletes
+    /// the sidecar so journals with no content don't clutter up
+    /// iCloud. Writes are atomic so a crash mid-write never leaves
+    /// a corrupt sidecar on disk.
     public static func save(_ note: DailyNote?, to dayFolder: URL) {
         let url = dayFolder.appendingPathComponent(filename)
         let fm = FileManager.default
-        let isBlank = note?.text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty ?? true
-        if isBlank {
+        guard let note, !note.isEmpty else {
             try? fm.removeItem(at: url)
             return
         }
