@@ -282,22 +282,24 @@ struct DayDetailView: View {
                             onTap: explainTap(.timeInApnea)
                         )
                     }
+                    // IPAP gets its own card only when the device
+                    // actually delivers extra inspiratory pressure.
+                    // On plain CPAP therapy IPAP equals EPAP, so
+                    // the single EPAP card is relabelled
+                    // "EPAP/IPAP" to make clear that one value
+                    // covers both.
+                    let showsDistinctIPAP: Bool = {
+                        guard let epap = stats.epap95, let ipap = stats.ipap95 else { return false }
+                        return ipap > epap + 0.05
+                    }()
                     if let epap = stats.epap95 {
                         StatCard(
-                            label: "EPAP (95%)",
+                            label: showsDistinctIPAP ? "EPAP (95%)" : "EPAP/IPAP (95%)",
                             value: String(format: "%.1f cmH₂O", epap),
                             onTap: explainTap(.epap95)
                         )
                     }
-                    // IPAP gets its own card only when the device
-                    // actually delivers extra inspiratory pressure.
-                    // On plain CPAP therapy IPAP equals EPAP, so a
-                    // second card would repeat the same number
-                    // next to itself.
-                    if let epap = stats.epap95,
-                       let ipap = stats.ipap95,
-                       ipap > epap + 0.05
-                    {
+                    if showsDistinctIPAP, let ipap = stats.ipap95 {
                         StatCard(
                             label: "IPAP (95%)",
                             value: String(format: "%.1f cmH₂O", ipap),
@@ -306,11 +308,13 @@ struct DayDetailView: View {
                     }
                     // Median mask pressure (50th percentile of the
                     // on-therapy waveform, or MaskPress.50 on
-                    // AirSense 11 summary) so the card is populated
-                    // on every device type. Reads as a "typical"
-                    // mask pressure complement to the 95%-target
-                    // EPAP/IPAP cards above.
-                    if let median = stats.pressureMedian {
+                    // AirSense 11 summary) reads as a "typical"
+                    // working-pressure complement to the 95%-target
+                    // EPAP/IPAP cards above. Only shown when the
+                    // standalone IPAP card is hidden so the grid
+                    // keeps the same card count whether therapy is
+                    // CPAP or bilevel.
+                    if !showsDistinctIPAP, let median = stats.pressureMedian {
                         StatCard(
                             label: "Mask Pressure (Median)",
                             value: String(format: "%.1f cmH₂O", median),
@@ -326,9 +330,14 @@ struct DayDetailView: View {
                         )
                     }
                     if let gi = stats.glasgowIndex {
+                        let contributor = stats.glasgowBreakdown
+                            .flatMap(Self.glasgowTopContributor)
                         StatCard(
                             label: "Glasgow Index",
                             value: String(format: "%.2f", gi),
+                            subtitle: contributor.map {
+                                String(format: "%.0f%% %@", $0.percent, $0.label)
+                            },
                             tint: glasgowColor(gi),
                             onTap: explainTap(.glasgowIndex)
                         )
@@ -342,7 +351,28 @@ struct DayDetailView: View {
                             onTap: explainTap(.tidalVolume)
                         )
                     }
-                    if let snore = stats.snore95 {
+                    if let level = SnoreLevel.classify(
+                        moderateSeconds: stats.snoreModerateSeconds,
+                        loudSeconds: stats.snoreLoudSeconds,
+                        usageSeconds: stats.usageMinutes * 60
+                    ) {
+                        StatCard(
+                            label: "Snore",
+                            value: level.label,
+                            subtitle: SnoreLevel.subtitle(
+                                moderateSeconds: stats.snoreModerateSeconds,
+                                loudSeconds: stats.snoreLoudSeconds,
+                                usageSeconds: stats.usageMinutes * 60
+                            ),
+                            tint: snoreLevelColor(level),
+                            onTap: explainTap(.snore95)
+                        )
+                    } else if let snore = stats.snore95 {
+                        // Fallback for cached days imported before the
+                        // band-seconds fields existed — drop them into
+                        // the card as the raw 95th-percentile number so
+                        // the card isn't blank until the user rebuilds
+                        // the cache.
                         StatCard(
                             label: "Snore (95%)",
                             value: String(format: "%.1f", snore),
@@ -412,10 +442,6 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                if let breakdown = day.stats?.glasgowBreakdown {
-                    GlasgowBreakdownChart(breakdown: breakdown)
-                }
-
                 // Detailed Statistics + Advanced Charting both
                 // spawn a secondary window (macOS) or sheet (iOS)
                 // so the day view itself stays focused on metrics
@@ -566,6 +592,34 @@ struct DayDetailView: View {
         }
     }
 
+    /// Dominant Glasgow sub-index in a single-night breakdown and its
+    /// share of the total score. Surfaced as the Glasgow card's
+    /// subtitle ("47% top-heavy") so the headline number is paired
+    /// with the breath characteristic driving it. Returns nil when
+    /// the total is zero or every sub-index is empty.
+    static func glasgowTopContributor(
+        _ breakdown: GlasgowIndex.Breakdown
+    ) -> (label: String, percent: Double)? {
+        let total = breakdown.total
+        guard total > 0 else { return nil }
+        // Labels match the wording the Trends view uses.
+        let fields: [(String, Double)] = [
+            ("flat-top", breakdown.flatTop),
+            ("top-heavy", breakdown.topHeavy),
+            ("skewed", breakdown.skew),
+            ("spiky", breakdown.spike),
+            ("multi-peak", breakdown.multiPeak),
+            ("no pause", breakdown.noPause),
+            ("fast rate", breakdown.inspirRate),
+            ("missed exhale", breakdown.multiBreath),
+            ("variable amplitude", breakdown.ampVar)
+        ]
+        guard let top = fields.max(by: { $0.1 < $1.1 }), top.1 > 0 else {
+            return nil
+        }
+        return (top.0, (top.1 / total) * 100)
+    }
+
     private func formatHours(_ hours: Double) -> String {
         let totalMinutes = Int((hours * 60).rounded())
         let h = totalMinutes / 60
@@ -677,11 +731,25 @@ struct DayDetailView: View {
     /// under 1 is quiet, 1–3 is mild / intermittent, ≥3 is loud or
     /// sustained. Matches the norm boundaries given to the explain
     /// sheet so the card colour agrees with the AI description.
+    /// Still used as a fallback for cached days imported before the
+    /// band-seconds fields existed.
     private func snoreColor(_ index: Double) -> Color {
         switch index {
         case ..<1: return .severityGood
         case ..<3: return library.eventColorPalette.severityLow
         default:   return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// Tint for the qualitative snore chip — mirrors the event-
+    /// severity palette so Quiet / Mild sit in the calm range and
+    /// Moderate / Loud escalate.
+    private func snoreLevelColor(_ level: SnoreLevel) -> Color {
+        switch level {
+        case .quiet:    return .severityGood
+        case .mild:     return library.eventColorPalette.severityLow
+        case .moderate: return library.eventColorPalette.severityLow
+        case .loud:     return library.eventColorPalette.severityHigh
         }
     }
 

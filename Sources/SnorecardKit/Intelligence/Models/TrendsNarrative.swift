@@ -19,6 +19,7 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
     public let rangeEnd: Date
     public let sampleSize: Int
     public let compliancePercent: Double    // 1 dp
+    public let complianceTargetHours: Double // user's per-night target
     public let avgAHI: Double               // 1 dp
     public let avgGlasgowIndex: Double?     // 2 dp
     public let avgUsageMinutes: Int
@@ -51,6 +52,7 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
         rangeEnd: Date,
         sampleSize: Int,
         compliancePercent: Double,
+        complianceTargetHours: Double,
         avgAHI: Double,
         avgGlasgowIndex: Double?,
         avgUsageMinutes: Int,
@@ -63,6 +65,7 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
         self.rangeEnd = rangeEnd
         self.sampleSize = sampleSize
         self.compliancePercent = compliancePercent
+        self.complianceTargetHours = complianceTargetHours
         self.avgAHI = avgAHI
         self.avgGlasgowIndex = avgGlasgowIndex
         self.avgUsageMinutes = avgUsageMinutes
@@ -81,7 +84,7 @@ extension TrendsNarrativeInput {
         var lines: [String] = []
         lines.append("Range: \(Self.rangeFormatter.string(from: rangeStart)) to \(Self.rangeFormatter.string(from: rangeEnd))")
         lines.append("Days with data: \(sampleSize)")
-        lines.append("Compliance: \(Self.oneDp(compliancePercent))% of nights with usage ≥ 4 hours")
+        lines.append("Compliance: \(Self.oneDp(compliancePercent))% of nights with usage ≥ \(Self.formatHours(complianceTargetHours))")
         lines.append("Average AHI: \(Self.oneDp(avgAHI)) events per hour")
         if let gi = avgGlasgowIndex {
             lines.append("Average Glasgow Index: \(Self.twoDp(gi))")
@@ -89,7 +92,7 @@ extension TrendsNarrativeInput {
         let usageHours = Double(avgUsageMinutes) / 60
         lines.append("Average usage: \(Self.oneDp(usageHours)) hours per night")
         if let p = avgPressure95 {
-            lines.append("Average pressure (95th percentile): \(Self.oneDp(p)) cmH₂O")
+            lines.append("Average pressure (95th percentile): \(Self.oneDp(p)) cmH2O")
         }
         if let leak = avgLeak95LPerMin {
             lines.append("Average leak (95th percentile): \(leak) L/min")
@@ -123,6 +126,13 @@ extension TrendsNarrativeInput {
 
     private static func oneDp(_ value: Double) -> String { String(format: "%.1f", value) }
     private static func twoDp(_ value: Double) -> String { String(format: "%.2f", value) }
+
+    private static func formatHours(_ hours: Double) -> String {
+        if hours.rounded() == hours {
+            return "\(Int(hours)) hours"
+        }
+        return String(format: "%.1f hours", hours)
+    }
 
     private static func trendLabel(_ bucket: TrendBucket) -> String {
         switch bucket {

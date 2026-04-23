@@ -89,7 +89,7 @@ extension NightSummaryInput {
             lines.append("Glasgow Index: \(formatTwoDp(gi))")
         }
         if let epap = pressure95 {
-            lines.append("EPAP (95th percentile target): \(formatOneDp(epap)) cmH₂O")
+            lines.append("EPAP (95th percentile target): \(formatOneDp(epap)) cmH2O")
             // Derive IPAP from the EPAP baseline + the stored
             // support delta so the model sees both sides of the
             // breath cycle separately. Suppress the IPAP line
@@ -98,7 +98,7 @@ extension NightSummaryInput {
             // case and the prompt should match.
             if let support = eprSupport, support > 0.05 {
                 let ipap = epap + support
-                lines.append("IPAP (95th percentile target): \(formatOneDp(ipap)) cmH₂O")
+                lines.append("IPAP (95th percentile target): \(formatOneDp(ipap)) cmH2O")
             }
         }
         if let leak = leak95LPerMin {

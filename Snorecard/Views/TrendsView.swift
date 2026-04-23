@@ -354,7 +354,7 @@ struct TrendsView: View {
                 card(
                     "Time in Apnea (AVG)",
                     value: formatDurationShort(apnea),
-                    subtitle: "per night",
+                    subtitle: String(format: "%.2f%% of usage", pct),
                     tint: apneaColor(pct),
                     explain: TrendsExplainContext(
                         metric: .timeInApnea,
@@ -363,9 +363,19 @@ struct TrendsView: View {
                     )
                 )
             }
+            // IPAP gets a separate card only when the range's
+            // average IPAP sits meaningfully above EPAP — i.e.
+            // some nights used bilevel or EPR-style therapy. On
+            // plain CPAP the two averages match, so the single
+            // EPAP card is relabelled "EPAP/IPAP" to make clear
+            // that one value covers both.
+            let showsDistinctIPAP: Bool = {
+                guard let epap = avgEPAP, let ipap = avgIPAP else { return false }
+                return ipap > epap + 0.05
+            }()
             if let epap = avgEPAP {
                 card(
-                    "EPAP (AVG/95%)",
+                    showsDistinctIPAP ? "EPAP (AVG/95%)" : "EPAP/IPAP (AVG/95%)",
                     value: String(format: "%.1f cmH₂O", epap),
                     explain: TrendsExplainContext(
                         metric: .epap95,
@@ -374,15 +384,7 @@ struct TrendsView: View {
                     )
                 )
             }
-            // Separate Avg IPAP card, shown only when the average
-            // IPAP sits meaningfully above EPAP — i.e. the range
-            // includes nights with bilevel / EPR-style therapy.
-            // On plain CPAP the two averages match and a second
-            // card would just echo the first.
-            if let epap = avgEPAP,
-               let ipap = avgIPAP,
-               ipap > epap + 0.05
-            {
+            if showsDistinctIPAP, let ipap = avgIPAP {
                 card(
                     "IPAP (AVG/95%)",
                     value: String(format: "%.1f cmH₂O", ipap),
@@ -397,8 +399,10 @@ struct TrendsView: View {
             // pressure. Stays in the median family to avoid a
             // mean-of-medians hybrid; reads as the "typical working
             // pressure" complement to the 95%-target EPAP/IPAP
-            // averages above.
-            if let maskMedian = medianMask {
+            // averages above. Only shown when the standalone IPAP
+            // card is hidden so the grid keeps the same card count
+            // whether therapy is CPAP or bilevel.
+            if !showsDistinctIPAP, let maskMedian = medianMask {
                 card(
                     "Mask Pressure (Median)",
                     value: String(format: "%.1f cmH₂O", maskMedian),
@@ -422,9 +426,13 @@ struct TrendsView: View {
                 )
             }
             if let gi = avgGI {
+                let contributor = glasgowTopContributor()
                 card(
                     "Glasgow Index (AVG)",
                     value: String(format: "%.2f", gi),
+                    subtitle: contributor.map {
+                        String(format: "%.0f%% %@", $0.percent, $0.label)
+                    },
                     tint: glasgowColor(gi),
                     explain: TrendsExplainContext(
                         metric: .glasgowIndex,
@@ -446,7 +454,25 @@ struct TrendsView: View {
                     )
                 )
             }
-            if let snore = avgSnore {
+            if let snoreBand = snoreBandAggregate() {
+                card(
+                    "Snore (AVG)",
+                    value: snoreBand.level.label,
+                    subtitle: snoreBand.subtitle,
+                    tint: snoreLevelColor(snoreBand.level),
+                    explain: avgSnore.map { snore in
+                        TrendsExplainContext(
+                            metric: .snore95,
+                            displayValue: String(format: "%.1f", snore),
+                            averageValue: snore
+                        )
+                    }
+                )
+            } else if let snore = avgSnore {
+                // Fallback for ranges where no day in the window has
+                // the band-seconds fields yet (older caches) — keep
+                // the old 95th-percentile framing so the card isn't
+                // blank until the user rebuilds the cache.
                 card(
                     "Snore (AVG/95%)",
                     value: String(format: "%.1f", snore),
@@ -958,6 +984,23 @@ struct TrendsView: View {
         return values[count / 2]
     }
 
+    /// Dominant Glasgow sub-index across the range and its share of
+    /// the total score. Surfaced as the Glasgow card's subtitle
+    /// ("47% top-heavy") so the headline number is paired with the
+    /// breath characteristic driving it. Per-day breakdowns are
+    /// averaged with equal weight — the per-inspiration weights the
+    /// underlying `computeDay` uses aren't persisted on
+    /// `DailyStatistics`, so days contribute evenly here.
+    private func glasgowTopContributor() -> (label: String, percent: Double)? {
+        let breakdowns = stats.compactMap(\.glasgowBreakdown)
+        guard !breakdowns.isEmpty else { return nil }
+
+        var acc = GlasgowIndex.BreakdownAccumulator()
+        for b in breakdowns { acc.add(b, weight: 1) }
+        let avg = acc.finalize(totalWeight: Double(breakdowns.count))
+        return DayDetailView.glasgowTopContributor(avg)
+    }
+
     private func largeLeakPercent(for stat: DailyStatistics) -> Double? {
         guard let seconds = stat.largeLeakSeconds, stat.usageMinutes > 0 else { return nil }
         return seconds / (stat.usageMinutes * 60) * 100
@@ -1069,12 +1112,56 @@ struct TrendsView: View {
     /// the extremes.
     /// Snore palette — same boundaries as the Daily view so the
     /// average card tints the same way the per-night card would.
+    /// Still used as a fallback when the range contains only
+    /// cached days from builds before the band-seconds fields.
     private func snoreColor(_ index: Double) -> Color {
         switch index {
         case ..<1: return .severityGood
         case ..<3: return library.eventColorPalette.severityLow
         default:   return library.eventColorPalette.severityHigh
         }
+    }
+
+    /// Mirrors `DayDetailView.snoreLevelColor` so Trends and Daily
+    /// agree on which levels wash the card amber or red.
+    private func snoreLevelColor(_ level: SnoreLevel) -> Color {
+        switch level {
+        case .quiet:    return .severityGood
+        case .mild:     return library.eventColorPalette.severityLow
+        case .moderate: return library.eventColorPalette.severityLow
+        case .loud:     return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// Roll the per-day snore band seconds up across the range and
+    /// classify the whole window. Returns nil when no day in the
+    /// range has the band-seconds fields populated (e.g. the whole
+    /// window predates the feature and no rebuild has run yet).
+    private func snoreBandAggregate() -> (level: SnoreLevel, subtitle: String?)? {
+        var moderate: Double = 0
+        var loud: Double = 0
+        var usageSeconds: Double = 0
+        var sawAny = false
+        for stat in stats where stat.hasUsage {
+            guard let mod = stat.snoreModerateSeconds,
+                  let lo = stat.snoreLoudSeconds else { continue }
+            moderate += mod
+            loud += lo
+            usageSeconds += stat.usageMinutes * 60
+            sawAny = true
+        }
+        guard sawAny, usageSeconds > 0 else { return nil }
+        guard let level = SnoreLevel.classify(
+            moderateSeconds: moderate,
+            loudSeconds: loud,
+            usageSeconds: usageSeconds
+        ) else { return nil }
+        let subtitle = SnoreLevel.subtitle(
+            moderateSeconds: moderate,
+            loudSeconds: loud,
+            usageSeconds: usageSeconds
+        )
+        return (level, subtitle)
     }
 
     private func tidalVolumeColor(_ mL: Double) -> Color {

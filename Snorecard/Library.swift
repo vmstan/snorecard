@@ -871,7 +871,10 @@ final class Library {
             averageValue: averageValue,
             rangeStart: rangeStart,
             rangeEnd: rangeEnd,
-            sampleSize: sampleSize
+            sampleSize: sampleSize,
+            complianceTargetHours: complianceTarget(
+                for: card?.identification?.serialNumber
+            )
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsMetricExplain(

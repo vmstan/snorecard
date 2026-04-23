@@ -206,6 +206,7 @@ public enum IntelligenceInputBuilder {
             rangeEnd: rangeEnd,
             sampleSize: sample,
             compliancePercent: PromptRounding.round1(compliance),
+            complianceTargetHours: PromptRounding.round1(complianceTargetHours),
             avgAHI: PromptRounding.round1(avgAHI),
             avgGlasgowIndex: avgGI.map(PromptRounding.round2),
             avgUsageMinutes: PromptRounding.toInt(avgUsageMinutes),
@@ -290,8 +291,14 @@ public enum IntelligenceInputBuilder {
 
     /// Canonical norms per explainable metric. Kept in Swift so the
     /// model never has to guess at clinical cutoffs — it's handed
-    /// the boundary values directly.
-    public static func norms(for metric: ExplainableMetric) -> MetricExplainInput.Norms {
+    /// the boundary values directly. `complianceTargetHours` lets
+    /// the compliance norm description reflect the user's actual
+    /// per-machine target instead of hardcoding the 4-hour insurer
+    /// default into the prompt.
+    public static func norms(
+        for metric: ExplainableMetric,
+        complianceTargetHours: Double = 4
+    ) -> MetricExplainInput.Norms {
         switch metric {
         case .ahi:
             return MetricExplainInput.Norms(
@@ -309,13 +316,13 @@ public enum IntelligenceInputBuilder {
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "EPAP stands for Expiratory Positive Airway Pressure — the cushion of air the CPAP holds against the user's exhalation to keep the upper airway from collapsing. The value shown is the 95th-percentile target: the pressure the device held for all but the top 5% of the night. Typical auto-titrating therapy sits between 6 and 14 cmH₂O."
+                description: "EPAP — Expiratory Positive Airway Pressure — is the cushion of air the device holds against your exhalation to keep your upper airway from collapsing. The value shown is the 95th-percentile target: the pressure reached or exceeded for all but the top 5% of on-therapy time. Auto-titrating CPAP typically ranges from 6 to 14 cmH2O."
             )
         case .ipap95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
                 elevatedMax: nil,
-                description: "IPAP stands for Inspiratory Positive Airway Pressure — the pressure the CPAP delivers while the user is breathing in, making inhalation feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. The gap in IPAP−EPAP is considered Pressure Support delivered on inhalation."
+                description: "IPAP — Inspiratory Positive Airway Pressure — is the pressure delivered while you're breathing in, making each inhale feel easier than it would against EPAP alone. The value shown is the 95th-percentile target. The gap between IPAP and EPAP is the Pressure Support added on inhalation."
             )
         case .maskPressureMedian:
             return MetricExplainInput.Norms(
@@ -366,10 +373,14 @@ public enum IntelligenceInputBuilder {
                 description: "95th-percentile flow-limitation score on a 0 to 1 scale, derived from inspiratory flow-waveform shape. 0 means smooth unobstructed breaths; values approaching 1 mean most inspirations showed flattening or shape distortion. Under 0.05 is good, 0.05–0.10 is elevated, above 0.10 commonly indicates upper-airway resistance that therapy hasn't fully resolved."
             )
         case .compliance:
+            let targetLabel = Self.formatComplianceTarget(complianceTargetHours)
+            let insurerClause = complianceTargetHours == 4
+                ? " \(targetLabel) is the standard threshold insurers and sleep clinics use to count a night as \"on therapy\"."
+                : " The user has set the per-night target to \(targetLabel); insurers and sleep clinics typically use 4 hours as the baseline."
             return MetricExplainInput.Norms(
                 goodMax: 100,
                 elevatedMax: nil,
-                description: "Compliance is the percentage of nights in the selected range with at least 4 hours of usage. 4 hours is the standard threshold insurers and sleep clinics use to count a night as \"on therapy\". 70% and above is typically considered strong adherence; anything lower indicates a pattern of short or skipped nights."
+                description: "Compliance is the percentage of nights in the selected range with at least \(targetLabel) of usage.\(insurerClause) 70% and above is typically considered strong adherence; anything lower indicates a pattern of short or skipped nights."
             )
         case .daysWithData:
             return MetricExplainInput.Norms(
@@ -453,19 +464,26 @@ public enum IntelligenceInputBuilder {
     /// across the filtered range). `rangeContext` reframes the
     /// prompt so the narration describes an aggregate, not a
     /// single night. No `recent14DayMean` is supplied because
-    /// the aggregate is the anchor.
+    /// the aggregate is the anchor. `complianceTargetHours`
+    /// flows into the compliance norm description so the prompt
+    /// reflects the machine's per-night target rather than the
+    /// hardcoded 4-hour insurer default.
     public static func trendsMetricExplain(
         metric: ExplainableMetric,
         averageValue: Double,
         rangeStart: Date,
         rangeEnd: Date,
-        sampleSize: Int
+        sampleSize: Int,
+        complianceTargetHours: Double = 4
     ) -> MetricExplainInput {
         MetricExplainInput(
             metric: metric,
             currentValue: PromptRounding.round2(averageValue),
             unitLabel: unitLabel(for: metric),
-            norms: norms(for: metric),
+            norms: norms(
+                for: metric,
+                complianceTargetHours: complianceTargetHours
+            ),
             recent14DayMean: nil,
             recent14DayP90: nil,
             rangeContext: MetricExplainInput.RangeContext(
@@ -480,9 +498,9 @@ public enum IntelligenceInputBuilder {
         switch metric {
         case .ahi:              return "events per hour"
         case .glasgowIndex:     return "score"
-        case .epap95:           return "cmH₂O"
-        case .ipap95:           return "cmH₂O"
-        case .maskPressureMedian: return "cmH₂O"
+        case .epap95:           return "cmH2O"
+        case .ipap95:           return "cmH2O"
+        case .maskPressureMedian: return "cmH2O"
         case .leak95:           return "L/min"
         case .largeLeak:        return "percent of usage"
         case .tidalVolume:      return "mL"
@@ -494,6 +512,16 @@ public enum IntelligenceInputBuilder {
         case .daysWithData:     return "nights"
         case .sessionsPerNight: return "sessions"
         }
+    }
+
+    /// Render the compliance target as a short plain-English
+    /// label — "4 hours", "5.5 hours" — for the norm description
+    /// injected into the explain prompt.
+    private static func formatComplianceTarget(_ hours: Double) -> String {
+        if hours.rounded() == hours {
+            return "\(Int(hours)) hours"
+        }
+        return String(format: "%.1f hours", hours)
     }
 
     private static func percentile(_ values: [Double], _ p: Double) -> Double? {

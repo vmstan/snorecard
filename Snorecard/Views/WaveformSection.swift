@@ -1334,7 +1334,8 @@ struct WaveformSection: View {
                     stepped: false,
                     thresholdY: 24,
                     hoverOffset: hoverOffset,
-                    axes: axes
+                    axes: axes,
+                    gradient: true
                 )
             }
         }
@@ -1363,7 +1364,8 @@ struct WaveformSection: View {
                     stepped: false,
                     thresholdY: nil,
                     hoverOffset: hoverOffset,
-                    axes: axes
+                    axes: axes,
+                    gradient: true
                 )
             }
         }

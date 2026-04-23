@@ -40,8 +40,8 @@ struct AdvancedChartingButton: View {
                 #endif
             } label: {
                 DayActionButtonLabel(
-                    title: "Advanced Charting",
-                    subtitle: "High-resolution breath waveforms",
+                    title: "Detailed Waveforms",
+                    subtitle: "High-resolution breathing and pressure traces",
                     systemImage: "waveform",
                     tint: .chartOrange
                 )
@@ -51,7 +51,7 @@ struct AdvancedChartingButton: View {
             .sheet(isPresented: $isShowingSheet) {
                 NavigationStack {
                     AdvancedChartingView(payload: payload)
-                        .navigationTitle("Advanced Charting")
+                        .navigationTitle("Detailed Waveforms")
                         .navigationBarTitleDisplayMode(.inline)
                 }
                 .presentationDragIndicator(.visible)
@@ -83,10 +83,10 @@ struct AdvancedChartingView: View {
         content
             #if os(macOS)
             // Populates the macOS title bar so the floating window
-            // reads as "Advanced Charting — <date>" instead of
+            // reads as "Detailed Waveforms — <date>" instead of
             // inheriting the generic app name. Matches the
             // treatment on `DetailedStatisticsView`.
-            .navigationTitle("Advanced Charting")
+            .navigationTitle("Detailed Waveforms")
             .navigationSubtitle(navigationSubtitle)
             #endif
             .task(id: payload.id) {

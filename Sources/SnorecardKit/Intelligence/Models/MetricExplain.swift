@@ -91,6 +91,16 @@ public struct MetricExplainInput: Codable, Hashable, Sendable {
 
 extension MetricExplainInput {
     /// Plain-English rendering for embedding in the prompt.
+    ///
+    /// Placement (which band the value falls into) and the
+    /// recent-average comparison are pre-digested on the Swift
+    /// side and handed to the model as qualitative phrases. The
+    /// on-device 3B model confabulated numeric boundaries when it
+    /// was shown raw "Boundary for 'good': up to X" lines next to
+    /// the reader's value — it extended the word "boundary" to
+    /// the 14-day mean and invented cutoffs that weren't in the
+    /// input. Swift owning the arithmetic avoids that whole class
+    /// of hallucination.
     public var promptDescription: String {
         var lines: [String] = []
         lines.append("Metric: \(metric.displayLabel)")
@@ -101,21 +111,117 @@ extension MetricExplainInput {
             lines.append("Scope: a single night")
             lines.append("Your current value: \(Self.formatValue(currentValue, metric: metric)) \(unitLabel)")
         }
-        if let mean = recent14DayMean {
-            lines.append("Your 14-day mean: \(Self.formatValue(mean, metric: metric)) \(unitLabel)")
+        if let placement = Self.placementPhrase(
+            for: metric,
+            currentValue: currentValue
+        ) {
+            lines.append("Placement: \(placement)")
         }
-        if let p90 = recent14DayP90 {
-            lines.append("Your 14-day 90th percentile: \(Self.formatValue(p90, metric: metric)) \(unitLabel)")
-        }
-        if let goodMax = norms.goodMax {
-            lines.append("Boundary for \"good\": up to \(Self.formatValue(goodMax, metric: metric)) \(unitLabel)")
-        }
-        if let elevatedMax = norms.elevatedMax {
-            lines.append("Boundary for \"elevated\": up to \(Self.formatValue(elevatedMax, metric: metric)) \(unitLabel)")
+        if let mean = recent14DayMean,
+           let relation = Self.meanRelationPhrase(
+                for: metric,
+                currentValue: currentValue,
+                mean: mean
+           ) {
+            lines.append("Compared with your recent average: \(relation)")
         }
         var body = lines.map { "- \($0)" }.joined(separator: "\n")
         body += "\n\nContext for the metric:\n\(norms.description)"
         return body
+    }
+
+    /// Qualitative band the reader's value falls into, for each
+    /// metric that has clinical bands. Returns nil when the
+    /// metric has no meaningful banding (EPAP/IPAP targets,
+    /// median mask pressure, days with data, sessions per night).
+    static func placementPhrase(
+        for metric: ExplainableMetric,
+        currentValue v: Double
+    ) -> String? {
+        switch metric {
+        case .ahi:
+            if v <= 5 { return "in the controlled range" }
+            if v <= 15 { return "in the mild range" }
+            return "above the mild range"
+        case .glasgowIndex:
+            if v <= 2.0 { return "in the good band" }
+            if v <= 3.0 { return "in the elevated band" }
+            return "above the elevated band"
+        case .leak95:
+            if v <= 5 { return "well sealed" }
+            if v <= 24 { return "below the large-leak threshold" }
+            return "above the large-leak threshold"
+        case .largeLeak:
+            if v <= 0.5 { return "negligible" }
+            if v <= 5 { return "elevated" }
+            return "high"
+        case .timeInApnea:
+            if v <= 1 { return "in the healthy range" }
+            if v <= 3 { return "elevated" }
+            return "high"
+        case .flowLimit:
+            if v <= 0.05 { return "in the good band" }
+            if v <= 0.10 { return "in the elevated band" }
+            return "above the elevated band"
+        case .snore95:
+            if v <= 1 { return "quiet" }
+            if v <= 3 { return "mild or intermittent" }
+            return "loud or sustained"
+        case .usage:
+            if v < 4 { return "below the compliance threshold" }
+            if v < 7 { return "short of the typical 7 to 9 hour window" }
+            if v <= 9 { return "inside the typical 7 to 9 hour window" }
+            if v <= 10 { return "above the typical window" }
+            return "unusually long"
+        case .tidalVolume:
+            if v < 350 { return "well below the typical adult range" }
+            if v < 420 { return "just below the typical adult range" }
+            if v <= 600 { return "inside the typical adult range" }
+            if v <= 700 { return "just above the typical adult range" }
+            return "well above the typical adult range"
+        case .compliance:
+            if v >= 70 { return "strong adherence" }
+            if v >= 50 { return "mixed adherence" }
+            return "inconsistent adherence"
+        case .epap95, .ipap95, .maskPressureMedian,
+             .daysWithData, .sessionsPerNight:
+            return nil
+        }
+    }
+
+    /// Qualitative relation between the reader's value and their
+    /// trailing 14-day mean. Each metric gets a noise floor so
+    /// float drift doesn't flip "in line" into "noticeably
+    /// above". Returns nil for metrics where the 14-day mean is
+    /// never supplied in practice (compliance, trends-only).
+    static func meanRelationPhrase(
+        for metric: ExplainableMetric,
+        currentValue v: Double,
+        mean: Double
+    ) -> String? {
+        let noiseFloor: Double
+        switch metric {
+        case .ahi:              noiseFloor = 0.5
+        case .glasgowIndex:     noiseFloor = 0.15
+        case .usage:            noiseFloor = 0.4
+        case .leak95:           noiseFloor = 3
+        case .largeLeak:        noiseFloor = 0.5
+        case .timeInApnea:      noiseFloor = 0.5
+        case .flowLimit:        noiseFloor = 0.02
+        case .snore95:          noiseFloor = 0.3
+        case .tidalVolume:      noiseFloor = 25
+        case .epap95, .ipap95, .maskPressureMedian:
+            noiseFloor = 0.3
+        case .compliance, .daysWithData, .sessionsPerNight:
+            return nil
+        }
+        let delta = v - mean
+        if abs(delta) <= noiseFloor {
+            return "in line with your recent average"
+        }
+        return delta > 0
+            ? "noticeably above your recent average"
+            : "noticeably below your recent average"
     }
 
     private static let rangeFormatter: DateFormatter = {
@@ -157,7 +263,7 @@ extension ExplainableMetric {
         case .usage:            return "Usage hours"
         case .timeInApnea:      return "Time in apnea (percent of usage)"
         case .flowLimit:        return "Flow limit (95th percentile)"
-        case .compliance:       return "Compliance (percent of nights ≥ 4 hours)"
+        case .compliance:       return "Compliance (percent of nights meeting the user's per-night usage target)"
         case .daysWithData:     return "Days with recorded data"
         case .sessionsPerNight: return "Sessions per night"
         }
@@ -166,7 +272,7 @@ extension ExplainableMetric {
 
 @Generable
 public struct MetricExplainOutput: Codable, Hashable, Sendable {
-    @Guide(description: "1 or 2 sentences defining what the metric represents. Plain English. Do not repeat the user's numeric value here.")
+    @Guide(description: "1 or 2 sentences defining what the metric represents. Plain English. The first sentence must begin with the metric's name or a natural paraphrase of it (e.g. \"The AHI…\", \"Your compliance score…\") — never with \"This metric\", \"This value\", or a bare pronoun. Do not repeat the user's numeric value here.")
     public let whatItMeans: String
 
     @Guide(description: "1 or 2 sentences putting the user's current value in context compared to the provided norms and recent mean. No advice, no recommendations, no causal verbs.")

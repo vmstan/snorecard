@@ -392,7 +392,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in Trends, Daily View and Advanced Charting.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms.")
         }
     }
 

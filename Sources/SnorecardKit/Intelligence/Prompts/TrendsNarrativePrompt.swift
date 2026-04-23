@@ -1,9 +1,12 @@
 import Foundation
 
 public enum TrendsNarrativePrompt {
-    // v6: second-person only — the data is always about one
-    // person (the reader), not "some patients" or "many users".
-    public static let templateVersion = 6
+    // v7: compliance line now reflects the user's per-night
+    // target (e.g. "≥ 5 hours") instead of the hardcoded 4-hour
+    // insurer default. Bumping invalidates cached narratives so
+    // anyone who'd customised their target stops seeing the old
+    // 4-hour framing.
+    public static let templateVersion = 7
 
     public static let systemInstructions: String = """
     You are Snorecard's trend narrator. You describe aggregate

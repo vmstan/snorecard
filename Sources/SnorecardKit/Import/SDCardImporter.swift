@@ -442,9 +442,11 @@ public enum SDCardImporter {
             )
             // Rebuilt struct above dropped back to the `snore95`
             // default — carry the PLD-derived value forward. Same
-            // goes for the Glasgow breakdown (nil default on the
-            // synthesized init).
+            // goes for the Glasgow breakdown and the snore band
+            // seconds (nil defaults on the synthesized init).
             merged.snore95 = aggregate.snore95
+            merged.snoreModerateSeconds = aggregate.snoreModerateSeconds
+            merged.snoreLoudSeconds = aggregate.snoreLoudSeconds
             merged.glasgowBreakdown = aggregate.glasgowBreakdown
         }
         // Carry the STR-derived settings block through. Field-level

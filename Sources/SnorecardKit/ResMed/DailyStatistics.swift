@@ -39,6 +39,18 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     /// scale. `nil` when no PLD was available or the signal was
     /// absent for the night (older firmware, STR-only records).
     public internal(set) var snore95: Double? = nil
+    /// On-therapy seconds with snore index in the 1.5–3.0 band —
+    /// ResScan's "moderately loud snoring" icon range. Derived
+    /// from the same gated PLD stream as `snore95`. `nil` when
+    /// no PLD was available. Lets the UI describe the night as
+    /// a loudness class ("Mild" / "Moderate" / "Loud") instead
+    /// of a bare machine number.
+    public internal(set) var snoreModerateSeconds: Double? = nil
+    /// On-therapy seconds with snore index ≥ 3.0 — ResScan's
+    /// "loud snoring" icon range (and above, since >3 runs off
+    /// the top of ResScan's scale). Companion to
+    /// `snoreModerateSeconds`.
+    public internal(set) var snoreLoudSeconds: Double? = nil
     /// Snapshot of therapy / comfort / humidifier / accessory
     /// settings active for this day, decoded from STR.edf's `S.*`
     /// signals. Nil when STR.edf has no record for the day (e.g.
@@ -227,6 +239,9 @@ extension DailyStatistics {
             productName: productName
         )
         stats.snore95 = percentile(snores, 95)
+        let snoreBands = snoreBandSeconds(samples: snores, usageMinutes: usageMinutes)
+        stats.snoreModerateSeconds = snoreBands.moderate
+        stats.snoreLoudSeconds = snoreBands.loud
         return stats
     }
 
@@ -487,8 +502,39 @@ extension DailyStatistics {
             productName: productName
         )
         stats.snore95 = percentile(snores, 95)
+        let snoreBands = snoreBandSeconds(samples: snores, usageMinutes: usageMinutes)
+        stats.snoreModerateSeconds = snoreBands.moderate
+        stats.snoreLoudSeconds = snoreBands.loud
         stats.glasgowBreakdown = glasgowBreakdown
         return stats
+    }
+
+    /// Convert the gated on-therapy snore samples into seconds in
+    /// the moderate (1.5–3.0) and loud (≥ 3.0) bands. Samples are
+    /// gated against the pressure stream one-to-one, so the
+    /// fraction of samples in each band times total usage seconds
+    /// approximates band seconds without us needing to know the
+    /// PLD sample rate. Returns `(nil, nil)` when there is no
+    /// snore signal for the night.
+    private static func snoreBandSeconds(
+        samples: [Double],
+        usageMinutes: Double
+    ) -> (moderate: Double?, loud: Double?) {
+        guard !samples.isEmpty, usageMinutes > 0 else {
+            return (nil, nil)
+        }
+        let total = Double(samples.count)
+        let usageSeconds = usageMinutes * 60
+        var moderate = 0
+        var loud = 0
+        for sample in samples {
+            if sample >= 3.0 { loud += 1 }
+            else if sample >= 1.5 { moderate += 1 }
+        }
+        return (
+            moderate: Double(moderate) / total * usageSeconds,
+            loud: Double(loud) / total * usageSeconds
+        )
     }
 
     /// Linear-interpolated percentile. Returns `nil` for an empty input.

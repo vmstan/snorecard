@@ -40,6 +40,11 @@ struct CanvasSignalLineChart: View, Equatable {
     let yDomain: ClosedRange<Double>?
     let hoverOffset: TimeInterval?
     let axes: SharedAxisConfig
+    /// Fade the stroke vertically from `color` at the top to a
+    /// muted version at the bottom. Opt-in per chart so Leak and
+    /// Tidal Volume pick it up while Breathing keeps its flat,
+    /// high-contrast trace.
+    var gradient: Bool = false
 
     nonisolated static func == (lhs: CanvasSignalLineChart, rhs: CanvasSignalLineChart) -> Bool {
         lhs.title == rhs.title
@@ -54,6 +59,7 @@ struct CanvasSignalLineChart: View, Equatable {
             && lhs.yDomain == rhs.yDomain
             && lhs.hoverOffset == rhs.hoverOffset
             && lhs.axes == rhs.axes
+            && lhs.gradient == rhs.gradient
     }
 
     var body: some View {
@@ -90,6 +96,17 @@ struct CanvasSignalLineChart: View, Equatable {
                 )
             }
             drawEventRects(events, in: context, size: size, math: math)
+            if gradient {
+                fillAreaBelow(
+                    points,
+                    color: color,
+                    topOpacity: 0.35,
+                    stepped: stepped,
+                    baselineY: size.height,
+                    in: context,
+                    math: math
+                )
+            }
             strokeSeries(
                 points,
                 color: color,
@@ -196,6 +213,42 @@ struct CanvasPressureChart: View, Equatable {
             hoverOffset: hoverOffset,
             legend: legendEntries
         ) { context, size, math in
+            // Fill all traces first so each line's own stroke lands on
+            // top of every wash — avoids one trace's gradient covering
+            // another trace's line.
+            if !ipap.isEmpty {
+                fillAreaBelow(
+                    ipap,
+                    color: .chartOrange,
+                    topOpacity: 0.35,
+                    stepped: true,
+                    baselineY: size.height,
+                    in: context,
+                    math: math
+                )
+            }
+            if !epap.isEmpty {
+                fillAreaBelow(
+                    epap,
+                    color: .chartBlue,
+                    topOpacity: 0.35,
+                    stepped: true,
+                    baselineY: size.height,
+                    in: context,
+                    math: math
+                )
+            }
+            if !fallback.isEmpty {
+                fillAreaBelow(
+                    fallback,
+                    color: .purple,
+                    topOpacity: 0.35,
+                    stepped: true,
+                    baselineY: size.height,
+                    in: context,
+                    math: math
+                )
+            }
             if !ipap.isEmpty {
                 strokeSeries(
                     ipap,
@@ -226,7 +279,6 @@ struct CanvasPressureChart: View, Equatable {
                     math: math
                 )
             }
-            _ = size
         }
     }
 
@@ -259,6 +311,7 @@ struct EquatableCanvasSignalLineChart: View {
     var yDomain: ClosedRange<Double>? = nil
     let hoverOffset: TimeInterval?
     let axes: SharedAxisConfig
+    var gradient: Bool = false
 
     var body: some View {
         CanvasSignalLineChart(
@@ -272,7 +325,8 @@ struct EquatableCanvasSignalLineChart: View {
             thresholdY: thresholdY,
             yDomain: yDomain,
             hoverOffset: hoverOffset,
-            axes: axes
+            axes: axes,
+            gradient: gradient
         )
         .equatable()
     }
@@ -662,6 +716,72 @@ fileprivate func strokeSeries(
         with: .color(color),
         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
     )
+}
+
+/// Fill the area under a line series with a vertical gradient —
+/// `color` at the top of the plot fading to fully transparent at
+/// `baselineY`. Classic "line chart with area wash" aesthetic: a
+/// colour drop-off below each trace, lighter than a filled bar
+/// chart and without obscuring overlapping lines when the opacity
+/// ceiling is kept low. Handles both stepped and point-to-point
+/// interpolation and closes each session's sub-path to the
+/// baseline independently so gaps between sessions don't pick up
+/// stray fill.
+fileprivate func fillAreaBelow(
+    _ points: [FlatPoint],
+    color: Color,
+    topOpacity: Double,
+    stepped: Bool,
+    baselineY: CGFloat,
+    in context: GraphicsContext,
+    math: CanvasAxesMath
+) {
+    guard !points.isEmpty else { return }
+    var currentSession: UUID?
+    var path = Path()
+    var sessionStart: CGPoint?
+    var lastPoint: CGPoint?
+
+    func closeSession() {
+        if let start = sessionStart, let last = lastPoint {
+            path.addLine(to: CGPoint(x: last.x, y: baselineY))
+            path.addLine(to: CGPoint(x: start.x, y: baselineY))
+            path.closeSubpath()
+        }
+    }
+
+    for point in points {
+        guard let x = math.xPixel(for: point.offset),
+              let y = math.yPixel(for: point.value)
+        else { continue }
+        let p = CGPoint(x: x, y: y)
+        if point.sessionID != currentSession {
+            closeSession()
+            currentSession = point.sessionID
+            path.move(to: CGPoint(x: p.x, y: baselineY))
+            path.addLine(to: p)
+            sessionStart = p
+            lastPoint = p
+        } else if stepped, let last = lastPoint {
+            path.addLine(to: CGPoint(x: p.x, y: last.y))
+            path.addLine(to: p)
+            lastPoint = p
+        } else {
+            path.addLine(to: p)
+            lastPoint = p
+        }
+    }
+    closeSession()
+
+    let shading: GraphicsContext.Shading = .linearGradient(
+        Gradient(stops: [
+            .init(color: color.opacity(topOpacity), location: 0),
+            .init(color: color.opacity(0), location: 1)
+        ]),
+        startPoint: .zero,
+        endPoint: CGPoint(x: 0, y: baselineY)
+    )
+    context.fill(path, with: shading)
 }
 
 /// Fill one area series as a single Path per session down to

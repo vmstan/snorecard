@@ -217,9 +217,9 @@ struct SnorecardApp: App {
         Button {
             NotificationCenter.default.post(name: .snorecardOpenAdvancedCharting, object: nil)
         } label: {
-            Label("Advanced Charting", systemImage: "waveform.path.ecg")
+            Label("Detailed Waveforms", systemImage: "waveform")
         }
-        .keyboardShortcut("c", modifiers: [.command, .shift])
+        .keyboardShortcut("w", modifiers: [.command, .shift])
         .disabled(!hasCard || !isViewingDay)
 
         Divider()
