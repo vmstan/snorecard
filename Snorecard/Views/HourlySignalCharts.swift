@@ -135,6 +135,8 @@ private struct HourlyChartCard<Content: View>: View {
 // MARK: - Leak by Hour
 
 struct LeakHourlyChart: View {
+    @Environment(Library.self) private var library
+
     let leak: [FlatPoint]
     let dayStart: Date
     let totalDuration: TimeInterval
@@ -154,7 +156,7 @@ struct LeakHourlyChart: View {
                     x: .value("Hour", bucket.clockLabel),
                     y: .value("Leak", bucket.value)
                 )
-                .foregroundStyle(Color.chartBlue)
+                .foregroundStyle(library.eventColorPalette.leak)
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: 0 ... max(peak, 24))
@@ -199,6 +201,8 @@ struct LeakHourlyChart: View {
 // MARK: - Flow Limit by Hour
 
 struct FlowLimitHourlyChart: View {
+    @Environment(Library.self) private var library
+
     let flowLimit: [FlatPoint]
     let dayStart: Date
     let totalDuration: TimeInterval
@@ -214,7 +218,7 @@ struct FlowLimitHourlyChart: View {
                     x: .value("Hour", bucket.clockLabel),
                     y: .value("Flow Limit", bucket.value)
                 )
-                .foregroundStyle(Color.chartOrange)
+                .foregroundStyle(library.eventColorPalette.flowLimit)
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: 0 ... 1)
@@ -248,6 +252,8 @@ struct FlowLimitHourlyChart: View {
 /// trajectory across the night is more informative than hour-by-hour
 /// deltas.
 struct TidalVolumeHourlyChart: View {
+    @Environment(Library.self) private var library
+
     let tidalVolume: [FlatPoint]
     let dayStart: Date
     let totalDuration: TimeInterval
@@ -278,14 +284,14 @@ struct TidalVolumeHourlyChart: View {
                     y: .value("Tidal Volume", bucket.value)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(Color.chartIndigo)
+                .foregroundStyle(library.eventColorPalette.tidalVolume)
                 .lineStyle(StrokeStyle(lineWidth: 2))
 
                 PointMark(
                     x: .value("Hour", bucket.clockLabel),
                     y: .value("Tidal Volume", bucket.value)
                 )
-                .foregroundStyle(Color.chartIndigo)
+                .foregroundStyle(library.eventColorPalette.tidalVolume)
                 .symbolSize(28)
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
@@ -311,6 +317,8 @@ struct TidalVolumeHourlyChart: View {
 // MARK: - Pressure by Hour (line)
 
 struct PressureHourlyChart: View {
+    @Environment(Library.self) private var library
+
     let pressure: [FlatPoint]
     let dayStart: Date
     let totalDuration: TimeInterval
@@ -347,14 +355,14 @@ struct PressureHourlyChart: View {
                     y: .value("Pressure", bucket.value)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(Color.chartTeal)
+                .foregroundStyle(library.eventColorPalette.pressureMedian)
                 .lineStyle(StrokeStyle(lineWidth: 2))
 
                 PointMark(
                     x: .value("Hour", bucket.clockLabel),
                     y: .value("Pressure", bucket.value)
                 )
-                .foregroundStyle(Color.chartTeal)
+                .foregroundStyle(library.eventColorPalette.pressureMedian)
                 .symbolSize(28)
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
@@ -388,6 +396,8 @@ struct PressureHourlyChart: View {
 /// Bars are sorted by magnitude descending so the dominant
 /// contributors sit at the top and scan first.
 struct GlasgowBreakdownChart: View {
+    @Environment(Library.self) private var library
+
     let breakdown: GlasgowIndex.Breakdown
 
     private struct Row: Identifiable {
@@ -421,7 +431,7 @@ struct GlasgowBreakdownChart: View {
                     x: .value("Fraction", row.value),
                     y: .value("Sub-index", row.label)
                 )
-                .foregroundStyle(Color.chartGreen)
+                .foregroundStyle(library.eventColorPalette.glasgowIndex)
                 .annotation(position: .trailing, alignment: .leading) {
                     Text(row.label)
                         .font(.caption)
