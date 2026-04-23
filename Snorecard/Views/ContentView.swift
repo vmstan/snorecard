@@ -449,22 +449,25 @@ struct ContentView: View {
     /// rather than treating it as a trivial refresh button.
     private var rebuildCacheWarning: String {
         let dayCount = library.card?.days.count ?? 0
-        let typeName = library.deviceType(for: library.card).displayName
+        // Prefer the user-set alias (or ResMed product name) over
+        // the generic device-type label so the dialog names the
+        // machine the user actually recognises.
+        let deviceName = library.card
+            .map { library.displayName(for: $0) }
+            ?? library.deviceType(for: library.card).displayName
         let scope: String
         if dayCount == 0 {
-            scope = "every day of data on this \(typeName)"
+            scope = "every day of data from your \(deviceName)"
         } else if dayCount == 1 {
-            scope = "the one day of data on this \(typeName)"
+            scope = "the one day of data from your \(deviceName)"
         } else {
-            scope = "all \(dayCount) days of data on this \(typeName)"
+            scope = "all \(dayCount) days of data from your \(deviceName)"
         }
 
         return """
-        This will recompute every metric for \(scope) from the raw files and replace the current summary data in iCloud. All AI-generated Sleep Analysis and Explain summaries are cleared at the same time, so the next time you open one it's regenerated against the fresh numbers.
+        This will recompute every metric for \(scope) and replace the data in iCloud. Sleep Analysis summaries are reset at the same time, and will be regenerated on-demand.
 
-        Your sleep journal entries are never touched.
-
-        While charting, AHI, computed percentiles and other scoring data will still be available, the Therapy Details for nights your \(typeName) no longer keeps in its rolling summary, may be lost.
+        While your charting, AHI, computed percentiles and other scoring data will still be available, the Therapy Details for individual nights your \(deviceName) no longer keeps in its rolling summary, may be lost.
 
         Based on your dataset this process may take \(estimatedRebuildDuration(dayCount: dayCount)).
         """

@@ -7,14 +7,18 @@ public enum NightSummaryPrompt {
     /// Version of the prompt template. Bump when the instructions
     /// or the input contract change so cache entries generated
     /// against the old prompt are invalidated cleanly.
-    // v8: second-person only — the data is always about one
-    // person (the reader), not "some patients" or "many users".
-    public static let templateVersion = 8
+    // v9: stop naming the night at all. The reader is already
+    // looking at a specific day's view, so the temporal anchor
+    // is implied. Earlier versions referred to "last night",
+    // which was wrong for older dates; spelling the date out was
+    // unnecessary noise. The summary now describes the night's
+    // character directly.
+    public static let templateVersion = 9
 
     public static let systemInstructions: String = """
     You are Snorecard's night-summary narrator. You describe
-    ResMed CPAP therapy data for the person who used the machine
-    last night. You are a summariser, not a clinician.
+    ResMed CPAP therapy data for one specific night that the
+    reader is viewing. You are a summariser, not a clinician.
 
     Audience: the reader is one specific person whose own night
     you are describing. Address them directly as "you" and
@@ -28,11 +32,18 @@ public enum NightSummaryPrompt {
     pressure, leak, Glasgow Index, etc.) immediately next to
     your summary. Do NOT restate raw numeric values — those are
     already visible. Describe the overall character of the
-    night: was it steady, quieter than usual, close to your
-    recent average, an unusual spike, a mixed picture. Refer to
-    metrics by name but in qualitative terms.
+    night: was it steady, quieter than usual, close to the
+    reader's recent average, an unusual spike, a mixed picture.
+    Refer to metrics by name but in qualitative terms.
 
     Rules:
+    - Do not name or date the night. The reader already knows
+      which night they are viewing, so temporal phrases are
+      noise. Never write "last night", "tonight", "this
+      morning", "on <date>", "that night", "this night", or any
+      similar anchor. Describe the night's character directly
+      ("Usage was steady…", "AHI ran higher than your recent
+      average…").
     - Never give advice, instructions, recommendations, or
       therapy changes. Words like "should", "must", "recommend"
       are forbidden when aimed at the reader.
@@ -43,8 +54,7 @@ public enum NightSummaryPrompt {
       input to frame the night as "in line with", "lower than",
       or "higher than your recent average" — not with figures.
     - 2 to 4 sentences, one paragraph, no bullets, no headings.
-    - British English spelling. Dates should appear exactly as
-      supplied in the input (human-readable format).
+    - British English spelling.
     - Omit metrics that are missing from the input.
     """
 
@@ -52,10 +62,11 @@ public enum NightSummaryPrompt {
     /// JSON so field names stay stable across model updates.
     public static func buildPrompt(input: NightSummaryInput) -> String {
         """
-        Summarise last night's therapy data using the information
-        below. The reader sees the stat cards with the raw
-        numbers next to this summary — do NOT restate those
-        numbers; describe the night's overall character instead.
+        Summarise the therapy data below. The reader sees the
+        stat cards with the raw numbers next to this summary —
+        do NOT restate those numbers; describe the night's
+        overall character instead. Do not name or date the
+        night in your output.
 
         Data:
         \(input.promptDescription)

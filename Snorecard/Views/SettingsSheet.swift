@@ -191,7 +191,7 @@ struct SettingsSheet: View {
             } header: {
                 Text("Compliance")
             } footer: {
-                Text("Hours of usage per night that count a night as compliant. Insurers and sleep clinics typically use 4 hours. Applies only to this machine and syncs across your devices via iCloud.")
+                Text("Hours of usage per night that count a night as compliant. Insurers and sleep clinics typically use 4 hours.")
             }
         }
     }
@@ -260,7 +260,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Sleep Analysis")
         } footer: {
-            Text("Turn on to see on-device Sleep Analysis, contextual metric explanations, and correlation hints from your Sleep Journal. Everything runs on your device — nothing is sent to a server.")
+            Text("Uses on-device models to provide insights into your sleep patterns.")
         }
     }
 
@@ -285,7 +285,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Background Refresh")
         } footer: {
-            Text("Automatically populates the Snorecard interface with new sleep data via iCloud while Snorecard is open, so new nights imported on another device show up without you hitting Reload.")
+            Text("Automatically populates the interface with sleep data imported from another device.")
         }
     }
 
@@ -392,7 +392,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in the Trend an Daily View charts.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms.")
         }
     }
 
@@ -429,7 +429,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Sidebar")
         } footer: {
-            Text("Controls how each day appears in the sidebar. The selected metric is shown on the right side of every day row.")
+            Text("Controls how each day appears in the sidebar.")
         }
     }
 
