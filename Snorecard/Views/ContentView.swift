@@ -508,7 +508,7 @@ struct ContentView: View {
                     Label("Import Sleep Data", systemImage: "externaldrive.badge.plus")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-                .help("Import a ResMed SD card or DATALOG folder")
+                .help("Import your latest sleep data from an SD card")
                 #else
                 optionsMenu
                 #endif

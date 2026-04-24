@@ -34,7 +34,7 @@ struct LoadingView: View {
         if let deviceName, !deviceName.isEmpty {
             return "Loading \(deviceName)"
         }
-        return "Loading your sleep data"
+        return "This may take a few moments…"
     }
 
     private var statusText: String {
@@ -42,7 +42,7 @@ struct LoadingView: View {
         case .downloading(let completed, let total):
             return "Syncing from iCloud — \(completed) of \(total)"
         case .scanning:
-            return "Reading sleep data…"
+            return "Please leave the app open during this process…"
         }
     }
 
