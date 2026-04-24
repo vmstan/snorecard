@@ -15,13 +15,13 @@ import SwiftUI
 /// If a package's fills change, update the tuple to match.
 enum AppIconOption: String, CaseIterable, Identifiable {
     case `default` = "Default"
+    case callan = "Callan"
+    case charlie = "Charlie"
     case claude = "Claude"
     case inverted = "Inverted"
     case joey = "Joey"
     case oscar = "Oscar"
     case royale = "Royale"
-    case sadie = "Sadie"
-    case slimer = "Slimer"
 
     var id: String { rawValue }
 
@@ -32,13 +32,13 @@ enum AppIconOption: String, CaseIterable, Identifiable {
     var alternateIconName: String? {
         switch self {
         case .default:  return nil
+        case .callan:   return "Snorecard-Callan"
+        case .charlie:  return "Snorecard-Charlie"
         case .claude:   return "Snorecard-Claude"
         case .inverted: return "Snorecard-Inverted"
         case .joey:     return "Snorecard-Joey"
         case .oscar:    return "Snorecard-Oscar"
         case .royale:   return "Snorecard-Royale"
-        case .sadie:    return "Snorecard-Sadie"
-        case .slimer:   return "Snorecard-Slimer"
         }
     }
 
@@ -46,24 +46,59 @@ enum AppIconOption: String, CaseIterable, Identifiable {
     /// package's top-level `fill.solid` colour.
     var backgroundColor: Color {
         switch self {
-        case .default:  return Color(.displayP3, red: 0.42107, green: 0.13119, blue: 0.78871)
-        case .claude:   return Color(.displayP3, red: 0.91657, green: 0.64250, blue: 0.42990)
+        case .default:  return Color(.displayP3, red: 0.58824, green: 0.23922, blue: 0.59216)
+        case .callan:   return Color(.sRGB, red: 0.18039, green: 0.49020, blue: 0.19608)
+        case .charlie:  return Color(.sRGB, red: 0.99216, green: 0.72157, blue: 0.15294)
+        case .claude:   return Color(.displayP3, red: 0.72157, green: 0.32941, blue: 0.05882)
         case .inverted: return Color(white: 1)
-        case .joey:     return Color(.displayP3, red: 0.80543, green: 0.29125, blue: 0.60434)
-        case .oscar:    return Color(.displayP3, red: 0.20471, green: 0.47274, blue: 0.77461)
-        case .royale:   return Color(.displayP3, red: 0.41961, green: 0.12941, blue: 0.78824)
-        case .sadie:    return Color(.sRGB, red: 1.00000, green: 0.49327, blue: 0.47400)
-        case .slimer:   return Color(.sRGB, red: 0.49804, green: 0.78824, blue: 0.12941)
+        case .joey:     return Color(.displayP3, red: 0.78431, green: 0.06275, blue: 0.18039)
+        case .oscar:    return Color(.displayP3, red: 0.00000, green: 0.44314, blue: 0.70980)
+        case .royale:   return Color(.displayP3, red: 0.41569, green: 0.10588, blue: 0.60392)
         }
     }
 
-    /// Waveform foreground fill, pulled from the single layer
-    /// inside each `.icon` package's `groups[0].layers[0]`.
+    /// Light-mode waveform fill. Pulled from each `.icon` package's
+    /// first `fill-specializations` entry (or the bare `fill.solid`
+    /// on packages that don't specialise by appearance).
     var foregroundColor: Color {
         switch self {
-        case .inverted: return Color(.displayP3, red: 0.42276, green: 0.13308, blue: 0.78482)
-        case .royale:   return Color(.sRGB, red: 1.00000, green: 0.83922, blue: 0.03922)
+        case .charlie:  return Color(white: 0)
+        case .inverted: return Color(.displayP3, red: 0.58824, green: 0.23922, blue: 0.59216)
+        case .royale:   return Color(.sRGB, red: 0.99216, green: 0.72157, blue: 0.15294)
         default:        return Color(white: 1)
+        }
+    }
+
+    /// Dark-mode override for the waveform fill. Mirrors the
+    /// `appearance: "dark"` entry in each package's
+    /// `fill-specializations` array so the picker preview matches
+    /// what the system renders on a dark Home Screen / Dock.
+    /// `nil` means the package has no dark specialisation and
+    /// `foregroundColor` is used in both appearances.
+    var darkForegroundStyle: AnyShapeStyle? {
+        switch self {
+        case .default, .charlie, .inverted:
+            return nil
+        case .callan:
+            return AnyShapeStyle(Color(.sRGB, red: 0.38039, green: 0.73333, blue: 0.27451))
+        case .claude:
+            return AnyShapeStyle(Color(.sRGB, red: 0.96078, green: 0.50980, blue: 0.12157))
+        case .joey:
+            return AnyShapeStyle(Color(.sRGB, red: 0.87843, green: 0.22745, blue: 0.24314))
+        case .oscar:
+            return AnyShapeStyle(Color(.sRGB, red: 0.00000, green: 0.61569, blue: 0.86275))
+        case .royale:
+            // Vertical gradient: purple at top, yellow at 70% down
+            // and below. Matches the package's linear-gradient with
+            // start (0.5, 0) → stop (0.5, 0.7).
+            return AnyShapeStyle(LinearGradient(
+                colors: [
+                    Color(.displayP3, red: 0.58824, green: 0.23922, blue: 0.59216),
+                    Color(.sRGB, red: 0.99216, green: 0.72157, blue: 0.15294)
+                ],
+                startPoint: UnitPoint(x: 0.5, y: 0),
+                endPoint: UnitPoint(x: 0.5, y: 0.7)
+            ))
         }
     }
 }
@@ -123,6 +158,7 @@ enum AppIconController {
 /// 24pt picker row and a hypothetical larger preview both look right.
 struct AppIconPreview: View {
     let option: AppIconOption
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { proxy in
@@ -133,13 +169,19 @@ struct AppIconPreview: View {
             // rendered `side` so the preview looks identical at
             // 24pt (picker row) and any future larger size.
             let canvasToSide = side / 1024
+            let waveformStyle: AnyShapeStyle = {
+                if colorScheme == .dark, let dark = option.darkForegroundStyle {
+                    return dark
+                }
+                return AnyShapeStyle(option.foregroundColor)
+            }()
             ZStack {
                 option.backgroundColor
                 Image("IconWaveform")
                     .resizable()
                     .renderingMode(.template)
                     .aspectRatio(contentMode: .fit)
-                    .foregroundStyle(option.foregroundColor)
+                    .foregroundStyle(waveformStyle)
                     .frame(width: side * 0.8, height: side * 0.8)
                     .offset(y: -60 * canvasToSide)
             }

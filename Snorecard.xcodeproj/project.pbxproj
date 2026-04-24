@@ -18,7 +18,7 @@
 		1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */; };
 		1F2B83D1E38CCEB684446BB2 /* AdvancedChartingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49BE9F94F371D67AB0D01F05 /* AdvancedChartingView.swift */; };
-		2343E2D6E118198413F5E556 /* Snorecard-Slimer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */; };
+		2343E2D6E118198413F5E556 /* Snorecard-Charlie.icon in Resources */ = {isa = PBXBuildFile; fileRef = 099CFC6D44F84BD3604CD1B6 /* Snorecard-Charlie.icon */; };
 		237DFD13A1D3651AFB7F3CD2 /* Snorecard-Oscar.icon in Resources */ = {isa = PBXBuildFile; fileRef = 803D46073F26E6AA4413092D /* Snorecard-Oscar.icon */; };
 		27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F85425A6C4E977C75813A1E /* LoadingView.swift */; };
 		2BAA884B6AD33FB08FBB46D4 /* SnorecardKit in Frameworks */ = {isa = PBXBuildFile; productRef = DDDC85A59813C7B5309429E2 /* SnorecardKit */; };
@@ -71,7 +71,7 @@
 		BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		BFBCE1DE8BAF792C85CCA58F /* CorrelationHintsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */; };
 		C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
-		CF85FDD451369E9EB50F30DC /* Snorecard-Slimer.icon in Resources */ = {isa = PBXBuildFile; fileRef = 099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */; };
+		CF85FDD451369E9EB50F30DC /* Snorecard-Charlie.icon in Resources */ = {isa = PBXBuildFile; fileRef = 099CFC6D44F84BD3604CD1B6 /* Snorecard-Charlie.icon */; };
 		D4FB9B70DFAAB21D64B38AAA /* Snorecard-Claude.icon in Resources */ = {isa = PBXBuildFile; fileRef = 921A499B2F22084A2BD06D66 /* Snorecard-Claude.icon */; };
 		D58ED823FEF04B57D5298D46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
 		D62F4533A6CF0C93E719D3AE /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
@@ -82,7 +82,7 @@
 		DEE4196822751F027CD5DB00 /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */; };
 		DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
 		E2A340EC989C8E50E6050C24 /* CorrelationHintsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */; };
-		E5EC4EDAC2811B020C4AA807 /* Snorecard-Sadie.icon in Resources */ = {isa = PBXBuildFile; fileRef = 857059FD0458DE1E0DCE89C9 /* Snorecard-Sadie.icon */; };
+		E5EC4EDAC2811B020C4AA807 /* Snorecard-Callan.icon in Resources */ = {isa = PBXBuildFile; fileRef = 857059FD0458DE1E0DCE89C9 /* Snorecard-Callan.icon */; };
 		E925A255B55DC53835F8056F /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */; };
 		E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		EA007307D3AE23AD81FAF0D9 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
@@ -92,11 +92,11 @@
 		F476D8AAA2C3AE1E731599B8 /* Snorecard-Royale.icon in Resources */ = {isa = PBXBuildFile; fileRef = A86607131992DF43ED4E80ED /* Snorecard-Royale.icon */; };
 		F8777E909FC7A13D1EF3E2CF /* Snorecard-Royale.icon in Resources */ = {isa = PBXBuildFile; fileRef = A86607131992DF43ED4E80ED /* Snorecard-Royale.icon */; };
 		F9FC6D02360537E5E45D49CF /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
-		FDFC4456A06B7E0170BA208E /* Snorecard-Sadie.icon in Resources */ = {isa = PBXBuildFile; fileRef = 857059FD0458DE1E0DCE89C9 /* Snorecard-Sadie.icon */; };
+		FDFC4456A06B7E0170BA208E /* Snorecard-Callan.icon in Resources */ = {isa = PBXBuildFile; fileRef = 857059FD0458DE1E0DCE89C9 /* Snorecard-Callan.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Slimer.icon"; sourceTree = "<group>"; };
+		099CFC6D44F84BD3604CD1B6 /* Snorecard-Charlie.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Charlie.icon"; sourceTree = "<group>"; };
 		0B6AAABBE89C89D502593E1D /* Snorecard-Joey.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Joey.icon"; sourceTree = "<group>"; };
 		0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformSection.swift; sourceTree = "<group>"; };
 		0CC9B5715C49902A1BC2AC38 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
@@ -124,7 +124,7 @@
 		73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySettingsInspector.swift; sourceTree = "<group>"; };
 		755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AHIHourlyChart.swift; sourceTree = "<group>"; };
 		803D46073F26E6AA4413092D /* Snorecard-Oscar.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Oscar.icon"; sourceTree = "<group>"; };
-		857059FD0458DE1E0DCE89C9 /* Snorecard-Sadie.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Sadie.icon"; sourceTree = "<group>"; };
+		857059FD0458DE1E0DCE89C9 /* Snorecard-Callan.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Callan.icon"; sourceTree = "<group>"; };
 		86917F47386EB72167DE2A0F /* StatCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatCard.swift; sourceTree = "<group>"; };
 		8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		921A499B2F22084A2BD06D66 /* Snorecard-Claude.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Claude.icon"; sourceTree = "<group>"; };
@@ -177,8 +177,8 @@
 				0B6AAABBE89C89D502593E1D /* Snorecard-Joey.icon */,
 				803D46073F26E6AA4413092D /* Snorecard-Oscar.icon */,
 				A86607131992DF43ED4E80ED /* Snorecard-Royale.icon */,
-				857059FD0458DE1E0DCE89C9 /* Snorecard-Sadie.icon */,
-				099CFC6D44F84BD3604CD1B6 /* Snorecard-Slimer.icon */,
+				857059FD0458DE1E0DCE89C9 /* Snorecard-Callan.icon */,
+				099CFC6D44F84BD3604CD1B6 /* Snorecard-Charlie.icon */,
 				B7D3A08725D70B6A35104190 /* Snorecard.icon */,
 			);
 			path = Resources;
@@ -376,8 +376,8 @@
 				F1CA683CB95EF228D0287BA5 /* Snorecard-Joey.icon in Resources */,
 				237DFD13A1D3651AFB7F3CD2 /* Snorecard-Oscar.icon in Resources */,
 				F476D8AAA2C3AE1E731599B8 /* Snorecard-Royale.icon in Resources */,
-				FDFC4456A06B7E0170BA208E /* Snorecard-Sadie.icon in Resources */,
-				CF85FDD451369E9EB50F30DC /* Snorecard-Slimer.icon in Resources */,
+				FDFC4456A06B7E0170BA208E /* Snorecard-Callan.icon in Resources */,
+				CF85FDD451369E9EB50F30DC /* Snorecard-Charlie.icon in Resources */,
 				852AD2F79A37CA1FA67A8B25 /* Snorecard.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -392,8 +392,8 @@
 				59532FC42B30F4E2F23C1D48 /* Snorecard-Joey.icon in Resources */,
 				6E01C40ABC1DC3CBFFE56E0B /* Snorecard-Oscar.icon in Resources */,
 				F8777E909FC7A13D1EF3E2CF /* Snorecard-Royale.icon in Resources */,
-				E5EC4EDAC2811B020C4AA807 /* Snorecard-Sadie.icon in Resources */,
-				2343E2D6E118198413F5E556 /* Snorecard-Slimer.icon in Resources */,
+				E5EC4EDAC2811B020C4AA807 /* Snorecard-Callan.icon in Resources */,
+				2343E2D6E118198413F5E556 /* Snorecard-Charlie.icon in Resources */,
 				3B2BC9F64A3B10FB028B88D4 /* Snorecard.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -487,7 +487,7 @@
 		1C11057968406CC172841089 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Snorecard-Claude Snorecard-Inverted Snorecard-Joey Snorecard-Oscar Snorecard-Royale Snorecard-Sadie Snorecard-Slimer";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Snorecard-Callan Snorecard-Charlie Snorecard-Claude Snorecard-Inverted Snorecard-Joey Snorecard-Oscar Snorecard-Royale";
 				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -566,7 +566,7 @@
 		CCB41BC03C9842BAE530C1C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Snorecard-Claude Snorecard-Inverted Snorecard-Joey Snorecard-Oscar Snorecard-Royale Snorecard-Sadie Snorecard-Slimer";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Snorecard-Callan Snorecard-Charlie Snorecard-Claude Snorecard-Inverted Snorecard-Joey Snorecard-Oscar Snorecard-Royale";
 				ASSETCATALOG_COMPILER_APPICON_NAME = Snorecard;
 				CODE_SIGN_ENTITLEMENTS = "Snorecard-iOS/Snorecard-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
