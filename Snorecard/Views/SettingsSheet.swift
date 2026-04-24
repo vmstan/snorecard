@@ -18,6 +18,12 @@ struct SettingsSheet: View {
     /// Serial the draft belongs to — used to re-sync when the
     /// user swaps devices while Settings is open.
     @State private var draftSerial: String?
+    #if os(iOS)
+    /// Current sheet detent for the iOS settings presentation.
+    /// Seeded to `.large` so Settings opens at full height — users
+    /// can still drag down to `.medium` or dismiss entirely.
+    @State private var presentationDetent: PresentationDetent = .large
+    #endif
 
     private var hasCard: Bool {
         library.card?.identification?.serialNumber != nil
@@ -98,7 +104,12 @@ struct SettingsSheet: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.medium, .large])
+        // Default to full-height on present — leaves `.medium` as a
+        // reachable pull-down detent so the user can still collapse
+        // the sheet without dismissing it. Without the explicit
+        // `selection` binding iOS picks the first detent, which
+        // would open the sheet at half height.
+        .presentationDetents([.medium, .large], selection: $presentationDetent)
         .presentationDragIndicator(.visible)
         .onAppear(perform: syncDeviceDraft)
         .onChange(of: currentSerial) { _, _ in syncDeviceDraft() }
