@@ -1,14 +1,24 @@
 {
   "fill" : {
-    "solid" : "display-p3:0.80543,0.29125,0.60434,1.00000"
+    "solid" : "display-p3:0.78431,0.06275,0.18039,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "fill" : {
-            "solid" : "extended-gray:1.00000,1.00000"
-          },
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "extended-gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.87843,0.22745,0.24314,1.00000"
+              }
+            }
+          ],
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",
           "position" : {

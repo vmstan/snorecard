@@ -1,14 +1,37 @@
 {
   "fill" : {
-    "solid" : "display-p3:0.41961,0.12941,0.78824,1.00000"
+    "solid" : "display-p3:0.41569,0.10588,0.60392,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "fill" : {
-            "solid" : "srgb:1.00000,0.83922,0.03922,1.00000"
-          },
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:0.99216,0.72157,0.15294,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.58824,0.23922,0.59216,1.00000",
+                  "srgb:0.99216,0.72157,0.15294,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
+              }
+            }
+          ],
           "image-name" : "waveform-modified-white.svg",
           "name" : "waveform-modified-white",
           "position" : {
