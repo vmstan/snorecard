@@ -71,40 +71,48 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
         healthKitLog.info(
             "fetchRange query: start=\(start, privacy: .public) end=\(end, privacy: .public)"
         )
-        // Use the modern Swift descriptor API. The legacy
-        // `HKSampleQuery` wrapped in CheckedContinuation has been
-        // observed to under-return Apple-Watch-written sleep samples
-        // when its predicate covers a range with many samples; the
-        // descriptor API uses Apple's newer query path and returns
-        // the same data set the iOS Health app sees.
-        let datePredicate = HKQuery.predicateForSamples(
-            withStart: start,
-            end: end,
-            options: []
-        )
-        let typedPredicate = HKSamplePredicate.categorySample(
-            type: type,
-            predicate: datePredicate
-        )
+        // Composing a date predicate inside `HKSamplePredicate
+        // .categorySample(type:predicate:)` was returning only one
+        // sample on iOS even when HealthKit had hundreds within the
+        // window — the typed-predicate composition silently filters
+        // most multi-source data out. Workaround: query newest-first
+        // with no date predicate (a generous descending-sorted
+        // window) and filter to `[start, end]` in Swift. The cost is
+        // O(N) over the most recent few thousand samples, which is
+        // cheap and well below the 14 days × ~100 stages/night the
+        // user's data set produces.
+        //
+        // The hard cap is sized for a worst-case heavy user (Sleep
+        // Schedule + watch + AutoSleep × multiple devices) writing
+        // ~300 samples/night for the longest range we'd query
+        // (typically 14 days, sometimes a year for trends), which
+        // tops out around ~100k samples but realistically is well
+        // under 10k for a typical user. 50k is safely above that
+        // and below any plausible memory concern.
         let descriptor = HKSampleQueryDescriptor(
-            predicates: [typedPredicate],
-            sortDescriptors: [SortDescriptor(\.startDate, order: .forward)],
-            limit: nil
+            predicates: [.categorySample(type: type)],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: 50_000
         )
-        let raw: [HKCategorySample]
+        let allRecent: [HKCategorySample]
         do {
-            raw = try await descriptor.result(for: store)
+            allRecent = try await descriptor.result(for: store)
         } catch {
             healthKitLog.error(
                 "fetchRange failed: \(String(describing: error), privacy: .public)"
             )
             throw HealthKitSleepError.framework(String(describing: error))
         }
+        // Filter in Swift — the descriptor's typed-predicate path is
+        // unreliable; this loop is fast and observable.
+        let raw = allRecent.filter { sample in
+            sample.startDate >= start && sample.startDate < end
+        }
         let rawCount = raw.count
         let mapped = raw.compactMap(Self.map(_:))
         let dropped = rawCount - mapped.count
-        let firstStart = mapped.first.map { $0.start.description } ?? "nil"
-        let lastEnd = mapped.last.map { $0.end.description } ?? "nil"
+        let firstStart = mapped.last.map { $0.start.description } ?? "nil"
+        let lastEnd = mapped.first.map { $0.end.description } ?? "nil"
         var hist: [String: Int] = [:]
         for s in mapped {
             hist[s.stage.rawValue, default: 0] += 1
@@ -114,57 +122,15 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
             .joined(separator: " ")
         let sources = Set(mapped.map(\.sourceBundleID))
         healthKitLog.info(
-            "fetchRange returned raw=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
+            "fetchRange returned scanned=\(allRecent.count) inRange=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
         )
         for source in sources {
             healthKitLog.info("fetchRange source: \(source, privacy: .public)")
         }
-        // Diagnostic only — runs an unbounded query (no date
-        // predicate, no limit) so we can compare against the
-        // date-bounded result. If the bounded query returns 1 but
-        // the unbounded query returns many, the bug is in the date
-        // predicate; if both return 1, the bug is in permissions or
-        // source filtering. Logged once per fetchRange call.
-        await runUnboundedDiagnostic(type: type)
-        return mapped
-    }
-
-    /// Sanity-check query: ask HealthKit for *every* sleep-analysis
-    /// sample with no date filter and a high limit. Logs the count
-    /// per source so we can tell if the date-bounded query is
-    /// erroneously dropping samples or if HealthKit really only
-    /// has 1 sample to give us. Diagnostic only — never feeds the
-    /// app's data path.
-    private func runUnboundedDiagnostic(type: HKCategoryType) async {
-        let predicate = HKSamplePredicate.categorySample(
-            type: type,
-            predicate: nil
-        )
-        let descriptor = HKSampleQueryDescriptor(
-            predicates: [predicate],
-            sortDescriptors: [SortDescriptor(\.startDate, order: .forward)],
-            limit: 5000
-        )
-        do {
-            let all = try await descriptor.result(for: store)
-            var bySource: [String: Int] = [:]
-            var byStage: [Int: Int] = [:]
-            for sample in all {
-                let bid = sample.sourceRevision.source.bundleIdentifier
-                bySource[bid, default: 0] += 1
-                byStage[sample.value, default: 0] += 1
-            }
-            healthKitLog.info(
-                "diagnostic unbounded total=\(all.count) sources=\(bySource.count) stageRawCounts=\(byStage)"
-            )
-            for (bid, count) in bySource.sorted(by: { $0.value > $1.value }) {
-                healthKitLog.info("diagnostic source: \(bid, privacy: .public) count=\(count)")
-            }
-        } catch {
-            healthKitLog.error(
-                "diagnostic unbounded failed: \(String(describing: error), privacy: .public)"
-            )
-        }
+        // Re-sort ascending for the bucketing pass, which expects
+        // chronological order so its session-clustering walk is
+        // monotonic.
+        return mapped.sorted { $0.start < $1.start }
     }
 
     /// Long-running observer so a new night that lands on the watch

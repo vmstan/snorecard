@@ -49,13 +49,16 @@ public struct NightlySleepSummary: Codable, Sendable, Equatable {
     ///   overlap a CPAP window into that day's summary.
     /// - v3 → v4: query predicate widened from `.strictStartDate`
     ///   to overlap-any.
-    /// - v4 → v5: HKSampleQuery replaced with HKSampleQueryDescriptor
-    ///   to work around Apple-Watch-written samples being silently
-    ///   under-returned on iOS.
+    /// - v4 → v5: HKSampleQuery replaced with HKSampleQueryDescriptor.
+    /// - v5 → v6: descriptor query no longer composes a date
+    ///   predicate inside `HKSamplePredicate.categorySample` — that
+    ///   path silently dropped multi-source samples down to one.
+    ///   We now query newest-first with no date predicate and
+    ///   filter in Swift.
     /// `SleepStageCache.load` requires equality with this constant,
     /// so older sidecars are dropped on load and rebuilt by the next
     /// attach().
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
 
     public init(
         nightDate: Date,
