@@ -295,15 +295,13 @@ struct DayDetailView: View {
                         let deepPct = sleep.fractionAsleep(in: .deep) * 100
                         let remPct = sleep.fractionAsleep(in: .rem) * 100
                         StatCard(
-                            label: "Deep",
+                            label: "Deep Sleep",
                             value: String(format: "%.0f%%", deepPct),
-                            subtitle: "of asleep time",
                             onTap: explainTap(.deepSleepPercent)
                         )
                         StatCard(
-                            label: "REM",
+                            label: "REM Sleep",
                             value: String(format: "%.0f%%", remPct),
-                            subtitle: "of asleep time",
                             onTap: explainTap(.remSleepPercent)
                         )
                     }

@@ -411,9 +411,8 @@ struct TrendsView: View {
             // other Trends card.
             if let deepPct = avgDeepPercent {
                 card(
-                    "Deep (AVG)",
+                    "Deep Sleep (AVG)",
                     value: String(format: "%.0f%%", deepPct),
-                    subtitle: "of asleep time",
                     explain: TrendsExplainContext(
                         metric: .deepSleepPercent,
                         displayValue: String(format: "%.0f%%", deepPct),
@@ -423,9 +422,8 @@ struct TrendsView: View {
             }
             if let remPct = avgRemPercent {
                 card(
-                    "REM (AVG)",
+                    "REM Sleep (AVG)",
                     value: String(format: "%.0f%%", remPct),
-                    subtitle: "of asleep time",
                     explain: TrendsExplainContext(
                         metric: .remSleepPercent,
                         displayValue: String(format: "%.0f%%", remPct),
