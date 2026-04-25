@@ -12,6 +12,7 @@ import SnorecardKit
 /// stack — the chart's job is to compare *asleep architecture*
 /// against CPAP usage, not to surface every category sample.
 struct SleepByHourChart: View {
+    @Environment(Library.self) private var library
     let summary: NightlySleepSummary
     let sessions: [SessionSegment]
     let dayStart: Date
@@ -19,6 +20,14 @@ struct SleepByHourChart: View {
     /// every hourly chart on the day view shares the same x axis,
     /// matching `AHIHourlyChart`.
     let totalDuration: TimeInterval
+
+    /// Label for the device-usage line — derived from the user's
+    /// configured device type so the chart reads "BiPAP Usage" for
+    /// a BiPAP user, "APAP Usage" for an APAP user, etc., matching
+    /// the device-name conventions everywhere else in the app.
+    private var deviceLabel: String {
+        "\(library.deviceType(for: library.card).displayName) Usage"
+    }
 
     private struct HourBucket: Identifiable {
         var id: Int { startHour }
@@ -145,23 +154,23 @@ struct SleepByHourChart: View {
                         )
                         .foregroundStyle(by: .value("Stage", "REM"))
 
-                        // CPAP usage line + marker on the secondary
+                        // Device-usage line + marker on the secondary
                         // axis. PointMark anchors each hour so the
                         // line reads as a per-hour reading rather
                         // than a continuous signal.
                         LineMark(
                             x: .value("Hour", bucket.clockLabel),
-                            y: .value("CPAP", bucket.cpapMinutes)
+                            y: .value(deviceLabel, bucket.cpapMinutes)
                         )
-                        .foregroundStyle(by: .value("Stage", "CPAP"))
+                        .foregroundStyle(by: .value("Stage", deviceLabel))
                         .lineStyle(StrokeStyle(lineWidth: 2))
                         .interpolationMethod(.monotone)
 
                         PointMark(
                             x: .value("Hour", bucket.clockLabel),
-                            y: .value("CPAP", bucket.cpapMinutes)
+                            y: .value(deviceLabel, bucket.cpapMinutes)
                         )
-                        .foregroundStyle(by: .value("Stage", "CPAP"))
+                        .foregroundStyle(by: .value("Stage", deviceLabel))
                         .symbolSize(36)
                     }
                 }
@@ -169,14 +178,14 @@ struct SleepByHourChart: View {
                     "Deep": Color.indigo,
                     "Core": Color.blue,
                     "REM": Color.teal,
-                    "CPAP": Color.timelineSessionFill
+                    deviceLabel: Color.timelineSessionFill
                 ])
                 .chartLegend(position: .bottom, alignment: .leading) {
                     HStack(spacing: 12) {
                         legendDot(color: .indigo, label: "Deep")
                         legendDot(color: .blue, label: "Core")
                         legendDot(color: .teal, label: "REM")
-                        legendLine(color: .timelineSessionFill, label: "CPAP")
+                        legendLine(color: .timelineSessionFill, label: deviceLabel)
                     }
                     .font(.caption2)
                 }
