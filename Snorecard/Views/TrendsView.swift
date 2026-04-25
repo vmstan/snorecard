@@ -39,6 +39,16 @@ struct TrendsView: View {
         allStats.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
     }
 
+    /// Apple Watch sleep summaries that fall inside the currently-
+    /// selected range, oldest first. Pulled from the coordinator's
+    /// in-memory map so the view doesn't re-query HealthKit when the
+    /// range changes.
+    private var sleepSummariesInRange: [NightlySleepSummary] {
+        library.healthSleep.summaryByDate.values
+            .filter { $0.nightDate >= rangeStart && $0.nightDate <= rangeEnd }
+            .sorted { $0.nightDate < $1.nightDate }
+    }
+
     private var rangeStart: Date {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
@@ -104,6 +114,11 @@ struct TrendsView: View {
                                 stats: stats,
                                 rangeStart: rangeStart,
                                 rangeEnd: rangeEnd
+                            )
+                        }
+                        if !sleepSummariesInRange.isEmpty {
+                            SleepStageTrendsSection(
+                                summaries: sleepSummariesInRange
                             )
                         }
                         ahiChart

@@ -401,6 +401,14 @@ struct DayDetailView: View {
                     }
                 }
 
+                // Apple Watch sleep card. Always shown on a night
+                // with usage so the "Connect" CTA gets a surface
+                // when the user hasn't opted in yet — collapsing
+                // it conditionally would hide the entry point.
+                AppleWatchSleepCard(
+                    summary: library.healthSleep.summaryByDate[day.date]
+                )
+
                 // Per-hour breakdowns sit below the stat grid so
                 // the cards aren't pushed offscreen by them. Order
                 // — events, leak, flow limit, pressure — goes from
@@ -410,6 +418,20 @@ struct DayDetailView: View {
                 if let bundle = loadedWaveform, !bundle.events.isEmpty {
                     AHIHourlyChart(
                         events: bundle.events,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                // Sleep-by-hour stack with CPAP usage overlay. Only
+                // renders when both a watch summary and the parsed
+                // waveform bundle are present — needs the bundle's
+                // session list to draw the CPAP-minutes line and
+                // the summary's raw samples to bucket the stages.
+                if let bundle = loadedWaveform,
+                   let sleep = library.healthSleep.summaryByDate[day.date] {
+                    SleepByHourChart(
+                        summary: sleep,
+                        sessions: bundle.sessions,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )

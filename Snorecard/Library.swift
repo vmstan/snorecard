@@ -181,6 +181,18 @@ final class Library {
     /// and the caller hides the surface.
     let narration: NarrationService
 
+    /// Apple Watch sleep-stage coordinator. Owns auth state, the
+    /// in-memory `summaryByDate` map, and the backfill/observer
+    /// pipeline. Views read from this directly via `library.healthSleep`
+    /// instead of holding their own HealthKit handles.
+    let healthSleep: HealthKitSleepCoordinator
+
+    /// Set to `true` when the first-launch flow needs `ContentView` to
+    /// present the "Pull sleep stages from Apple Watch?" prompt. The
+    /// view clears the flag (and writes the persisted "shown" key)
+    /// when the dialog is answered or dismissed.
+    var pendingHealthKitPrompt: Bool = false
+
     /// Non-nil while the user has opened a metric explanation
     /// by tapping a stat card. Drives the iOS sheet and the
     /// macOS inspector pane from a single source of truth so
@@ -211,6 +223,8 @@ final class Library {
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
     private static let defaultJournalTagsKey = "defaultJournalTags"
+    private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
+    private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
@@ -315,6 +329,19 @@ final class Library {
         // If the model flips to unavailable mid-session, the service
         // throws `sessionFailed` and the caller hides its card.
         self.narration = FoundationNarrationService()
+
+        // HealthKit coordinator. Backed by the real
+        // `HealthKitSleepFetcher` on iOS/macOS where HealthKit is
+        // available. If a future platform drops the framework, the
+        // `#if canImport` keeps `Library` compilable — the coordinator
+        // simply never receives samples.
+        let healthEnabled = UserDefaults.standard.bool(
+            forKey: Self.appleWatchSleepEnabledKey
+        )
+        self.healthSleep = HealthKitSleepCoordinator(
+            fetcher: HealthKitSleepFetcher(),
+            isEnabled: healthEnabled
+        )
 
         let storedInterval = UserDefaults.standard.object(
             forKey: Self.backgroundReloadIntervalKey
@@ -646,6 +673,11 @@ final class Library {
             for dir in dayDirs {
                 try? fm.removeItem(at: dir.appendingPathComponent(DailyStatsCache.filename))
                 try? fm.removeItem(at: dir.appendingPathComponent(IntelligenceCache.dayFilename))
+                // Sleep-stage sidecars are derived data from
+                // HealthKit, so the rebuild path drops them too.
+                // The next attach() will re-fetch from HealthKit
+                // when the user has the toggle on.
+                try? fm.removeItem(at: dir.appendingPathComponent(SleepStageCache.filename))
             }
         }
         // Device-level intelligence sidecar (Trends narratives +
@@ -653,6 +685,74 @@ final class Library {
         // not inside DATALOG.
         try? fm.removeItem(at: url.appendingPathComponent(IntelligenceCache.deviceFilename))
         load(url)
+    }
+
+    // MARK: - Apple Watch sleep
+
+    /// Whether the user has opted in to pulling Apple Watch sleep
+    /// stages. Mirrors the `HealthKitSleepCoordinator.isEnabled`
+    /// flag so views that only have `Library` can render the toggle
+    /// without fishing into the coordinator.
+    var appleWatchSleepEnabled: Bool {
+        healthSleep.isEnabled
+    }
+
+    /// Flip the Apple Watch sleep toggle. Persists the choice to
+    /// `UserDefaults` and, when enabling, triggers an authorization
+    /// request followed by a backfill against the currently-loaded
+    /// card. Disabling clears the in-memory map but leaves sidecars
+    /// on disk so re-enabling picks up where the user left off.
+    func setAppleWatchSleepEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: Self.appleWatchSleepEnabledKey)
+        healthSleep.setEnabled(enabled)
+        guard enabled else { return }
+        Task { [weak self] in
+            await self?.healthSleep.requestAuthorization()
+            if let card = self?.card {
+                await self?.healthSleep.backfill(card: card)
+            }
+        }
+    }
+
+    /// Manually re-run the backfill — used by the Settings "Re-sync
+    /// now" button when a user adds older nights from another device
+    /// and wants the local app to catch up immediately.
+    func resyncAppleWatchSleep() {
+        guard let card else { return }
+        Task { [weak self] in
+            await self?.healthSleep.backfill(card: card)
+        }
+    }
+
+    /// Decide whether to surface the first-launch confirmation. Only
+    /// fires once per device install (gated on
+    /// `appleWatchSleepPromptShownKey`) and never when the user has
+    /// already enabled the feature explicitly.
+    fileprivate func maybeShowHealthKitFirstRunPrompt() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.appleWatchSleepPromptShownKey),
+              !defaults.bool(forKey: Self.appleWatchSleepEnabledKey) else {
+            return
+        }
+        pendingHealthKitPrompt = true
+    }
+
+    /// Called by `ContentView` when the user taps "Yes" on the
+    /// confirmation dialog. Records the prompt as shown, flips the
+    /// toggle on, and kicks off the auth+backfill sequence.
+    func acceptHealthKitFirstRunPrompt() {
+        UserDefaults.standard.set(true, forKey: Self.appleWatchSleepPromptShownKey)
+        pendingHealthKitPrompt = false
+        setAppleWatchSleepEnabled(true)
+    }
+
+    /// Called by `ContentView` when the user taps "Not now" or
+    /// dismisses the dialog. Records the prompt as shown so we don't
+    /// nag again on subsequent imports; the user can still flip the
+    /// toggle on from Settings later.
+    func declineHealthKitFirstRunPrompt() {
+        UserDefaults.standard.set(true, forKey: Self.appleWatchSleepPromptShownKey)
+        pendingHealthKitPrompt = false
     }
 
     // MARK: - Per-day notes
@@ -1432,6 +1532,16 @@ final class Library {
                     // the sidebar before any I/O completes.
                     CardSnapshot.save(finalCard)
                     self?.applyDefaultSelection(for: finalCard)
+                }
+                // Hydrate the sleep-stage map from on-disk sidecars
+                // and, if the user has opted in and HealthKit is
+                // ready, run the single-batched backfill for any
+                // missing/stale nights. Runs after `.loaded` so the
+                // sleep card on the day view appears as soon as the
+                // sidecars finish loading.
+                await self?.healthSleep.attach(card: finalCard)
+                await MainActor.run {
+                    self?.maybeShowHealthKitFirstRunPrompt()
                 }
             } catch {
                 await MainActor.run {

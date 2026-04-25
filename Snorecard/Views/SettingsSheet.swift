@@ -285,6 +285,43 @@ struct SettingsSheet: View {
         }
     }
 
+    /// Master switch for the Apple Watch sleep-stage integration.
+    /// Flipping on triggers an authorization request followed by a
+    /// backfill against the currently-loaded card; flipping off
+    /// clears the in-memory map but leaves sidecars on disk so
+    /// re-enabling picks up where the user left off.
+    @ViewBuilder
+    private var appleWatchSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { library.appleWatchSleepEnabled },
+                set: { library.setAppleWatchSleepEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Watch Sleep")
+                    if library.healthSleep.authState == .unsupported {
+                        Text("Health data isn't available on this device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(library.healthSleep.authState == .unsupported)
+
+            if library.appleWatchSleepEnabled {
+                Button("Re-sync now") {
+                    library.resyncAppleWatchSleep()
+                }
+                .disabled(library.card == nil
+                          || library.healthSleep.backfillProgress != nil)
+            }
+        } header: {
+            Text("Apple Watch")
+        } footer: {
+            Text("Reads sleep stages from the Health app so Snorecard can show them next to each night's CPAP data. Snorecard never writes anything to Health.")
+        }
+    }
+
     /// Cadence picker for the in-app auto-reload. Mirrors the
     /// existing Apple Intelligence toggle pattern (Binding wrapping
     /// a Library property) so both controls read from one source of
@@ -525,6 +562,7 @@ struct SettingsSheet: View {
     private var advancedTab: some View {
         Form {
             appleIntelligenceSection
+            appleWatchSection
             backgroundReloadSection
             maintenanceSection
         }

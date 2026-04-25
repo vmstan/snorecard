@@ -40,6 +40,7 @@ targets:
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.medical
         NSHumanReadableCopyright: "© 2026"
+        NSHealthShareUsageDescription: "Snorecard reads Apple Watch sleep stages so it can show them next to your CPAP data. Snorecard never writes anything to Health."
         NSUbiquitousContainers:
           iCloud.com.vmstan.Snorecard:
             NSUbiquitousContainerIsDocumentScopePublic: true
@@ -78,6 +79,7 @@ targets:
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.medical
         NSHumanReadableCopyright: "© 2026"
+        NSHealthShareUsageDescription: "Snorecard reads Apple Watch sleep stages so it can show them next to your CPAP data. Snorecard never writes anything to Health."
         UILaunchScreen:
           UIColorName: ""
         UIApplicationSceneManifest:
