@@ -433,6 +433,10 @@ struct SettingsSheet: View {
     /// H / CA colours in the event donut and the Events-by-Hour
     /// chart. Named presets swap in alternative schemes for users
     /// who find the default muted red/yellow/blue hard to read.
+    /// Also exposes the long-form label preference for the CA
+    /// category so the user can pick "Clear Airway" (default,
+    /// matches OSCAR / SleepHQ / clinician usage) or the more
+    /// formal "Central Apnea".
     @ViewBuilder
     private var eventPaletteSection: some View {
         Section {
@@ -447,10 +451,21 @@ struct SettingsSheet: View {
                     Text(palette.displayName).tag(palette)
                 }
             }
+            Picker(
+                "CA Label",
+                selection: Binding(
+                    get: { library.centralEventLabel },
+                    set: { library.centralEventLabel = $0 }
+                )
+            ) {
+                ForEach(CentralEventLabel.allCases) { label in
+                    Text(label.displayName).tag(label)
+                }
+            }
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events.")
         }
     }
 

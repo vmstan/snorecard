@@ -73,6 +73,34 @@ enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// User-facing label for "CA" (the central-apnea / clear-airway
+/// category). ResMed and most CPAP literature uses "Central Apnea";
+/// SleepHQ / OSCAR / sleep clinicians often prefer "Clear Airway"
+/// because the central label can mis-suggest a brain-stem origin
+/// when in practice CA events are most often arousal-related on
+/// CPAP therapy. Default is "Clear Airway" — matches the term the
+/// user would see in OSCAR and most online discussions.
+enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
+    case clearAirway
+    case centralApnea
+
+    var id: String { rawValue }
+
+    /// Long form used in legends, AI narratives, and stat-card
+    /// labels. Reads naturally inline ("3 Clear Airway events").
+    var displayName: String {
+        switch self {
+        case .clearAirway: return "Clear Airway"
+        case .centralApnea: return "Central Apnea"
+        }
+    }
+
+    /// Short form for the event donut and any width-constrained
+    /// chip. Both labels share the same "CA" abbreviation, so this
+    /// is constant across the two cases.
+    var shortName: String { "CA" }
+}
+
 /// User-facing category for a PAP device — shown in the Settings
 /// Device section as a dropdown, used anywhere copy refers to the
 /// machine generically ("this CPAP", "this BiPAP"), and synced
@@ -222,6 +250,7 @@ final class Library {
     private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
+    private static let centralEventLabelKey = "centralEventLabel"
     private static let defaultJournalTagsKey = "defaultJournalTags"
     private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
     private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
@@ -300,6 +329,20 @@ final class Library {
             UserDefaults.standard.set(
                 eventColorPalette.rawValue,
                 forKey: Self.eventColorPaletteKey
+            )
+        }
+    }
+
+    /// User-preferred long-form label for "CA" events. Drives the
+    /// chart legend, the stat-card label, and the AI narrative
+    /// terminology so the same naming reads consistently across
+    /// the app. Defaults to `.clearAirway`. Local-only.
+    var centralEventLabel: CentralEventLabel {
+        didSet {
+            guard oldValue != centralEventLabel else { return }
+            UserDefaults.standard.set(
+                centralEventLabel.rawValue,
+                forKey: Self.centralEventLabelKey
             )
         }
     }
@@ -386,6 +429,14 @@ final class Library {
             self.eventColorPalette = palette
         } else {
             self.eventColorPalette = .topher
+        }
+
+        if let rawLabel = UserDefaults.standard.string(
+            forKey: Self.centralEventLabelKey
+        ), let label = CentralEventLabel(rawValue: rawLabel) {
+            self.centralEventLabel = label
+        } else {
+            self.centralEventLabel = .clearAirway
         }
 
         // Default tags default to empty so upgrading users don't

@@ -146,15 +146,19 @@ struct AHIHourlyChart: View {
     }
 
     /// Colour-keyed legend below the x-axis. Uses the clinical
-    /// names ("Obstructive Apnea", "Clear Airway") rather than the
-    /// internal scale keys so the chart label matches what the
-    /// user sees in journal entries and AI narratives. Built as a
-    /// flow layout so it wraps cleanly on iPhone-width plates.
+    /// names ("Obstructive Apnea", and the user-preferred long
+    /// form for the CA category from `library.centralEventLabel`)
+    /// rather than the internal scale keys so the chart label
+    /// matches what the user sees elsewhere. Built as a flow
+    /// layout so it wraps cleanly on iPhone-width plates.
     private var legend: some View {
         FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
             legendItem("Obstructive Apnea", color: library.eventColorPalette.obstructive)
             legendItem("Hypopnea", color: library.eventColorPalette.hypopnea)
-            legendItem("Clear Airway", color: library.eventColorPalette.central)
+            legendItem(
+                library.centralEventLabel.displayName,
+                color: library.eventColorPalette.central
+            )
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
