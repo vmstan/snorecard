@@ -330,14 +330,21 @@ final class Library {
         // throws `sessionFailed` and the caller hides its card.
         self.narration = FoundationNarrationService()
 
-        // HealthKit coordinator. Backed by the real
-        // `HealthKitSleepFetcher` on iOS/macOS where HealthKit is
-        // available. If a future platform drops the framework, the
-        // `#if canImport` keeps `Library` compilable — the coordinator
-        // simply never receives samples.
+        // HealthKit coordinator. iOS only — macOS HealthKit sleep
+        // sync from iPhone is unreliable in practice (sample
+        // returns drop most multi-source data and lag the iPhone
+        // store by hours), so we ship the feature as iOS-only.
+        // The coordinator is still constructed on macOS but stays
+        // permanently disabled, which keeps every Library API
+        // reachable from shared view code without a `#if` at every
+        // call site.
+        #if os(iOS)
         let healthEnabled = UserDefaults.standard.bool(
             forKey: Self.appleWatchSleepEnabledKey
         )
+        #else
+        let healthEnabled = false
+        #endif
         self.healthSleep = HealthKitSleepCoordinator(
             fetcher: HealthKitSleepFetcher(),
             isEnabled: healthEnabled
@@ -727,14 +734,19 @@ final class Library {
     /// Decide whether to surface the first-launch confirmation. Only
     /// fires once per device install (gated on
     /// `appleWatchSleepPromptShownKey`) and never when the user has
-    /// already enabled the feature explicitly.
+    /// already enabled the feature explicitly. macOS skips it
+    /// entirely — the Apple Watch sleep integration is iOS-only.
     fileprivate func maybeShowHealthKitFirstRunPrompt() {
+        #if os(macOS)
+        return
+        #else
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Self.appleWatchSleepPromptShownKey),
               !defaults.bool(forKey: Self.appleWatchSleepEnabledKey) else {
             return
         }
         pendingHealthKitPrompt = true
+        #endif
     }
 
     /// Called by `ContentView` when the user taps "Yes" on the
@@ -1538,11 +1550,14 @@ final class Library {
                 // ready, run the single-batched backfill for any
                 // missing/stale nights. Runs after `.loaded` so the
                 // sleep card on the day view appears as soon as the
-                // sidecars finish loading.
+                // sidecars finish loading. iOS only — macOS doesn't
+                // expose the feature so there's nothing to attach.
+                #if os(iOS)
                 await self?.healthSleep.attach(card: finalCard)
                 await MainActor.run {
                     self?.maybeShowHealthKitFirstRunPrompt()
                 }
+                #endif
             } catch {
                 await MainActor.run {
                     self?.state = .failed(String(describing: error))

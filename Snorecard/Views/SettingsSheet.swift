@@ -562,7 +562,11 @@ struct SettingsSheet: View {
     private var advancedTab: some View {
         Form {
             appleIntelligenceSection
+            #if os(iOS)
+            // Apple Watch sleep is iOS-only — macOS HealthKit
+            // sleep sync from iPhone is unreliable.
             appleWatchSection
+            #endif
             backgroundReloadSection
             maintenanceSection
         }

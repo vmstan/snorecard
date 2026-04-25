@@ -116,11 +116,17 @@ struct TrendsView: View {
                                 rangeEnd: rangeEnd
                             )
                         }
+                        // Apple Watch sleep aggregates — iOS only.
+                        // macOS doesn't expose the underlying
+                        // HealthKit feature, so the section never
+                        // appears on Mac.
+                        #if os(iOS)
                         if !sleepSummariesInRange.isEmpty {
                             SleepStageTrendsSection(
                                 summaries: sleepSummariesInRange
                             )
                         }
+                        #endif
                         ahiChart
                         usageChart
                         glasgowChart

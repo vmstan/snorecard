@@ -405,9 +405,15 @@ struct DayDetailView: View {
                 // with usage so the "Connect" CTA gets a surface
                 // when the user hasn't opted in yet — collapsing
                 // it conditionally would hide the entry point.
+                // iOS only — macOS HealthKit sleep sync is
+                // unreliable in practice, so the feature is hidden
+                // entirely on Mac rather than offering a CTA that
+                // produces partial data.
+                #if os(iOS)
                 AppleWatchSleepCard(
                     summary: library.healthSleep.summaryByDate[day.date]
                 )
+                #endif
 
                 // Per-hour breakdowns sit below the stat grid so
                 // the cards aren't pushed offscreen by them. Order
@@ -427,6 +433,9 @@ struct DayDetailView: View {
                 // waveform bundle are present — needs the bundle's
                 // session list to draw the CPAP-minutes line and
                 // the summary's raw samples to bucket the stages.
+                // iOS only, same reason as the AppleWatchSleepCard
+                // above.
+                #if os(iOS)
                 if let bundle = loadedWaveform,
                    let sleep = library.healthSleep.summaryByDate[day.date] {
                     SleepByHourChart(
@@ -436,6 +445,7 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
+                #endif
                 if let bundle = loadedWaveform, !bundle.flatLeak.isEmpty {
                     LeakHourlyChart(
                         leak: bundle.flatLeak,
