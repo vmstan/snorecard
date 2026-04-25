@@ -284,11 +284,11 @@ struct ContentView: View {
         } message: {
             Text(rebuildCacheWarning)
         }
-        // Apple Watch sleep first-launch prompt — iOS only. macOS
-        // never sets `pendingHealthKitPrompt`, so the alert wouldn't
-        // fire there anyway, but `#if`-ing it out keeps the macOS
-        // build free of any Health-related UI dead code.
-        #if os(iOS)
+        // Apple Watch sleep first-launch prompt. macOS never sets
+        // `pendingHealthKitPrompt` (the Library's
+        // `maybeShowHealthKitFirstRunPrompt` is a no-op there), so
+        // the alert is silently inert on Mac without needing a
+        // platform gate.
         .alert(
             "Pull sleep stages from Apple Watch?",
             isPresented: Binding(
@@ -313,7 +313,6 @@ struct ContentView: View {
                 + "You'll be asked to grant Health access — Snorecard only reads sleep samples and never writes anything."
             )
         }
-        #endif
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildCache)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 isConfirmingRebuild = true

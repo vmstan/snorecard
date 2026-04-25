@@ -144,12 +144,10 @@ struct TrendsView: View {
                         // chart sits next to Time in Apnea so the
                         // sleep-architecture story reads alongside
                         // the apnea metrics it's most often
-                        // compared to. iOS only.
-                        #if os(iOS)
+                        // compared to.
                         if !sleepSummariesInRange.isEmpty {
                             sleepStagesChart
                         }
-                        #endif
                         pressureChart
                         flowLimitChart
                         tidalVolumeChart
@@ -406,9 +404,9 @@ struct TrendsView: View {
             // Apple Watch sleep-stage chips. Sit alongside the rest
             // of the night-aggregate cards so the per-stage averages
             // read at the same level as Compliance / Usage / Time
-            // in Apnea, rather than being walled off in their own
-            // section. iOS only.
-            #if os(iOS)
+            // in Apnea. Both platforms: the data comes from the
+            // sidecars iCloud Drive syncs, not from a HealthKit
+            // query (which only runs on iOS).
             if let deepPct = avgDeepPercent {
                 card(
                     "Deep (AVG)",
@@ -423,7 +421,6 @@ struct TrendsView: View {
                     subtitle: "of asleep time"
                 )
             }
-            #endif
             // IPAP gets a separate card only when the range's
             // average IPAP sits meaningfully above EPAP — i.e.
             // some nights used bilevel or EPR-style therapy. On

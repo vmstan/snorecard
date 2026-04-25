@@ -287,9 +287,9 @@ struct DayDetailView: View {
                     // and per-range views read the same. Only on
                     // nights where we have a summary with non-zero
                     // asleep time (otherwise the percentage is
-                    // undefined). iOS only — macOS HealthKit sleep
-                    // sync is unreliable so the feature is hidden.
-                    #if os(iOS)
+                    // undefined). Reads from the sidecars regardless
+                    // of platform — HealthKit is queried only on
+                    // iOS, but Mac shows whatever iCloud synced.
                     if let sleep = library.healthSleep.summaryByDate[day.date],
                        sleep.timeAsleep > 0 {
                         let deepPct = sleep.fractionAsleep(in: .deep) * 100
@@ -305,7 +305,6 @@ struct DayDetailView: View {
                             subtitle: "of asleep time"
                         )
                     }
-                    #endif
                     // IPAP gets its own card only when the device
                     // actually delivers extra inspiratory pressure.
                     // On plain CPAP therapy IPAP equals EPAP, so
@@ -429,14 +428,13 @@ struct DayDetailView: View {
                 // `NightlySleepSummary` exists for this night —
                 // skipping the empty-state placeholder keeps the
                 // day grid clean for nights where the watch wasn't
-                // worn or HealthKit didn't have the data. The
-                // Connect / Re-sync entry points live in Settings.
-                // iOS only.
-                #if os(iOS)
+                // worn or HealthKit didn't have the data. macOS
+                // shows the card too, reading whatever sidecars the
+                // iPhone wrote to iCloud Drive; HealthKit is never
+                // called on macOS itself.
                 if let sleep = library.healthSleep.summaryByDate[day.date] {
                     AppleWatchSleepCard(summary: sleep)
                 }
-                #endif
 
                 // Per-hour breakdowns sit below the stat grid so
                 // the cards aren't pushed offscreen by them. Order
@@ -456,9 +454,8 @@ struct DayDetailView: View {
                 // waveform bundle are present — needs the bundle's
                 // session list to draw the CPAP-minutes line and
                 // the summary's raw samples to bucket the stages.
-                // iOS only, same reason as the AppleWatchSleepCard
-                // above.
-                #if os(iOS)
+                // Renders on both platforms — the underlying data
+                // comes from sidecars synced via iCloud Drive.
                 if let bundle = loadedWaveform,
                    let sleep = library.healthSleep.summaryByDate[day.date] {
                     SleepByHourChart(
@@ -468,7 +465,6 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                #endif
                 if let bundle = loadedWaveform, !bundle.flatLeak.isEmpty {
                     LeakHourlyChart(
                         leak: bundle.flatLeak,

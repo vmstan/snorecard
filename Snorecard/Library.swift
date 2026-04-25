@@ -1550,14 +1550,20 @@ final class Library {
                 // ready, run the single-batched backfill for any
                 // missing/stale nights. Runs after `.loaded` so the
                 // sleep card on the day view appears as soon as the
-                // sidecars finish loading. iOS only — macOS doesn't
-                // expose the feature so there's nothing to attach.
-                #if os(iOS)
+                // sidecars finish loading.
+                //
+                // macOS runs this too — the coordinator's `attach`
+                // disk-hydrates first and bails before any HealthKit
+                // call when `isEnabled == false`, which it always
+                // is on macOS. That gives Mac a read-only view of
+                // whatever the iPhone wrote to iCloud Drive without
+                // touching the (unreliable) macOS HealthKit store.
+                // `maybeShowHealthKitFirstRunPrompt` is also a
+                // no-op on macOS by its own internal guard.
                 await self?.healthSleep.attach(card: finalCard)
                 await MainActor.run {
                     self?.maybeShowHealthKitFirstRunPrompt()
                 }
-                #endif
             } catch {
                 await MainActor.run {
                     self?.state = .failed(String(describing: error))
