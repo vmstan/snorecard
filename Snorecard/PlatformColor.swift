@@ -197,30 +197,33 @@ extension EventColorPalette {
     // the timeline filters it out, and the legend below the chart
     // never lists it.
 
-    /// Deep-sleep anchor colour for this palette.
+    /// Deep-sleep anchor colour for this palette. Oscar's deep
+    /// shade matches its CA event colour (magenta-purple) so the
+    /// chart and the donut reuse the same hue identity; the other
+    /// themes pick a complementary indigo/lavender family.
     var deepSleep: Color {
         switch self {
-        case .topher: return Color(red: 0.282, green: 0.310, blue: 0.659)
+        case .topher: return Color(red: 0.220, green: 0.090, blue: 0.694)
         case .nick:   return Color(red: 0.471, green: 0.443, blue: 0.690)
-        case .oscar:  return Color(red: 0.220, green: 0.090, blue: 0.694)
+        case .oscar:  return Color(red: 0.537, green: 0.000, blue: 0.522)
         }
     }
 
     /// Core-sleep colour — the same hue as `deepSleep` lightened.
     var coreSleep: Color {
         switch self {
-        case .topher: return Color(red: 0.443, green: 0.502, blue: 0.776)
+        case .topher: return Color(red: 0.420, green: 0.290, blue: 0.831)
         case .nick:   return Color(red: 0.671, green: 0.643, blue: 0.835)
-        case .oscar:  return Color(red: 0.420, green: 0.290, blue: 0.831)
+        case .oscar:  return Color(red: 0.722, green: 0.314, blue: 0.706)
         }
     }
 
     /// REM-sleep colour — `deepSleep` lightened one step further.
     var remSleep: Color {
         switch self {
-        case .topher: return Color(red: 0.604, green: 0.694, blue: 0.886)
+        case .topher: return Color(red: 0.624, green: 0.541, blue: 0.910)
         case .nick:   return Color(red: 0.831, green: 0.816, blue: 0.945)
-        case .oscar:  return Color(red: 0.624, green: 0.541, blue: 0.910)
+        case .oscar:  return Color(red: 0.875, green: 0.604, blue: 0.867)
         }
     }
 }
