@@ -130,12 +130,17 @@ private func shortClockLabel(for date: Date) -> String {
     }
 }
 
-/// Card chrome used by all three hourly charts. Matches
+/// Card chrome used by every per-signal hourly chart. Matches
 /// `AHIHourlyChart`'s inset plate so the panels below the stat
-/// grid read as one cohesive set.
+/// grid read as one cohesive set. When `legendLabel` is provided,
+/// a single coloured-dot legend row appears beneath the chart so
+/// the colour key matches the labelling AHIHourlyChart shows for
+/// its multi-category bars.
 private struct HourlyChartCard<Content: View>: View {
     let title: String
     let subtitle: String?
+    var legendLabel: String? = nil
+    var legendColor: Color = .primary
     @ViewBuilder var chart: () -> Content
 
     var body: some View {
@@ -153,6 +158,14 @@ private struct HourlyChartCard<Content: View>: View {
             }
             chart()
                 .frame(minHeight: 140)
+            if let legendLabel {
+                HStack(spacing: 4) {
+                    Circle().fill(legendColor).frame(width: 8, height: 8)
+                    Text(legendLabel)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(14)
         .background(
@@ -180,7 +193,12 @@ struct LeakHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Leak by Hour", subtitle: "95th percentile · L/min") {
+        HourlyChartCard(
+            title: "Leak by Hour",
+            subtitle: "95th percentile · L/min",
+            legendLabel: "Leak",
+            legendColor: library.eventColorPalette.leak
+        ) {
             Chart(buckets) { bucket in
                 BarMark(
                     x: .value("Hour", bucket.clockLabel),
@@ -242,7 +260,12 @@ struct FlowLimitHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Flow Limit by Hour", subtitle: "95th percentile · 0–1 scale") {
+        HourlyChartCard(
+            title: "Flow Limit by Hour",
+            subtitle: "95th percentile · 0–1 scale",
+            legendLabel: "Flow Limitation",
+            legendColor: library.eventColorPalette.flowLimit
+        ) {
             Chart(buckets) { bucket in
                 BarMark(
                     x: .value("Hour", bucket.clockLabel),
@@ -307,7 +330,12 @@ struct TidalVolumeHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Tidal Volume by Hour", subtitle: "median · mL") {
+        HourlyChartCard(
+            title: "Tidal Volume by Hour",
+            subtitle: "median · mL",
+            legendLabel: "Tidal Volume",
+            legendColor: library.eventColorPalette.tidalVolume
+        ) {
             Chart(plottedBuckets) { bucket in
                 LineMark(
                     x: .value("Hour", bucket.clockLabel),
@@ -378,7 +406,12 @@ struct PressureHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Mask Pressure by Hour", subtitle: "median · cmH₂O") {
+        HourlyChartCard(
+            title: "Mask Pressure by Hour",
+            subtitle: "median · cmH₂O",
+            legendLabel: "Mask Pressure",
+            legendColor: library.eventColorPalette.pressureMedian
+        ) {
             Chart(plottedBuckets) { bucket in
                 LineMark(
                     x: .value("Hour", bucket.clockLabel),
