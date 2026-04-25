@@ -426,18 +426,6 @@ struct DayDetailView: View {
                     }
                 }
 
-                // Sleep Stages card. Only renders when a
-                // `NightlySleepSummary` exists for this night —
-                // skipping the empty-state placeholder keeps the
-                // day grid clean for nights where the watch wasn't
-                // worn or HealthKit didn't have the data. macOS
-                // shows the card too, reading whatever sidecars the
-                // iPhone wrote to iCloud Drive; HealthKit is never
-                // called on macOS itself.
-                if let sleep = library.healthSleep.summaryByDate[day.date] {
-                    AppleWatchSleepCard(summary: sleep)
-                }
-
                 // Per-hour breakdowns sit below the stat grid so
                 // the cards aren't pushed offscreen by them. Order
                 // — events, leak, flow limit, pressure — goes from

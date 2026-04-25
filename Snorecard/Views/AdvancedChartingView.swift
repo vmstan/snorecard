@@ -1,5 +1,6 @@
 import SwiftUI
 import os.log
+import SnorecardKit
 
 private let advancedChartingLog = Logger(subsystem: "com.vmstan.Snorecard", category: "AdvancedCharting")
 
@@ -76,8 +77,20 @@ struct AdvancedChartingButton: View {
 struct AdvancedChartingView: View {
     let payload: AdvancedChartingPayload
 
+    @Environment(Library.self) private var library
     @State private var bundle: WaveformBundle?
     @State private var loadError: String?
+
+    /// Apple Watch sleep summary for this payload's night, when
+    /// the coordinator has one in memory. Pulled fresh on each
+    /// render so toggling the feature off in another window
+    /// removes the timeline tint here too. macOS reads sidecars
+    /// only — same source as iOS, just no HealthKit fetch.
+    private var sleepSummary: NightlySleepSummary? {
+        let calendar = Calendar.current
+        let key = calendar.startOfDay(for: payload.dayDate)
+        return library.healthSleep.summaryByDate[key]
+    }
 
     var body: some View {
         content
@@ -98,7 +111,7 @@ struct AdvancedChartingView: View {
     private var content: some View {
         if let bundle {
             ScrollView {
-                WaveformSection(bundle: bundle)
+                WaveformSection(bundle: bundle, sleepSummary: sleepSummary)
                     .padding(20)
             }
         } else if let loadError {

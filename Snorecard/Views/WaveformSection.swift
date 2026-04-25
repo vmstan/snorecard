@@ -682,6 +682,10 @@ enum DownsampledSignal {
 
 struct WaveformSection: View {
     let bundle: WaveformBundle
+    /// Optional Apple Watch sleep summary for the night, threaded
+    /// through to `SessionTimelineView` where it tints the timeline
+    /// strip with stage colours.
+    var sleepSummary: NightlySleepSummary? = nil
     @State private var hoverOffset: TimeInterval?
     /// Width of the visible x-axis window in seconds. `0` means "fit the
     /// whole night" and the charts show their full domain.
@@ -871,6 +875,7 @@ struct WaveformSection: View {
                 zoomControls
                 SessionTimelineView(
                     bundle: bundle,
+                    sleepSummary: sleepSummary,
                     onJumpToTime: { time in jumpTo(time: time) },
                     onDragToTime: { time in panViewport(center: time) },
                     viewportStart: scrollPosition,

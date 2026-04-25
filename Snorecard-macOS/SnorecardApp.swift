@@ -76,6 +76,7 @@ struct SnorecardApp: App {
         WindowGroup(for: AdvancedChartingPayload.self) { $payload in
             if let payload {
                 AdvancedChartingView(payload: payload)
+                    .environment(library)
                     .frame(minWidth: 960, minHeight: 640)
             }
         }
