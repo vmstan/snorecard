@@ -50,12 +50,13 @@ struct AppleWatchSleepCard: View {
         )
     }
 
-    /// Hypnogram-style timeline matching how the iOS Health app
-    /// renders a night: four stage rows (Awake on top, REM, Core,
-    /// Deep on bottom) with one rectangle per `SleepStageSample` at
-    /// its actual wall-clock start/end. `inBed` records are filtered
-    /// out — Apple writes them as overlapping envelope rows that
-    /// would obscure the real stages.
+    /// Single-row chronological timeline of sleep stages — one
+    /// `RectangleMark` per `SleepStageSample`, all stacked on the
+    /// same row and color-coded by stage. The time axis along the
+    /// bottom carries the chronology so the user reads stage
+    /// transitions left → right. `inBed` records are filtered out
+    /// so Apple's overlapping envelope rows don't paint over the
+    /// real stages.
     private func hypnogram(for summary: NightlySleepSummary) -> some View {
         let stages = summary.samples
             .filter { $0.stage != .inBed }
@@ -64,7 +65,7 @@ struct AppleWatchSleepCard: View {
             return AnyView(
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color.secondary.opacity(0.15))
-                    .frame(height: 14)
+                    .frame(height: 18)
                     .overlay(
                         Text("No stage data")
                             .font(.caption2)
@@ -78,61 +79,22 @@ struct AppleWatchSleepCard: View {
                     RectangleMark(
                         xStart: .value("Start", sample.start),
                         xEnd: .value("End", sample.end),
-                        yStart: .value("Stage", Self.stageRow(for: sample.stage)),
-                        yEnd: .value("Stage", Self.stageRow(for: sample.stage) + 0.85)
+                        yStart: .value("Y", 0),
+                        yEnd: .value("Y", 1)
                     )
                     .foregroundStyle(Self.color(for: sample.stage))
                 }
             }
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                    AxisGridLine()
                     AxisValueLabel(format: .dateTime.hour().minute())
                         .font(.caption2.monospacedDigit())
                 }
             }
-            .chartYAxis {
-                // Mid-row tick positions so the label centres in
-                // each stage band rather than sitting on its edge.
-                AxisMarks(position: .leading, values: [0.4, 1.4, 2.4, 3.4]) { value in
-                    AxisValueLabel {
-                        if let v = value.as(Double.self),
-                           let label = Self.label(forRow: v - 0.4) {
-                            Text(label)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .chartYScale(domain: 0...4)
-            .frame(height: 100)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: 0...1)
+            .frame(height: 36)
         )
-    }
-
-    /// Stage → row index. Top→bottom in the rendered chart is
-    /// Awake (3) → REM (2) → Core (1) → Deep (0), matching the
-    /// Health app's visual ordering. `asleepUnspecified` is
-    /// folded into Core because it represents legacy watchOS
-    /// pre-iOS-16 records that didn't differentiate stages.
-    private static func stageRow(for stage: SleepStageSample.Stage) -> Double {
-        switch stage {
-        case .deep: return 0
-        case .core, .asleepUnspecified: return 1
-        case .rem: return 2
-        case .awake: return 3
-        case .inBed: return -1   // never rendered — filtered out
-        }
-    }
-
-    private static func label(forRow row: Double) -> String? {
-        switch Int(row.rounded()) {
-        case 0: return "Deep"
-        case 1: return "Core"
-        case 2: return "REM"
-        case 3: return "Awake"
-        default: return nil
-        }
     }
 
     private static func color(for stage: SleepStageSample.Stage) -> Color {
