@@ -45,12 +45,13 @@ struct SleepByHourChart: View {
     private var buckets: [HourBucket] {
         let calendar = Calendar.current
         // Snap the first bucket to the hour boundary at or before
-        // dayStart so a 22:39 session bucket starts at 22:00 — same
-        // logic AHIHourlyChart uses.
-        let anchor = calendar.date(
-            bySetting: .minute, value: 0,
-            of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
-        ) ?? dayStart
+        // dayStart. `dateInterval(of: .hour, for:)` is the right
+        // primitive for "snap-down to hour"; chaining
+        // `Calendar.date(bySetting:)` rolls forward to the next
+        // matching value (e.g. 23:38:39 ends up at the next
+        // midnight, not at 23:00:00) which silently dropped the
+        // partial first hour from every hourly chart.
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
 
         // `totalDuration` is measured from `dayStart`, which sits
         // partway through the first hour. The hour grid is anchored

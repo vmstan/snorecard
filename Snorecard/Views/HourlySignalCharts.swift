@@ -54,13 +54,13 @@ private func hourlyBuckets(
     stat: HourlyStat
 ) -> [HourlyBucket] {
     let calendar = Calendar.current
-    // Snap the anchor to the hour boundary at or before dayStart so
-    // labels line up with wall-clock hours even when the first BRP
-    // starts partway through an hour.
-    let anchor = calendar.date(
-        bySetting: .minute, value: 0,
-        of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
-    ) ?? dayStart
+    // Snap the anchor to the hour boundary at or before dayStart.
+    // `dateInterval(of: .hour, for:)` returns the hour interval
+    // containing dayStart; its `.start` is the snap-down boundary.
+    // (`Calendar.date(bySetting:)` rolls forward to the next
+    // matching value, so it lands on the *following* midnight for
+    // any non-zero minute / second — not what we want.)
+    let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
 
     // Always span the full night's hour range — all four hourly
     // charts share the same axis so even signals that go quiet for

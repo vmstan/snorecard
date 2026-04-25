@@ -21,13 +21,15 @@ struct AHIHourlyChart: View {
     private var buckets: [HourBucket] {
         let calendar = Calendar.current
         // Snap the first bucket to the hour boundary at or before
-        // dayStart so a 22:39 session bucket starts at 22:00 — and
-        // bucketing by wall-clock hour means events stay aligned
-        // with the label they're filed under.
-        let anchor = calendar.date(
-            bySetting: .minute, value: 0,
-            of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
-        ) ?? dayStart
+        // dayStart so a 22:39 session bucket starts at 22:00.
+        // `Calendar.date(bySetting:value:of:)` would have been the
+        // obvious choice here but it *rolls forward* to the next
+        // matching component value — chaining `.second=0` then
+        // `.minute=0` on 23:38:39 returns 24:00:00 (the next
+        // midnight), not 23:00:00. `dateInterval(of: .hour, for:)`
+        // returns the [start, end) of the hour containing dayStart,
+        // whose `.start` is the snap-down hour boundary we want.
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
 
         // Distance from anchor to dayStart — events use offsets
         // relative to dayStart, but we group into hour slots
