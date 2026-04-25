@@ -16,17 +16,10 @@ struct AppleWatchSleepCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Apple Watch Sleep")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                if let summary {
-                    Text(formatDuration(summary.timeAsleep))
-                        .font(.title3.weight(.semibold).monospacedDigit())
-                }
-            }
+            Text("Apple Watch Sleep")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
             if let summary {
                 hypnogram(for: summary)
