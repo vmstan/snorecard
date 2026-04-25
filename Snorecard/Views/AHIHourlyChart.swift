@@ -119,10 +119,12 @@ struct AHIHourlyChart: View {
                 )
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(
+                    values: pickedHourLabels(buckets.map(\.clockLabel))
+                ) { value in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel() {
+                    AxisValueLabel {
                         if let label = value.as(String.self) {
                             Text(label).font(.caption2.monospacedDigit())
                         }

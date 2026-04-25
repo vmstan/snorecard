@@ -203,7 +203,7 @@ struct SleepByHourChart: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                    AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
                         AxisGridLine()
                         AxisTick()
                         AxisValueLabel {
