@@ -120,9 +120,9 @@ struct AppleWatchSleepCard: View {
     /// plenty of horizontal room.
     private static var xAxisDesiredCount: Int {
         #if os(iOS)
-        return 4
+        return 5
         #else
-        return 6
+        return 8
         #endif
     }
 
