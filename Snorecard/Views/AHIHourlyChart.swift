@@ -20,38 +20,48 @@ struct AHIHourlyChart: View {
 
     private var buckets: [HourBucket] {
         let calendar = Calendar.current
-        // Snap the first bucket to the hour boundary at or before dayStart so
-        // a 22:39 session bucket starts at 22:00 rather than 22:39.
+        // Snap the first bucket to the hour boundary at or before
+        // dayStart so a 22:39 session bucket starts at 22:00 — and
+        // bucketing by wall-clock hour means events stay aligned
+        // with the label they're filed under.
         let anchor = calendar.date(
             bySetting: .minute, value: 0,
             of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
         ) ?? dayStart
 
-        let lastHour = Int((max(totalDuration, 1) / 3600).rounded(.up)) - 1
+        // Distance from anchor to dayStart — events use offsets
+        // relative to dayStart, but we group into hour slots
+        // relative to anchor so the label and the contained data
+        // describe the same wall-clock window.
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
         guard lastHour >= 0 else { return [] }
+
+        var grouped: [Int: (ob: Int, ce: Int, hy: Int)] = [:]
+        for event in events {
+            let bucket = Int(((event.offset + anchorOffset) / 3600).rounded(.down))
+            guard bucket >= 0, bucket <= lastHour else { continue }
+            let text = event.text.lowercased()
+            var current = grouped[bucket] ?? (0, 0, 0)
+            if text.contains("obstructive") { current.ob += 1 }
+            else if text.contains("central") { current.ce += 1 }
+            else if text.contains("hypopnea") { current.hy += 1 }
+            grouped[bucket] = current
+        }
 
         var out: [HourBucket] = []
         out.reserveCapacity(lastHour + 1)
         for hour in 0...lastHour {
-            let start = TimeInterval(hour) * 3600
-            let end = start + 3600
-            var ob = 0
-            var ce = 0
-            var hy = 0
-            for event in events where event.offset >= start && event.offset < end {
-                let text = event.text.lowercased()
-                if text.contains("obstructive") { ob += 1 }
-                else if text.contains("central") { ce += 1 }
-                else if text.contains("hypopnea") { hy += 1 }
-            }
-            let bucketStart = anchor.addingTimeInterval(start)
+            let bucketStart = anchor.addingTimeInterval(TimeInterval(hour) * 3600)
+            let counts = grouped[hour] ?? (0, 0, 0)
             out.append(
                 HourBucket(
                     startHour: hour,
                     clockLabel: Self.shortClockLabel(for: bucketStart),
-                    obstructive: ob,
-                    central: ce,
-                    hypopnea: hy
+                    obstructive: counts.ob,
+                    central: counts.ce,
+                    hypopnea: counts.hy
                 )
             )
         }

@@ -66,13 +66,22 @@ private func hourlyBuckets(
     // charts share the same axis so even signals that go quiet for
     // a stretch still occupy the same visual width. Missing hours
     // resolve to `stat.reduce([])` (which returns 0).
-    let lastHour = Int((max(totalDuration, 1) / 3600).rounded(.up)) - 1
+    //
+    // Bucket by wall-clock hour, not by `offset / 3600`. Points use
+    // offsets relative to dayStart, but the axis labels are anchored
+    // to the hour boundary at-or-before dayStart, so a point at
+    // offset 0 (e.g. 23:38 wall-clock) belongs in the 23:00 bucket
+    // — not the 0th bucket measured from 23:38. Without this shift
+    // every signal point is filed under the previous hour's label.
+    let anchorOffset = dayStart.timeIntervalSince(anchor)
+    let anchorToEnd = totalDuration + anchorOffset
+    let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
     guard lastHour >= 0 else { return [] }
 
     var grouped: [Int: [Double]] = [:]
     grouped.reserveCapacity(lastHour + 1)
     for point in points {
-        let hour = Int((point.offset / 3600).rounded(.down))
+        let hour = Int(((point.offset + anchorOffset) / 3600).rounded(.down))
         grouped[hour, default: []].append(point.value)
     }
 
