@@ -104,8 +104,8 @@ public final class HealthKitSleepCoordinator {
             guard let existing = summaryByDate[day.date] else { return true }
             return now.timeIntervalSince(existing.generatedAt) > staleAfter
         }
-        healthKitLog.info(
-            "backfill: card has \(card.days.count) days, \(needsUpdate.count) need update"
+        healthKitLog.debug(
+            "backfill: \(needsUpdate.count)/\(card.days.count) days need update"
         )
         guard !needsUpdate.isEmpty else { return }
 
@@ -146,14 +146,9 @@ public final class HealthKitSleepCoordinator {
             cpapWindows: windows,
             calendar: calendar
         )
-        healthKitLog.info(
-            "backfill: clustered \(samples.count) samples into \(bucketed.count) day buckets across \(windows.count) CPAP windows"
+        healthKitLog.debug(
+            "backfill: bucketed \(samples.count) samples into \(bucketed.count) days"
         )
-        for (key, bucket) in bucketed.sorted(by: { $0.key < $1.key }) {
-            healthKitLog.info(
-                "backfill bucket: day=\(key, privacy: .public) sampleCount=\(bucket.count)"
-            )
-        }
 
         // Folder lookup once, off the main thread cost is trivial —
         // these are URLs we already have on hand.

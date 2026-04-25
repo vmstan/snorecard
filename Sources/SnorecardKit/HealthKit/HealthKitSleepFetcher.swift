@@ -4,11 +4,11 @@ import os.log
 import HealthKit
 #endif
 
-/// Subsystem used by every HealthKit-related log line so a user can
-/// stream just these via `log stream --predicate 'subsystem ==
-/// "com.vmstan.Snorecard" && category == "HealthKit"'`. Diagnostic
-/// only — verbose by design while we're sorting out macOS HealthKit
-/// coverage gaps. Move to `.debug` once stable.
+/// Subsystem used by every HealthKit-related log line. Stream via
+/// `log stream --predicate 'subsystem == "com.vmstan.Snorecard" &&
+/// category == "HealthKit"' --level debug`. Operational lines log
+/// at `.error` (fetch failures); per-fetch headlines at `.debug` so
+/// they're elided in release builds.
 let healthKitLog = Logger(subsystem: "com.vmstan.Snorecard", category: "HealthKit")
 
 /// Async-friendly façade over `HKSampleQuery` / `HKObserverQuery` for
@@ -68,27 +68,16 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
             throw HealthKitSleepError.unsupported
         }
         let type = HKCategoryType(.sleepAnalysis)
-        healthKitLog.info(
-            "fetchRange query: start=\(start, privacy: .public) end=\(end, privacy: .public)"
-        )
         // Composing a date predicate inside `HKSamplePredicate
-        // .categorySample(type:predicate:)` was returning only one
-        // sample on iOS even when HealthKit had hundreds within the
-        // window — the typed-predicate composition silently filters
-        // most multi-source data out. Workaround: query newest-first
-        // with no date predicate (a generous descending-sorted
-        // window) and filter to `[start, end]` in Swift. The cost is
-        // O(N) over the most recent few thousand samples, which is
-        // cheap and well below the 14 days × ~100 stages/night the
-        // user's data set produces.
-        //
-        // The hard cap is sized for a worst-case heavy user (Sleep
-        // Schedule + watch + AutoSleep × multiple devices) writing
-        // ~300 samples/night for the longest range we'd query
-        // (typically 14 days, sometimes a year for trends), which
-        // tops out around ~100k samples but realistically is well
-        // under 10k for a typical user. 50k is safely above that
-        // and below any plausible memory concern.
+        // .categorySample(type:predicate:)` returned only one sample
+        // on iOS 26 even when HealthKit had many in the window — the
+        // typed-predicate composition silently filters multi-source
+        // data out. Workaround: query newest-first with no date
+        // predicate and filter to `[start, end]` in Swift. The cap
+        // is sized for a worst-case heavy user (Sleep Schedule +
+        // watch + AutoSleep × multiple devices) over the longest
+        // range we'd query, well above what any realistic user
+        // produces and well below any plausible memory concern.
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.categorySample(type: type)],
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
@@ -103,79 +92,17 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
             )
             throw HealthKitSleepError.framework(String(describing: error))
         }
-        // Filter in Swift — the descriptor's typed-predicate path is
-        // unreliable; this loop is fast and observable.
-        let raw = allRecent.filter { sample in
+        let inRange = allRecent.filter { sample in
             sample.startDate >= start && sample.startDate < end
         }
-        let rawCount = raw.count
-        let mapped = raw.compactMap(Self.map(_:))
-        let dropped = rawCount - mapped.count
-        let firstStart = mapped.last.map { $0.start.description } ?? "nil"
-        let lastEnd = mapped.first.map { $0.end.description } ?? "nil"
-        var hist: [String: Int] = [:]
-        for s in mapped {
-            hist[s.stage.rawValue, default: 0] += 1
-        }
-        let histStr = hist.sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: " ")
-        let sources = Set(mapped.map(\.sourceBundleID))
-        healthKitLog.info(
-            "fetchRange returned scanned=\(allRecent.count) inRange=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
+        let mapped = inRange.compactMap(Self.map(_:))
+        healthKitLog.debug(
+            "fetchRange scanned=\(allRecent.count) inRange=\(inRange.count) mapped=\(mapped.count)"
         )
-        for source in sources {
-            healthKitLog.info("fetchRange source: \(source, privacy: .public)")
-        }
-        // Diagnostic — what does HealthKit think Snorecard's view of
-        // recent data actually is? We need to know whether our app
-        // simply isn't seeing multi-source samples in the last
-        // 30 days, or whether the date filter is somehow dropping
-        // them despite them being in `allRecent`.
-        Self.logRecentDiagnostic(allRecent: allRecent)
         // Re-sort ascending for the bucketing pass, which expects
         // chronological order so its session-clustering walk is
         // monotonic.
         return mapped.sorted { $0.start < $1.start }
-    }
-
-    /// Snapshot of what HealthKit reports as Snorecard's view of
-    /// sleep-analysis data. Logs:
-    ///  - oldest + newest startDate in the descending-sorted result
-    ///  - top 5 newest samples with date / source / stage value
-    ///  - per-source count for samples inside the last 30 days
-    /// Diagnostic only — never feeds the data path.
-    private static func logRecentDiagnostic(allRecent: [HKCategorySample]) {
-        guard !allRecent.isEmpty else {
-            healthKitLog.info("recent-diagnostic: empty")
-            return
-        }
-        // `allRecent` is sorted DESCENDING (newest first), so first =
-        // newest, last = oldest.
-        let newest = allRecent.first!
-        let oldest = allRecent.last!
-        healthKitLog.info(
-            "recent-diagnostic: total=\(allRecent.count) newest=\(newest.startDate, privacy: .public) oldest=\(oldest.startDate, privacy: .public)"
-        )
-        for sample in allRecent.prefix(5) {
-            healthKitLog.info(
-                "recent-diagnostic top: start=\(sample.startDate, privacy: .public) end=\(sample.endDate, privacy: .public) value=\(sample.value) source=\(sample.sourceRevision.source.bundleIdentifier, privacy: .public)"
-            )
-        }
-        let cutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
-        let last30 = allRecent.filter { $0.startDate >= cutoff }
-        var bySource30: [String: Int] = [:]
-        for sample in last30 {
-            bySource30[sample.sourceRevision.source.bundleIdentifier, default: 0] += 1
-        }
-        healthKitLog.info(
-            "recent-diagnostic last30: total=\(last30.count) sources=\(bySource30.count)"
-        )
-        for (bid, count) in bySource30.sorted(by: { $0.value > $1.value }) {
-            healthKitLog.info(
-                "recent-diagnostic last30 source: \(bid, privacy: .public) count=\(count)"
-            )
-        }
     }
 
     /// Long-running observer so a new night that lands on the watch
