@@ -1,7 +1,15 @@
 import Foundation
+import os.log
 #if canImport(HealthKit)
 import HealthKit
 #endif
+
+/// Subsystem used by every HealthKit-related log line so a user can
+/// stream just these via `log stream --predicate 'subsystem ==
+/// "com.vmstan.Snorecard" && category == "HealthKit"'`. Diagnostic
+/// only — verbose by design while we're sorting out macOS HealthKit
+/// coverage gaps. Move to `.debug` once stable.
+let healthKitLog = Logger(subsystem: "com.vmstan.Snorecard", category: "HealthKit")
 
 /// Async-friendly façade over `HKSampleQuery` / `HKObserverQuery` for
 /// the one HealthKit type Snorecard reads — sleep-stage analysis.
@@ -60,14 +68,25 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
             throw HealthKitSleepError.unsupported
         }
         let type = HKCategoryType(.sleepAnalysis)
+        // Use `.strictEndDate` so a sample whose start is before our
+        // window but whose end falls inside is still included.
+        // `.strictStartDate` was excluding overnight sessions whose
+        // first sample timestamp lands a hair before the queryStart
+        // padding — combine both with no strict flag (default
+        // behaviour) so any sample that intersects the range is
+        // returned. The bucketing pass clusters them correctly
+        // afterwards.
         let predicate = HKQuery.predicateForSamples(
             withStart: start,
             end: end,
-            options: .strictStartDate
+            options: []
         )
         let sort = NSSortDescriptor(
             key: HKSampleSortIdentifierStartDate,
             ascending: true
+        )
+        healthKitLog.info(
+            "fetchRange query: start=\(start, privacy: .public) end=\(end, privacy: .public)"
         )
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
@@ -77,13 +96,40 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
                 sortDescriptors: [sort]
             ) { _, samples, error in
                 if let error {
+                    healthKitLog.error(
+                        "fetchRange failed: \(String(describing: error), privacy: .public)"
+                    )
                     continuation.resume(
                         throwing: HealthKitSleepError.framework(String(describing: error))
                     )
                     return
                 }
-                let mapped = (samples as? [HKCategorySample] ?? [])
-                    .compactMap(Self.map(_:))
+                let raw = (samples as? [HKCategorySample] ?? [])
+                let rawCount = raw.count
+                let mapped = raw.compactMap(Self.map(_:))
+                let dropped = rawCount - mapped.count
+                let firstStart = mapped.first.map { $0.start.description } ?? "nil"
+                let lastEnd = mapped.last.map { $0.end.description } ?? "nil"
+                // Per-stage histogram so we can tell if HealthKit is
+                // returning only inBed (iPhone scheduled-sleep), only
+                // core (basic watch tracking), or the full set.
+                var hist: [String: Int] = [:]
+                for s in mapped {
+                    hist[s.stage.rawValue, default: 0] += 1
+                }
+                let histStr = hist.sorted { $0.key < $1.key }
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: " ")
+                // Distinct sources so we can tell if multiple writers
+                // (Apple Watch + iPhone Sleep + AutoSleep, etc.) are
+                // contributing, and whether macOS is missing one.
+                let sources = Set(mapped.map(\.sourceBundleID))
+                healthKitLog.info(
+                    "fetchRange returned raw=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
+                )
+                for source in sources {
+                    healthKitLog.info("fetchRange source: \(source, privacy: .public)")
+                }
                 continuation.resume(returning: mapped)
             }
             store.execute(query)

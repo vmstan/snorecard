@@ -104,13 +104,16 @@ public final class HealthKitSleepCoordinator {
             guard let existing = summaryByDate[day.date] else { return true }
             return now.timeIntervalSince(existing.generatedAt) > staleAfter
         }
+        healthKitLog.info(
+            "backfill: card has \(card.days.count) days, \(needsUpdate.count) need update"
+        )
         guard !needsUpdate.isEmpty else { return }
 
         let earliest = card.days.first!.date
         let latest = card.days.last!.date
         // Pad by 24 h on each side so a session that crosses
         // midnight at either edge of the card's date range is still
-        // captured by the strictStartDate predicate.
+        // captured.
         let queryStart = earliest.addingTimeInterval(-24 * 60 * 60)
         let queryEnd = latest.addingTimeInterval(24 * 60 * 60)
 
@@ -124,13 +127,25 @@ public final class HealthKitSleepCoordinator {
                 end: queryEnd
             )
         } catch {
+            healthKitLog.error(
+                "backfill: fetchRange threw — \(String(describing: error), privacy: .public)"
+            )
             return
         }
+        let windows = Self.cpapWindows(for: card)
         let bucketed = NightBucketing.bucketAgainstCPAPDays(
             samples: samples,
-            cpapWindows: Self.cpapWindows(for: card),
+            cpapWindows: windows,
             calendar: calendar
         )
+        healthKitLog.info(
+            "backfill: clustered \(samples.count) samples into \(bucketed.count) day buckets across \(windows.count) CPAP windows"
+        )
+        for (key, bucket) in bucketed.sorted(by: { $0.key < $1.key }) {
+            healthKitLog.info(
+                "backfill bucket: day=\(key, privacy: .public) sampleCount=\(bucket.count)"
+            )
+        }
 
         // Folder lookup once, off the main thread cost is trivial —
         // these are URLs we already have on hand.
