@@ -8,6 +8,7 @@ import SnorecardKit
 /// omits the card so the day grid doesn't carry an empty placeholder.
 /// The Connect / Re-sync entry points live in Settings.
 struct AppleWatchSleepCard: View {
+    @Environment(Library.self) private var library
     let summary: NightlySleepSummary
 
     var body: some View {
@@ -65,7 +66,7 @@ struct AppleWatchSleepCard: View {
                         yStart: .value("Y", 0),
                         yEnd: .value("Y", 1)
                     )
-                    .foregroundStyle(Self.color(for: sample.stage))
+                    .foregroundStyle(color(for: sample.stage))
                 }
             }
             .chartXAxis(.hidden)
@@ -75,21 +76,23 @@ struct AppleWatchSleepCard: View {
         }
     }
 
-    private static func color(for stage: SleepStageSample.Stage) -> Color {
+    private func color(for stage: SleepStageSample.Stage) -> Color {
+        let palette = library.eventColorPalette
         switch stage {
-        case .deep: return .indigo
-        case .core, .asleepUnspecified: return .blue
-        case .rem: return .teal
+        case .deep: return palette.deepSleep
+        case .core, .asleepUnspecified: return palette.coreSleep
+        case .rem: return palette.remSleep
         case .awake: return .orange
         case .inBed: return .gray
         }
     }
 
     private func stageLegend(for summary: NightlySleepSummary) -> some View {
-        HStack(spacing: 12) {
-            legendItem(color: .indigo, label: "Deep", value: formatDuration(summary.deepSeconds))
-            legendItem(color: .blue, label: "Core", value: formatDuration(summary.coreSeconds))
-            legendItem(color: .teal, label: "REM", value: formatDuration(summary.remSeconds))
+        let palette = library.eventColorPalette
+        return HStack(spacing: 12) {
+            legendItem(color: palette.deepSleep, label: "Deep", value: formatDuration(summary.deepSeconds))
+            legendItem(color: palette.coreSleep, label: "Core", value: formatDuration(summary.coreSeconds))
+            legendItem(color: palette.remSleep, label: "REM", value: formatDuration(summary.remSeconds))
         }
         .font(.caption2.monospacedDigit())
         .foregroundStyle(.secondary)

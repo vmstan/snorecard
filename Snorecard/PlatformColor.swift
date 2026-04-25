@@ -186,4 +186,41 @@ extension EventColorPalette {
         case .oscar:  return Color(red: 1.000, green: 0.200, blue: 0.100)
         }
     }
+
+    // MARK: - Apple Watch sleep stages
+    //
+    // Each theme picks one hue family for the sleep-stage trio so
+    // Deep, Core, and REM read as variants of the same colour
+    // rather than three unrelated chips. Deep is the anchor (the
+    // most saturated / darkest); Core sits one step lighter; REM
+    // sits one step lighter still. Awake doesn't have a slot —
+    // the timeline filters it out, and the legend below the chart
+    // never lists it.
+
+    /// Deep-sleep anchor colour for this palette.
+    var deepSleep: Color {
+        switch self {
+        case .topher: return Color(red: 0.282, green: 0.310, blue: 0.659)
+        case .nick:   return Color(red: 0.471, green: 0.443, blue: 0.690)
+        case .oscar:  return Color(red: 0.220, green: 0.090, blue: 0.694)
+        }
+    }
+
+    /// Core-sleep colour — the same hue as `deepSleep` lightened.
+    var coreSleep: Color {
+        switch self {
+        case .topher: return Color(red: 0.443, green: 0.502, blue: 0.776)
+        case .nick:   return Color(red: 0.671, green: 0.643, blue: 0.835)
+        case .oscar:  return Color(red: 0.420, green: 0.290, blue: 0.831)
+        }
+    }
+
+    /// REM-sleep colour — `deepSleep` lightened one step further.
+    var remSleep: Color {
+        switch self {
+        case .topher: return Color(red: 0.604, green: 0.694, blue: 0.886)
+        case .nick:   return Color(red: 0.831, green: 0.816, blue: 0.945)
+        case .oscar:  return Color(red: 0.624, green: 0.541, blue: 0.910)
+        }
+    }
 }

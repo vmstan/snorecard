@@ -768,9 +768,9 @@ struct TrendsView: View {
                 .foregroundStyle(by: .value("Stage", point.stage))
             }
             .chartForegroundStyleScale([
-                "Deep": Color.indigo,
-                "Core": Color.blue,
-                "REM": Color.teal
+                "Deep": library.eventColorPalette.deepSleep,
+                "Core": library.eventColorPalette.coreSleep,
+                "REM": library.eventColorPalette.remSleep
             ])
             .chartYAxis {
                 AxisMarks(position: .leading) { value in

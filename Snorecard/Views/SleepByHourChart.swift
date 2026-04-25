@@ -184,16 +184,16 @@ struct SleepByHourChart: View {
                     }
                 }
                 .chartForegroundStyleScale([
-                    "Deep": Color.indigo,
-                    "Core": Color.blue,
-                    "REM": Color.teal,
+                    "Deep": library.eventColorPalette.deepSleep,
+                    "Core": library.eventColorPalette.coreSleep,
+                    "REM": library.eventColorPalette.remSleep,
                     deviceLabel: Color.timelineSessionFill
                 ])
                 .chartLegend(position: .bottom, alignment: .leading) {
                     HStack(spacing: 12) {
-                        legendDot(color: .indigo, label: "Deep")
-                        legendDot(color: .blue, label: "Core")
-                        legendDot(color: .teal, label: "REM")
+                        legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
+                        legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
+                        legendDot(color: library.eventColorPalette.remSleep, label: "REM")
                         legendLine(color: .timelineSessionFill, label: deviceLabel)
                     }
                     .font(.caption2)
