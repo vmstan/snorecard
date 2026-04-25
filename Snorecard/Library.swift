@@ -1017,12 +1017,14 @@ final class Library {
             from: allStats
         )
         let note = DailyNotesCache.load(for: folder)
+        let sleepSummary = healthSleep.summaryByDate[day.date]
         let input = IntelligenceInputBuilder.nightSummary(
             stats: stats,
             baseline: baseline,
             userNote: note?.text,
             subjectiveScore: note?.subjectiveScore,
-            userTags: note?.effectiveTags ?? []
+            userTags: note?.effectiveTags ?? [],
+            sleepSummary: sleepSummary
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadNightSummary(
@@ -1058,13 +1060,20 @@ final class Library {
         guard intelligence.isReady else { return nil }
         guard let folder = card?.rootURL else { return nil }
         guard !stats.isEmpty else { return nil }
+        // Apple Watch sleep summaries that fall inside the same
+        // range — gives the narrative access to deep/core/REM
+        // averages alongside the CPAP aggregates.
+        let sleepSummaries = healthSleep.summaryByDate.values
+            .filter { $0.nightDate >= rangeStart && $0.nightDate <= rangeEnd }
+            .sorted { $0.nightDate < $1.nightDate }
         let input = IntelligenceInputBuilder.trendsNarrative(
             stats: stats,
             rangeStart: rangeStart,
             rangeEnd: rangeEnd,
             complianceTargetHours: complianceTarget(
                 for: card?.identification?.serialNumber
-            )
+            ),
+            sleepSummaries: sleepSummaries
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsNarrative(
@@ -1090,20 +1099,36 @@ final class Library {
 
     /// Explain a single metric for the selected day. `trailing`
     /// should be the recent window the caller has already filtered
-    /// (typically the last 14 days with usage).
+    /// (typically the last 14 days with usage). Sleep-stage metrics
+    /// pull their value from the watch summary instead of stats —
+    /// the caller passes those in via `sleepSummary` /
+    /// `trailingSleepSummaries`.
     func explainMetric(
         _ metric: ExplainableMetric,
         for day: ResMedDay,
-        trailing: [DailyStatistics]
+        trailing: [DailyStatistics],
+        sleepSummary: NightlySleepSummary? = nil,
+        trailingSleepSummaries: [NightlySleepSummary] = []
     ) async -> MetricExplainOutput? {
         guard intelligence.isReady else { return nil }
         guard let folder = day.files.first?.url.deletingLastPathComponent(),
               let stats = day.stats else { return nil }
-        guard let input = IntelligenceInputBuilder.metricExplain(
-            metric: metric,
-            stats: stats,
-            trailing: trailing
-        ) else { return nil }
+        let input: MetricExplainInput?
+        if metric.isSleepStage {
+            guard let sleepSummary else { return nil }
+            input = IntelligenceInputBuilder.metricExplain(
+                metric: metric,
+                summary: sleepSummary,
+                trailingSummaries: trailingSleepSummaries
+            )
+        } else {
+            input = IntelligenceInputBuilder.metricExplain(
+                metric: metric,
+                stats: stats,
+                trailing: trailing
+            )
+        }
+        guard let input else { return nil }
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadMetricExplain(
             for: folder,
@@ -1193,10 +1218,21 @@ final class Library {
             let trailing = card.days
                 .compactMap(\.stats)
                 .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
+            // Sleep-stage explanations need the watch summary for
+            // this night plus the trailing 14 days of summaries
+            // for the recent-mean anchor. Both are pulled from the
+            // coordinator's already-hydrated map; an empty list is
+            // fine for non-sleep metrics.
+            let sleepSummary = healthSleep.summaryByDate[day.date]
+            let trailingSleepSummaries = healthSleep.summaryByDate.values
+                .filter { $0.nightDate >= windowStart && $0.nightDate < day.date }
+                .sorted { $0.nightDate < $1.nightDate }
             return await explainMetric(
                 request.metric,
                 for: day,
-                trailing: trailing
+                trailing: trailing,
+                sleepSummary: sleepSummary,
+                trailingSleepSummaries: trailingSleepSummaries
             )
         case .trends(let averageValue, let rangeStart, let rangeEnd, let sampleSize):
             return await explainTrendsMetric(

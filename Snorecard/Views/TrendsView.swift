@@ -406,19 +406,31 @@ struct TrendsView: View {
             // read at the same level as Compliance / Usage / Time
             // in Apnea. Both platforms: the data comes from the
             // sidecars iCloud Drive syncs, not from a HealthKit
-            // query (which only runs on iOS).
+            // query (which only runs on iOS). Tap-to-explain wiring
+            // routes through the same `explainTap` helper as every
+            // other Trends card.
             if let deepPct = avgDeepPercent {
                 card(
                     "Deep (AVG)",
                     value: String(format: "%.0f%%", deepPct),
-                    subtitle: "of asleep time"
+                    subtitle: "of asleep time",
+                    explain: TrendsExplainContext(
+                        metric: .deepSleepPercent,
+                        displayValue: String(format: "%.0f%%", deepPct),
+                        averageValue: deepPct
+                    )
                 )
             }
             if let remPct = avgRemPercent {
                 card(
                     "REM (AVG)",
                     value: String(format: "%.0f%%", remPct),
-                    subtitle: "of asleep time"
+                    subtitle: "of asleep time",
+                    explain: TrendsExplainContext(
+                        metric: .remSleepPercent,
+                        displayValue: String(format: "%.0f%%", remPct),
+                        averageValue: remPct
+                    )
                 )
             }
             // IPAP gets a separate card only when the range's
@@ -639,6 +651,8 @@ struct TrendsView: View {
         case .compliance:       return "Compliance"
         case .daysWithData:     return "Days with Data"
         case .sessionsPerNight: return "Sessions / Night (AVG)"
+        case .deepSleepPercent: return "Deep Sleep (AVG)"
+        case .remSleepPercent:  return "REM Sleep (AVG)"
         }
     }
 

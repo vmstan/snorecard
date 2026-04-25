@@ -297,12 +297,14 @@ struct DayDetailView: View {
                         StatCard(
                             label: "Deep",
                             value: String(format: "%.0f%%", deepPct),
-                            subtitle: "of asleep time"
+                            subtitle: "of asleep time",
+                            onTap: explainTap(.deepSleepPercent)
                         )
                         StatCard(
                             label: "REM",
                             value: String(format: "%.0f%%", remPct),
-                            subtitle: "of asleep time"
+                            subtitle: "of asleep time",
+                            onTap: explainTap(.remSleepPercent)
                         )
                     }
                     // IPAP gets its own card only when the device
@@ -594,6 +596,8 @@ struct DayDetailView: View {
         case .usage:            return "Usage"
         case .timeInApnea:      return "Time in Apnea"
         case .flowLimit:        return "Flow Limit (95%)"
+        case .deepSleepPercent: return "Deep Sleep"
+        case .remSleepPercent:  return "REM Sleep"
         // Trends-only metrics fall back to their enum label —
         // the daily view never opens the sheet for these, but
         // the switch has to be exhaustive.
@@ -635,6 +639,14 @@ struct DayDetailView: View {
             return String(format: "%.2f%% of usage", pct)
         case .flowLimit:
             return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
+        case .deepSleepPercent:
+            guard let sleep = library.healthSleep.summaryByDate[day.date],
+                  sleep.timeAsleep > 0 else { return "—" }
+            return String(format: "%.0f%%", sleep.fractionAsleep(in: .deep) * 100)
+        case .remSleepPercent:
+            guard let sleep = library.healthSleep.summaryByDate[day.date],
+                  sleep.timeAsleep > 0 else { return "—" }
+            return String(format: "%.0f%%", sleep.fractionAsleep(in: .rem) * 100)
         // Trends-only metrics have no per-day value — the sheet
         // path on DayDetailView never hits these cases, but
         // exhaustive switching still requires them.

@@ -29,6 +29,31 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
     /// present. Rendered as a comma-separated line so the model
     /// treats them as context, not fields to echo verbatim.
     public let userTags: [String]
+    /// Apple Watch sleep-stage breakdown for the night, when a
+    /// summary exists. `nil` when the watch wasn't worn or when
+    /// HealthKit didn't return data for the night. The narrative
+    /// only mentions sleep architecture when this is non-nil so
+    /// the model never invents stage data.
+    public let sleepStages: SleepStages?
+
+    public struct SleepStages: Codable, Hashable, Sendable {
+        public let totalAsleepHours: Double  // 1 dp
+        public let deepPercent: Double       // integer percent
+        public let corePercent: Double       // integer percent
+        public let remPercent: Double        // integer percent
+
+        public init(
+            totalAsleepHours: Double,
+            deepPercent: Double,
+            corePercent: Double,
+            remPercent: Double
+        ) {
+            self.totalAsleepHours = totalAsleepHours
+            self.deepPercent = deepPercent
+            self.corePercent = corePercent
+            self.remPercent = remPercent
+        }
+    }
 
     public struct BaselineDiff: Codable, Hashable, Sendable {
         public let ahiDelta: Double        // 1 dp, signed
@@ -63,7 +88,8 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
         baselineDiff: BaselineDiff?,
         userNote: String?,
         subjectiveScore: Int? = nil,
-        userTags: [String] = []
+        userTags: [String] = [],
+        sleepStages: SleepStages? = nil
     ) {
         self.date = date
         self.usageHours = usageHours
@@ -79,6 +105,7 @@ public struct NightSummaryInput: Codable, Hashable, Sendable {
         self.userNote = userNote
         self.subjectiveScore = subjectiveScore
         self.userTags = userTags
+        self.sleepStages = sleepStages
     }
 }
 
@@ -126,6 +153,12 @@ extension NightSummaryInput {
         }
         if let tv = tidalVolumeMedianML {
             lines.append("Tidal volume (median): \(tv) mL")
+        }
+        if let stages = sleepStages {
+            lines.append("Apple Watch total sleep: \(formatOneDp(stages.totalAsleepHours)) hours")
+            lines.append("Apple Watch deep sleep: \(Int(stages.deepPercent.rounded()))% of asleep time")
+            lines.append("Apple Watch core sleep: \(Int(stages.corePercent.rounded()))% of asleep time")
+            lines.append("Apple Watch REM sleep: \(Int(stages.remPercent.rounded()))% of asleep time")
         }
 
         var body = lines.map { "- \($0)" }.joined(separator: "\n")

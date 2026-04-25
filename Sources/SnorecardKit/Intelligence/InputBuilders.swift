@@ -9,15 +9,17 @@ public enum IntelligenceInputBuilder {
     // MARK: - Night summary
 
     /// Build a `NightSummaryInput` from the single night's stats, an
-    /// optional trailing baseline, and an optional user note. Values
-    /// are rounded to the precision declared on `NightSummaryInput`
-    /// so float drift doesn't invalidate cached entries.
+    /// optional trailing baseline, an optional user note, and an
+    /// optional Apple Watch sleep summary. Values are rounded to
+    /// the precision declared on `NightSummaryInput` so float drift
+    /// doesn't invalidate cached entries.
     public static func nightSummary(
         stats: DailyStatistics,
         baseline: Baseline?,
         userNote: String?,
         subjectiveScore: Int? = nil,
-        userTags: [NoteTag] = []
+        userTags: [NoteTag] = [],
+        sleepSummary: NightlySleepSummary? = nil
     ) -> NightSummaryInput {
         let usageHours = PromptRounding.round1(stats.usageHours)
         let ahi = PromptRounding.round1(stats.ahi)
@@ -89,6 +91,20 @@ public enum IntelligenceInputBuilder {
         let clampedScore: Int? = subjectiveScore.map { min(max($0, 1), 5) }
         let tagLabels = userTags.map(\.displayLabel)
 
+        // Sleep-stage summary, only when the watch actually has a
+        // night to report on (otherwise the model sees no stage
+        // line and won't be able to invent one).
+        let stagesInput: NightSummaryInput.SleepStages? = {
+            guard let summary = sleepSummary,
+                  summary.timeAsleep > 0 else { return nil }
+            return NightSummaryInput.SleepStages(
+                totalAsleepHours: PromptRounding.round1(summary.timeAsleep / 3600),
+                deepPercent: PromptRounding.round1(summary.fractionAsleep(in: .deep) * 100),
+                corePercent: PromptRounding.round1(summary.fractionAsleep(in: .core) * 100),
+                remPercent: PromptRounding.round1(summary.fractionAsleep(in: .rem) * 100)
+            )
+        }()
+
         return NightSummaryInput(
             date: stats.date,
             usageHours: usageHours,
@@ -103,7 +119,8 @@ public enum IntelligenceInputBuilder {
             baselineDiff: diff,
             userNote: trimmedNote,
             subjectiveScore: clampedScore,
-            userTags: tagLabels
+            userTags: tagLabels,
+            sleepStages: stagesInput
         )
     }
 
@@ -176,7 +193,8 @@ public enum IntelligenceInputBuilder {
         stats: [DailyStatistics],
         rangeStart: Date,
         rangeEnd: Date,
-        complianceTargetHours: Double = 4
+        complianceTargetHours: Double = 4,
+        sleepSummaries: [NightlySleepSummary] = []
     ) -> TrendsNarrativeInput {
         let days = stats.filter(\.hasUsage)
         let sample = days.count
@@ -211,6 +229,26 @@ public enum IntelligenceInputBuilder {
 
         let trends = trendBuckets(days: days)
 
+        // Apple Watch sleep-stage averages — only computed from
+        // nights with non-zero asleep time (otherwise the
+        // fractions are undefined).
+        let scoredStages = sleepSummaries.filter { $0.timeAsleep > 0 }
+        let stagesInput: TrendsNarrativeInput.SleepStages? = {
+            guard !scoredStages.isEmpty else { return nil }
+            let count = Double(scoredStages.count)
+            let totalAsleepHours = scoredStages.reduce(0) { $0 + $1.timeAsleep / 3600 } / count
+            let deepPct = scoredStages.reduce(0) { $0 + $1.fractionAsleep(in: .deep) } / count * 100
+            let corePct = scoredStages.reduce(0) { $0 + $1.fractionAsleep(in: .core) } / count * 100
+            let remPct = scoredStages.reduce(0) { $0 + $1.fractionAsleep(in: .rem) } / count * 100
+            return TrendsNarrativeInput.SleepStages(
+                nightsWithStages: scoredStages.count,
+                avgTotalAsleepHours: PromptRounding.round1(totalAsleepHours),
+                avgDeepPercent: PromptRounding.round1(deepPct),
+                avgCorePercent: PromptRounding.round1(corePct),
+                avgRemPercent: PromptRounding.round1(remPct)
+            )
+        }()
+
         return TrendsNarrativeInput(
             rangeStart: rangeStart,
             rangeEnd: rangeEnd,
@@ -223,7 +261,8 @@ public enum IntelligenceInputBuilder {
             avgPressure95: avgP95.map(PromptRounding.round1),
             avgLeak95LPerMin: avgLeak.map(PromptRounding.toInt),
             avgLargeLeakPercent: avgLargePct.map(PromptRounding.round1),
-            trends: trends
+            trends: trends,
+            sleepStages: stagesInput
         )
     }
 
@@ -404,6 +443,18 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 3.0,
                 description: "Each session is one continuous stretch of mask-on time. Averaging close to 1 means you typically sleep straight through; higher averages indicate the mask comes off and goes back on (bathroom trips, waking up, adjusting the fit). Not inherently good or bad; it's contextual information."
             )
+        case .deepSleepPercent:
+            return MetricExplainInput.Norms(
+                goodMax: nil,
+                elevatedMax: nil,
+                description: "Percent of total asleep time spent in deep (slow-wave) sleep, as detected by Apple Watch. Adult deep sleep typically lands between 13% and 23% of total sleep, with a usual decline through middle age. Below 10% is short of the typical band; above ~25% is unusual but not inherently a problem if total sleep duration is normal."
+            )
+        case .remSleepPercent:
+            return MetricExplainInput.Norms(
+                goodMax: nil,
+                elevatedMax: nil,
+                description: "Percent of total asleep time spent in REM sleep, as detected by Apple Watch. Adult REM typically falls between 20% and 25% of total sleep, with 18–30% the broader within-normal-limits envelope. Values outside that band can reflect short sleep, sleep fragmentation, alcohol or medication effects, or measurement noise from the watch itself."
+            )
         }
     }
 
@@ -466,7 +517,54 @@ public enum IntelligenceInputBuilder {
         case .compliance:       return nil
         case .daysWithData:     return nil
         case .sessionsPerNight: return nil
+        // Sleep-stage metrics live on `NightlySleepSummary`, not
+        // `DailyStatistics`. Return nil here; callers detect the
+        // metric kind via `ExplainableMetric.isSleepStage` and use
+        // the summary-aware overload below.
+        case .deepSleepPercent: return nil
+        case .remSleepPercent:  return nil
         }
+    }
+
+    /// Sleep-summary-keyed companion to `rawValue(of:in:)`. Only
+    /// returns a value for sleep-stage metrics; the CPAP family
+    /// always returns nil here so a caller that hands in a summary
+    /// for a non-sleep metric falls through to the no-value path
+    /// instead of silently producing a wrong number.
+    static func rawValue(of metric: ExplainableMetric, in summary: NightlySleepSummary) -> Double? {
+        guard summary.timeAsleep > 0 else { return nil }
+        switch metric {
+        case .deepSleepPercent: return summary.fractionAsleep(in: .deep) * 100
+        case .remSleepPercent:  return summary.fractionAsleep(in: .rem) * 100
+        default:                return nil
+        }
+    }
+
+    /// Sleep-stage variant of `metricExplain` — sources the value
+    /// from the Apple Watch summary instead of `DailyStatistics`,
+    /// and uses the trailing list of summaries for the recent-mean
+    /// anchor. Returns nil for non-sleep metrics; the CPAP family
+    /// has its own builder above.
+    public static func metricExplain(
+        metric: ExplainableMetric,
+        summary: NightlySleepSummary,
+        trailingSummaries: [NightlySleepSummary]
+    ) -> MetricExplainInput? {
+        guard metric.isSleepStage else { return nil }
+        guard let value = rawValue(of: metric, in: summary) else { return nil }
+        let trailingValues = trailingSummaries.compactMap { rawValue(of: metric, in: $0) }
+        let mean: Double? = trailingValues.isEmpty
+            ? nil
+            : trailingValues.reduce(0, +) / Double(trailingValues.count)
+        let p90: Double? = percentile(trailingValues, 90)
+        return MetricExplainInput(
+            metric: metric,
+            currentValue: PromptRounding.round2(value),
+            unitLabel: unitLabel(for: metric),
+            norms: norms(for: metric),
+            recent14DayMean: mean.map(PromptRounding.round2),
+            recent14DayP90: p90.map(PromptRounding.round2)
+        )
     }
 
     /// Build a `MetricExplainInput` for a Trends-style card,
@@ -521,6 +619,8 @@ public enum IntelligenceInputBuilder {
         case .compliance:       return "percent of nights"
         case .daysWithData:     return "nights"
         case .sessionsPerNight: return "sessions"
+        case .deepSleepPercent,
+             .remSleepPercent:  return "percent of asleep time"
         }
     }
 

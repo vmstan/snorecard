@@ -27,6 +27,31 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
     public let avgLeak95LPerMin: Int?
     public let avgLargeLeakPercent: Double? // 1 dp
     public let trends: Trends
+    /// Apple Watch sleep-stage averages over the same range. `nil`
+    /// when no nights in the range had a watch summary.
+    public let sleepStages: SleepStages?
+
+    public struct SleepStages: Codable, Hashable, Sendable {
+        public let nightsWithStages: Int
+        public let avgTotalAsleepHours: Double  // 1 dp
+        public let avgDeepPercent: Double       // 1 dp
+        public let avgCorePercent: Double       // 1 dp
+        public let avgRemPercent: Double        // 1 dp
+
+        public init(
+            nightsWithStages: Int,
+            avgTotalAsleepHours: Double,
+            avgDeepPercent: Double,
+            avgCorePercent: Double,
+            avgRemPercent: Double
+        ) {
+            self.nightsWithStages = nightsWithStages
+            self.avgTotalAsleepHours = avgTotalAsleepHours
+            self.avgDeepPercent = avgDeepPercent
+            self.avgCorePercent = avgCorePercent
+            self.avgRemPercent = avgRemPercent
+        }
+    }
 
     public struct Trends: Codable, Hashable, Sendable {
         public let ahi: TrendBucket
@@ -59,7 +84,8 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
         avgPressure95: Double?,
         avgLeak95LPerMin: Int?,
         avgLargeLeakPercent: Double?,
-        trends: Trends
+        trends: Trends,
+        sleepStages: SleepStages? = nil
     ) {
         self.rangeStart = rangeStart
         self.rangeEnd = rangeEnd
@@ -73,6 +99,7 @@ public struct TrendsNarrativeInput: Codable, Hashable, Sendable {
         self.avgLeak95LPerMin = avgLeak95LPerMin
         self.avgLargeLeakPercent = avgLargeLeakPercent
         self.trends = trends
+        self.sleepStages = sleepStages
     }
 }
 
@@ -99,6 +126,13 @@ extension TrendsNarrativeInput {
         }
         if let large = avgLargeLeakPercent {
             lines.append("Average time above large-leak threshold: \(Self.oneDp(large))% of usage")
+        }
+        if let stages = sleepStages {
+            lines.append("Apple Watch nights with stage data: \(stages.nightsWithStages)")
+            lines.append("Apple Watch average total sleep: \(Self.oneDp(stages.avgTotalAsleepHours)) hours per night")
+            lines.append("Apple Watch average deep sleep: \(Self.oneDp(stages.avgDeepPercent))% of asleep time")
+            lines.append("Apple Watch average core sleep: \(Self.oneDp(stages.avgCorePercent))% of asleep time")
+            lines.append("Apple Watch average REM sleep: \(Self.oneDp(stages.avgRemPercent))% of asleep time")
         }
 
         var body = lines.map { "- \($0)" }.joined(separator: "\n")

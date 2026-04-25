@@ -17,6 +17,10 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case usage
     case timeInApnea
     case flowLimit
+    // Apple Watch sleep-stage metrics, sourced from
+    // `NightlySleepSummary` rather than `DailyStatistics`.
+    case deepSleepPercent
+    case remSleepPercent
     // Trends-only metrics. No daily equivalents exist for
     // these; they describe the shape of a range as a whole.
     case compliance
@@ -24,6 +28,17 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case sessionsPerNight
 
     public var id: String { rawValue }
+
+    /// `true` when this metric's value comes from the watch's
+    /// `NightlySleepSummary` instead of the CPAP `DailyStatistics`.
+    /// Lets the Library and InputBuilders branch the data lookup
+    /// without scattering switch statements.
+    public var isSleepStage: Bool {
+        switch self {
+        case .deepSleepPercent, .remSleepPercent: return true
+        default: return false
+        }
+    }
 }
 
 /// Inputs for `explainMetric`. `norms` is always supplied by Swift —
@@ -179,6 +194,19 @@ extension MetricExplainInput {
             if v <= 600 { return "inside the typical adult range" }
             if v <= 700 { return "just above the typical adult range" }
             return "well above the typical adult range"
+        case .deepSleepPercent:
+            // Adult deep-sleep references vary; 13–23 % of total
+            // sleep is the most commonly cited typical band, with
+            // declines pronounced after middle age.
+            if v < 10 { return "below the typical adult range" }
+            if v <= 23 { return "inside the typical adult range" }
+            return "above the typical adult range"
+        case .remSleepPercent:
+            // Adult REM is typically 20–25 % of total sleep, with
+            // 18–30 % the broader "within normal limits" envelope.
+            if v < 18 { return "below the typical adult range" }
+            if v <= 30 { return "inside the typical adult range" }
+            return "above the typical adult range"
         case .compliance:
             if v >= 70 { return "strong adherence" }
             if v >= 50 { return "mixed adherence" }
@@ -210,6 +238,8 @@ extension MetricExplainInput {
         case .flowLimit:        noiseFloor = 0.02
         case .snore95:          noiseFloor = 0.3
         case .tidalVolume:      noiseFloor = 25
+        case .deepSleepPercent: noiseFloor = 2
+        case .remSleepPercent:  noiseFloor = 2
         case .epap95, .ipap95, .maskPressureMedian:
             noiseFloor = 0.3
         case .compliance, .daysWithData, .sessionsPerNight:
@@ -240,6 +270,8 @@ extension MetricExplainInput {
         case .daysWithData:     return String(format: "%.0f", value)
         case .sessionsPerNight: return String(format: "%.1f", value)
         case .compliance:       return String(format: "%.0f", value)
+        case .deepSleepPercent,
+             .remSleepPercent:  return String(format: "%.0f", value)
         default:                return String(format: "%.1f", value)
         }
     }
@@ -266,6 +298,8 @@ extension ExplainableMetric {
         case .compliance:       return "Compliance (percent of nights meeting the user's per-night usage target)"
         case .daysWithData:     return "Days with recorded data"
         case .sessionsPerNight: return "Sessions per night"
+        case .deepSleepPercent: return "Deep sleep (percent of asleep time, from Apple Watch)"
+        case .remSleepPercent:  return "REM sleep (percent of asleep time, from Apple Watch)"
         }
     }
 }
