@@ -401,18 +401,17 @@ struct DayDetailView: View {
                     }
                 }
 
-                // Apple Watch sleep card. Always shown on a night
-                // with usage so the "Connect" CTA gets a surface
-                // when the user hasn't opted in yet — collapsing
-                // it conditionally would hide the entry point.
-                // iOS only — macOS HealthKit sleep sync is
-                // unreliable in practice, so the feature is hidden
-                // entirely on Mac rather than offering a CTA that
-                // produces partial data.
+                // Sleep Stages card. Only renders when a
+                // `NightlySleepSummary` exists for this night —
+                // skipping the empty-state placeholder keeps the
+                // day grid clean for nights where the watch wasn't
+                // worn or HealthKit didn't have the data. The
+                // Connect / Re-sync entry points live in Settings.
+                // iOS only.
                 #if os(iOS)
-                AppleWatchSleepCard(
-                    summary: library.healthSleep.summaryByDate[day.date]
-                )
+                if let sleep = library.healthSleep.summaryByDate[day.date] {
+                    AppleWatchSleepCard(summary: sleep)
+                }
                 #endif
 
                 // Per-hour breakdowns sit below the stat grid so
