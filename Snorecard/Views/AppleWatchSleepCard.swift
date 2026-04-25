@@ -47,12 +47,14 @@ struct AppleWatchSleepCard: View {
     /// `RectangleMark` per `SleepStageSample`, all stacked on the
     /// same row and color-coded by stage. The time axis along the
     /// bottom carries the chronology so the user reads stage
-    /// transitions left → right. `inBed` records are filtered out
-    /// so Apple's overlapping envelope rows don't paint over the
-    /// real stages.
+    /// transitions left → right. `inBed` envelope records are
+    /// filtered out (they'd paint over the real stages); `awake`
+    /// records are also filtered so the strip only shows time the
+    /// user was actually asleep — gaps between rectangles read as
+    /// the awake intervals without needing a colour for them.
     private func hypnogram(for summary: NightlySleepSummary) -> some View {
         let stages = summary.samples
-            .filter { $0.stage != .inBed }
+            .filter { $0.stage != .inBed && $0.stage != .awake }
             .sorted { $0.start < $1.start }
         guard !stages.isEmpty else {
             return AnyView(
@@ -134,9 +136,6 @@ struct AppleWatchSleepCard: View {
             legendItem(color: .indigo, label: "Deep", value: formatDuration(summary.deepSeconds))
             legendItem(color: .blue, label: "Core", value: formatDuration(summary.coreSeconds))
             legendItem(color: .teal, label: "REM", value: formatDuration(summary.remSeconds))
-            if summary.awakeSeconds > 0 {
-                legendItem(color: .orange, label: "Awake", value: formatDuration(summary.awakeSeconds))
-            }
         }
         .font(.caption2.monospacedDigit())
         .foregroundStyle(.secondary)
