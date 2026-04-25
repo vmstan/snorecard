@@ -69,7 +69,7 @@ If your device doesn't support Apple Intelligence, or you've turned it off, thes
 
 Snorecard is a viewer — it doesn't send your data anywhere except your own iCloud account, which is what keeps your nights synced between your Mac and iPhone. There are no third-party accounts, no tracking, and no analytics. The Apple Intelligence narratives run on Apple's on-device Foundation Models; your therapy data is never sent to a server.
 
-Apple Watch sleep data is read from your iPhone's local Health store and only on your iPhone — never on your Mac. The summaries are written to your own iCloud Drive container alongside the rest of your CPAP data, and your Mac displays whichever summaries iCloud has already synced. Snorecard never writes anything to Health.
+Apple Watch sleep data is imported from your iPhone's Health store and saved alongside the rest of your CPAP data in your own iCloud Drive container. Your Mac picks the summaries up automatically once iCloud has synced them, so the timeline tint and Trends averages are available on both platforms — import once on the iPhone, view anywhere. Snorecard reads sleep samples from Health but never writes anything back.
 
 ## A note on accuracy
 
