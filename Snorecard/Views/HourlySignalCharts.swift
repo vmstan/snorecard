@@ -191,14 +191,15 @@ struct LeakHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                // Per-signal hourly charts share the AHI chart's
+                // hour grid right above them, so the gridlines
+                // line up visually without the labels — keeping
+                // labels here just doubles the visual noise on a
+                // stacked column. Grid + tick stay so the bars
+                // still read as bucketed.
+                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label).font(.caption2.monospacedDigit())
-                        }
-                    }
                 }
             }
             .chartOverlay { proxy in
@@ -261,14 +262,15 @@ struct FlowLimitHourlyChart: View {
                 )
             }
             .chartXAxis {
-                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                // Per-signal hourly charts share the AHI chart's
+                // hour grid right above them, so the gridlines
+                // line up visually without the labels — keeping
+                // labels here just doubles the visual noise on a
+                // stacked column. Grid + tick stay so the bars
+                // still read as bucketed.
+                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label).font(.caption2.monospacedDigit())
-                        }
-                    }
                 }
             }
         }
@@ -337,14 +339,15 @@ struct TidalVolumeHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                // Per-signal hourly charts share the AHI chart's
+                // hour grid right above them, so the gridlines
+                // line up visually without the labels — keeping
+                // labels here just doubles the visual noise on a
+                // stacked column. Grid + tick stay so the bars
+                // still read as bucketed.
+                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label).font(.caption2.monospacedDigit())
-                        }
-                    }
                 }
             }
         }
@@ -413,14 +416,15 @@ struct PressureHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                // Per-signal hourly charts share the AHI chart's
+                // hour grid right above them, so the gridlines
+                // line up visually without the labels — keeping
+                // labels here just doubles the visual noise on a
+                // stacked column. Grid + tick stay so the bars
+                // still read as bucketed.
+                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label).font(.caption2.monospacedDigit())
-                        }
-                    }
                 }
             }
         }
