@@ -81,9 +81,17 @@ public final class HealthKitSleepCoordinator {
         }
         summaryByDate = loaded
 
-        // 2. Backfill — only if the user has opted in and the system
-        // has had a chance to respond to the prompt.
-        guard isEnabled, authState == .requested else { return }
+        guard isEnabled else { return }
+        // `authState` is in-memory only, so a relaunch always starts
+        // at `.notDetermined` even when the user previously granted
+        // access. Re-issue the request so backfill can run on launch
+        // without forcing a manual "Re-sync now" tap; HealthKit
+        // returns immediately without re-prompting when permissions
+        // are already in place.
+        if authState == .notDetermined {
+            await requestAuthorization()
+        }
+        guard authState == .requested else { return }
         await backfill(card: card)
     }
 
@@ -118,8 +126,9 @@ public final class HealthKitSleepCoordinator {
         } catch {
             return
         }
-        let bucketed = NightBucketing.bucketByNight(
+        let bucketed = NightBucketing.bucketAgainstCPAPDays(
             samples: samples,
+            cpapWindows: Self.cpapWindows(for: card),
             calendar: calendar
         )
 
@@ -175,8 +184,9 @@ public final class HealthKitSleepCoordinator {
         } catch {
             return
         }
-        let bucketed = NightBucketing.bucketByNight(
+        let bucketed = NightBucketing.bucketAgainstCPAPDays(
             samples: samples,
+            cpapWindows: Self.cpapWindows(for: card),
             calendar: calendar
         )
         for day in recent {
@@ -193,6 +203,41 @@ public final class HealthKitSleepCoordinator {
             if let folder = Self.dayFolderURL(for: day) {
                 SleepStageCache.save(summary, to: folder)
             }
+        }
+    }
+
+    /// Build a `CPAPDayWindow` per ResMed day from filename timestamps
+    /// plus the day's recorded `usageMinutes`. The window is padded
+    /// 30 min on each side so a watch session that started slightly
+    /// before mask-on (or ran past mask-off) still maps cleanly to
+    /// this day. When a day has no parsed file timestamps (rare —
+    /// happens during structure-only iCloud hydration), the day's
+    /// own midnight is used as a stand-in start so the window still
+    /// covers the calendar day.
+    public static func cpapWindows(for card: ResMedSDCard) -> [NightBucketing.CPAPDayWindow] {
+        let pad: TimeInterval = 30 * 60
+        // Default envelope for days where we know the session
+        // started but not how long it ran. 12 h covers any
+        // reasonable single night without bleeding into the
+        // following calendar day's window.
+        let fallbackDuration: TimeInterval = 12 * 60 * 60
+        return card.days.map { day in
+            let start: Date = {
+                if let earliest = day.files.compactMap(\.timestamp).min() {
+                    return earliest
+                }
+                return day.date
+            }()
+            let usageSec = (day.stats?.usageMinutes ?? 0) * 60
+            // Use the bigger of the recorded usage and the fallback —
+            // a long in-bed window with little mask time still wants
+            // to attract that night's watch session.
+            let duration = max(usageSec, fallbackDuration)
+            return NightBucketing.CPAPDayWindow(
+                nightKey: day.date,
+                start: start.addingTimeInterval(-pad),
+                end: start.addingTimeInterval(duration + pad)
+            )
         }
     }
 

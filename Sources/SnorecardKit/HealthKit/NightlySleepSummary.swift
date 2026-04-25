@@ -42,7 +42,11 @@ public struct NightlySleepSummary: Codable, Sendable, Equatable {
     /// shape changes so older sidecars can be invalidated cleanly.
     public let schemaVersion: Int
 
-    public static let currentSchemaVersion = 1
+    /// Bumped from 1 → 2 when the bucketing rule changed from
+    /// "Apple Health wake-up day" to "ResMed recording-start day with
+    /// CPAP-window overlap". Sidecars written under v1 are dropped on
+    /// load so the next attach() rebuilds them with the new rule.
+    public static let currentSchemaVersion = 2
 
     public init(
         nightDate: Date,

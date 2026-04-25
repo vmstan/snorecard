@@ -12,14 +12,17 @@ public enum SleepStageCache {
 
     /// Read the cached summary for a day folder, or `nil` if no
     /// sidecar exists, the file can't be decoded, or its
-    /// `schemaVersion` is from the future. Future-version reads are
-    /// dropped so a build that doesn't understand the payload
-    /// can't surface partial / wrong data.
+    /// `schemaVersion` doesn't match the current build. Strict
+    /// equality (rather than `<=`) is intentional — both stale
+    /// payloads from an older bucketing rule and forward-compat
+    /// payloads from a future build get dropped, forcing the next
+    /// attach() to rebuild against the live data with this build's
+    /// rules.
     public static func load(for dayFolder: URL) -> NightlySleepSummary? {
         let url = dayFolder.appendingPathComponent(filename)
         guard let data = try? Data(contentsOf: url),
               let summary = try? decoder.decode(NightlySleepSummary.self, from: data),
-              summary.schemaVersion <= NightlySleepSummary.currentSchemaVersion
+              summary.schemaVersion == NightlySleepSummary.currentSchemaVersion
         else { return nil }
         return summary
     }
