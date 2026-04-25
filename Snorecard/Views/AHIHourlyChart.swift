@@ -120,6 +120,8 @@ struct AHIHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            legend
         }
         // Card chrome — matches the StatCard treatment so the
         // events-by-hour panel reads as part of the same set as
@@ -129,6 +131,28 @@ struct AHIHourlyChart: View {
             Color.primary.opacity(0.05),
             in: RoundedRectangle(cornerRadius: 12)
         )
+    }
+
+    /// Colour-keyed legend below the x-axis. Uses the clinical
+    /// names ("Obstructive Apnea", "Clear Airway") rather than the
+    /// internal scale keys so the chart label matches what the
+    /// user sees in journal entries and AI narratives. Built as a
+    /// flow layout so it wraps cleanly on iPhone-width plates.
+    private var legend: some View {
+        FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+            legendItem("Obstructive Apnea", color: library.eventColorPalette.obstructive)
+            legendItem("Hypopnea", color: library.eventColorPalette.hypopnea)
+            legendItem("Clear Airway", color: library.eventColorPalette.central)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+
+    private func legendItem(_ label: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
+        }
     }
 
     private static func shortClockLabel(for date: Date) -> String {
