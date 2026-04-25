@@ -55,12 +55,15 @@ public struct NightlySleepSummary: Codable, Sendable, Equatable {
     ///   we now query newest-first with no date predicate and
     ///   filter in Swift.
     /// - v6 → v7: diagnostic-only bump to force a re-fetch on the
-    ///   build that adds recent-sample logging — no behavioural
-    ///   change in summary semantics.
+    ///   build that adds recent-sample logging.
+    /// - v7 → v8: backfill query end was 24 h past the latest CPAP
+    ///   day's midnight, but the matching wake-up samples land in
+    ///   the morning of the day after — pushed to 48 h so the full
+    ///   overnight session is in the queried window.
     /// `SleepStageCache.load` requires equality with this constant,
     /// so older sidecars are dropped on load and rebuilt by the next
     /// attach().
-    public static let currentSchemaVersion = 7
+    public static let currentSchemaVersion = 8
 
     public init(
         nightDate: Date,

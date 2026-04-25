@@ -111,11 +111,19 @@ public final class HealthKitSleepCoordinator {
 
         let earliest = card.days.first!.date
         let latest = card.days.last!.date
-        // Pad by 24 h on each side so a session that crosses
-        // midnight at either edge of the card's date range is still
-        // captured.
+        // Pad on both sides so sleep sessions that span midnight
+        // are captured fully. A `ResMedDay.date` is the recording-
+        // start day at local midnight; the wake-up for that night
+        // can land 30+ hours later (e.g. fell asleep 23:30 → woke
+        // at 07:00 the next morning), so 24 h on the trailing side
+        // is too tight. Use 48 h, and never end before the current
+        // moment so an in-progress query still picks up samples
+        // already written today.
         let queryStart = earliest.addingTimeInterval(-24 * 60 * 60)
-        let queryEnd = latest.addingTimeInterval(24 * 60 * 60)
+        let queryEnd = max(
+            latest.addingTimeInterval(48 * 60 * 60),
+            Date()
+        )
 
         backfillProgress = (done: 0, total: needsUpdate.count)
         defer { backfillProgress = nil }
@@ -187,8 +195,14 @@ public final class HealthKitSleepCoordinator {
         let recent = Array(card.days.suffix(max(1, days)))
         let earliest = recent.first!.date
         let latest = recent.last!.date
+        // Same 48 h trailing pad as `backfill` — wake-up samples
+        // for the latest CPAP day land in the morning AFTER the
+        // recording-start day.
         let queryStart = earliest.addingTimeInterval(-24 * 60 * 60)
-        let queryEnd = latest.addingTimeInterval(24 * 60 * 60)
+        let queryEnd = max(
+            latest.addingTimeInterval(48 * 60 * 60),
+            Date()
+        )
 
         let samples: [SleepStageSample]
         do {
