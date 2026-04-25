@@ -119,9 +119,7 @@ struct AHIHourlyChart: View {
                 )
             }
             .chartXAxis {
-                AxisMarks(
-                    values: pickedHourLabels(buckets.map(\.clockLabel))
-                ) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {

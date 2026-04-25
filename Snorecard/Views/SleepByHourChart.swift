@@ -52,7 +52,15 @@ struct SleepByHourChart: View {
             of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
         ) ?? dayStart
 
-        let lastHour = Int((max(totalDuration, 1) / 3600).rounded(.up)) - 1
+        // `totalDuration` is measured from `dayStart`, which sits
+        // partway through the first hour. The hour grid is anchored
+        // earlier (at the hour boundary at-or-before `dayStart`), so
+        // we widen the span by `anchorOffset` to make sure the last
+        // hour of CPAP usage gets its own bucket instead of being
+        // clipped past the chart edge.
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
         guard lastHour >= 0 else { return [] }
 
         var out: [HourBucket] = []
@@ -203,7 +211,7 @@ struct SleepByHourChart: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
+                    AxisMarks(values: buckets.map(\.clockLabel)) { value in
                         AxisGridLine()
                         AxisTick()
                         AxisValueLabel {

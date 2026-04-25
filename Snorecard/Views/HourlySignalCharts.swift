@@ -99,27 +99,6 @@ private func hourlyBuckets(
     return out
 }
 
-/// Pick up to ~5 labels evenly spaced across the bucket array
-/// while always including the first and last entries. SwiftUI
-/// Charts' default `.automatic(desiredCount:)` on a discrete
-/// (String) x-scale tends to skip edge values, which makes the
-/// leftmost / rightmost columns read as empty even when they
-/// have data. Shared by every hourly chart on the day view.
-func pickedHourLabels(_ all: [String], target: Int = 5) -> [String] {
-    guard all.count > target else { return all }
-    let step = max(1, Int((Double(all.count) / Double(target)).rounded(.up)))
-    var picked: [String] = []
-    var i = 0
-    while i < all.count {
-        picked.append(all[i])
-        i += step
-    }
-    if picked.last != all.last, let last = all.last {
-        picked.append(last)
-    }
-    return picked
-}
-
 private func shortClockLabel(for date: Date) -> String {
     let hour = Calendar.current.component(.hour, from: date)
     switch hour {
@@ -212,7 +191,7 @@ struct LeakHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {
@@ -282,7 +261,7 @@ struct FlowLimitHourlyChart: View {
                 )
             }
             .chartXAxis {
-                AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {
@@ -358,7 +337,7 @@ struct TidalVolumeHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {
@@ -434,7 +413,7 @@ struct PressureHourlyChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: pickedHourLabels(buckets.map(\.clockLabel))) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {

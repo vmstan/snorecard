@@ -80,45 +80,11 @@ struct AppleWatchSleepCard: View {
                     .foregroundStyle(Self.color(for: sample.stage))
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: Self.xAxisDesiredCount)) { value in
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) {
-                            Text(Self.shortClockLabel(for: date))
-                                .font(.caption2.monospacedDigit())
-                        }
-                    }
-                }
-            }
+            .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartYScale(domain: 0...1)
             .frame(height: 36)
         )
-    }
-
-    /// `12a` / `11p` style label — same convention as
-    /// `AHIHourlyChart` so all the day-view charts use the same
-    /// short clock vocabulary, and avoids the long "11:30 PM"
-    /// rendering of `.dateTime.hour().minute()` that crowded the
-    /// axis on iPhone.
-    private static func shortClockLabel(for date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        switch hour {
-        case 0:        return "12a"
-        case 1..<12:   return "\(hour)a"
-        case 12:       return "12p"
-        default:       return "\(hour - 12)p"
-        }
-    }
-
-    /// Fewer marks on iPhone so the labels don't collide. macOS has
-    /// plenty of horizontal room.
-    private static var xAxisDesiredCount: Int {
-        #if os(iOS)
-        return 5
-        #else
-        return 8
-        #endif
     }
 
     private static func color(for stage: SleepStageSample.Stage) -> Color {
