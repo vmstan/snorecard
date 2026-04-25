@@ -1019,26 +1019,19 @@ struct TrendsView: View {
     /// day, 14-day windows show every other day, 30-day windows show
     /// weekly.
     private var xAxisTickDates: [Date] {
+        // Label every day in the range — matches the daily-view
+        // hourly charts where every hour gets its own label
+        // regardless of width. SwiftUI Charts handles layout when
+        // the labels run together; the user explicitly preferred
+        // a complete x-axis to a strided one.
         let cal = Calendar.current
-        let days = cal.dateComponents([.day], from: rangeStart, to: rangeEnd).day ?? 0
-        let stride: Int
-        switch days {
-        case ..<8:  stride = 1
-        case ..<15: stride = 2
-        case ..<22: stride = 3
-        default:    stride = 5
-        }
         var dates: [Date] = []
         var current = cal.startOfDay(for: rangeStart)
         let end = cal.startOfDay(for: rangeEnd)
         while current <= end {
             dates.append(current)
-            guard let next = cal.date(byAdding: .day, value: stride, to: current) else { break }
+            guard let next = cal.date(byAdding: .day, value: 1, to: current) else { break }
             current = next
-        }
-        // Always include the last day in the range for context.
-        if let last = dates.last, last != end {
-            dates.append(end)
         }
         return dates
     }

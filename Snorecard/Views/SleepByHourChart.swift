@@ -189,15 +189,7 @@ struct SleepByHourChart: View {
                     "REM": library.eventColorPalette.remSleep,
                     deviceLabel: Color.timelineSessionFill
                 ])
-                .chartLegend(position: .bottom, alignment: .leading) {
-                    HStack(spacing: 12) {
-                        legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
-                        legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
-                        legendDot(color: library.eventColorPalette.remSleep, label: "REM")
-                        legendLine(color: .timelineSessionFill, label: deviceLabel)
-                    }
-                    .font(.caption2)
-                }
+                .chartLegend(.hidden)
                 .chartXScale(domain: buckets.map(\.clockLabel))
                 .chartYScale(domain: 0...60)
                 .chartYAxis {
@@ -223,6 +215,8 @@ struct SleepByHourChart: View {
                     }
                 }
                 .frame(minHeight: 160)
+
+                legend
             } else {
                 // Defensive — `DayDetailView` already gates on a
                 // non-nil summary, but the chart can render without
@@ -239,6 +233,21 @@ struct SleepByHourChart: View {
             Color.primary.opacity(0.05),
             in: RoundedRectangle(cornerRadius: 12)
         )
+    }
+
+    /// Colour-keyed legend rendered outside the Chart's drawing
+    /// surface so the `chartForegroundStyleScale` can't bleed its
+    /// hues into the labels — the text always reads `.secondary`,
+    /// matching the legend on `AHIHourlyChart`.
+    private var legend: some View {
+        FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+            legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
+            legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
+            legendDot(color: library.eventColorPalette.remSleep, label: "REM")
+            legendLine(color: .timelineSessionFill, label: deviceLabel)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
 
     private func legendDot(color: Color, label: String) -> some View {
