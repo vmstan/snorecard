@@ -282,6 +282,30 @@ struct DayDetailView: View {
                             onTap: explainTap(.timeInApnea)
                         )
                     }
+                    // Apple Watch sleep-stage chips. Mirror the
+                    // Trends Deep / REM averages so the per-night
+                    // and per-range views read the same. Only on
+                    // nights where we have a summary with non-zero
+                    // asleep time (otherwise the percentage is
+                    // undefined). iOS only — macOS HealthKit sleep
+                    // sync is unreliable so the feature is hidden.
+                    #if os(iOS)
+                    if let sleep = library.healthSleep.summaryByDate[day.date],
+                       sleep.timeAsleep > 0 {
+                        let deepPct = sleep.fractionAsleep(in: .deep) * 100
+                        let remPct = sleep.fractionAsleep(in: .rem) * 100
+                        StatCard(
+                            label: "Deep",
+                            value: String(format: "%.0f%%", deepPct),
+                            subtitle: "of asleep time"
+                        )
+                        StatCard(
+                            label: "REM",
+                            value: String(format: "%.0f%%", remPct),
+                            subtitle: "of asleep time"
+                        )
+                    }
+                    #endif
                     // IPAP gets its own card only when the device
                     // actually delivers extra inspiratory pressure.
                     // On plain CPAP therapy IPAP equals EPAP, so

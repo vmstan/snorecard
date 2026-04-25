@@ -97,8 +97,6 @@
 		AABF000000000000AABF0003 /* AppleWatchSleepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */; };
 		AABF000000000000AABF0011 /* SleepByHourChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0010 /* SleepByHourChart.swift */; };
 		AABF000000000000AABF0012 /* SleepByHourChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0010 /* SleepByHourChart.swift */; };
-		AABF000000000000AABF0021 /* SleepStageTrendsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */; };
-		AABF000000000000AABF0022 /* SleepStageTrendsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -154,7 +152,6 @@
 		FB115042FD0555DF4AFECD0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleWatchSleepCard.swift; sourceTree = "<group>"; };
 		AABF000000000000AABF0010 /* SleepByHourChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepByHourChart.swift; sourceTree = "<group>"; };
-		AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepStageTrendsSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -287,7 +284,6 @@
 				0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */,
 				AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */,
 				AABF000000000000AABF0010 /* SleepByHourChart.swift */,
-				AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -452,7 +448,6 @@
 				5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */,
 				AABF000000000000AABF0003 /* AppleWatchSleepCard.swift in Sources */,
 				AABF000000000000AABF0012 /* SleepByHourChart.swift in Sources */,
-				AABF000000000000AABF0022 /* SleepStageTrendsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,7 +490,6 @@
 				5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */,
 				AABF000000000000AABF0002 /* AppleWatchSleepCard.swift in Sources */,
 				AABF000000000000AABF0011 /* SleepByHourChart.swift in Sources */,
-				AABF000000000000AABF0021 /* SleepStageTrendsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
