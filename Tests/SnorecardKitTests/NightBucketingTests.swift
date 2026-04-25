@@ -143,6 +143,58 @@ final class NightBucketingTests: XCTestCase {
         )
     }
 
+    func testBucketAgainstCPAPDaysAccumulatesMultipleClustersInSameWindow() {
+        // A bathroom break splits the watch's view of the night
+        // into two clusters separated by >90 min. Both clusters
+        // overlap the same CPAP day's window. They must both end
+        // up in that day's bucket — keeping only the longer one
+        // would drop half the user's sleep from the day card.
+        let cpapStart = calendar.date(from: DateComponents(
+            calendar: calendar,
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: 2023, month: 11, day: 14, hour: 23, minute: 30
+        ))!
+        let nightKey = calendar.startOfDay(for: cpapStart)
+        let cpapWindow = NightBucketing.CPAPDayWindow(
+            nightKey: nightKey,
+            start: cpapStart.addingTimeInterval(-30 * 60),
+            end: cpapStart.addingTimeInterval(8 * 3600)
+        )
+
+        // Cluster A: 23:30 → 02:00 (2.5 h asleep)
+        let clusterA = [
+            SleepStageSample(stage: .core,
+                             start: cpapStart,
+                             end: cpapStart.addingTimeInterval(2.5 * 3600),
+                             sourceBundleID: "test")
+        ]
+        // 100-min gap (over the 90-min cluster split threshold).
+        // Cluster B: 03:40 → 06:30 (2h50m asleep)
+        let clusterB = [
+            SleepStageSample(stage: .deep,
+                             start: cpapStart.addingTimeInterval(2.5 * 3600 + 100 * 60),
+                             end: cpapStart.addingTimeInterval(2.5 * 3600 + 100 * 60 + 2.83 * 3600),
+                             sourceBundleID: "test")
+        ]
+
+        let bucketed = NightBucketing.bucketAgainstCPAPDays(
+            samples: clusterA + clusterB,
+            cpapWindows: [cpapWindow],
+            calendar: calendar
+        )
+
+        let result = bucketed[nightKey] ?? []
+        XCTAssertEqual(
+            result.count, 2,
+            "Both clusters should accumulate into the same CPAP day"
+        )
+        XCTAssertTrue(result.contains(where: { $0.stage == .core }))
+        XCTAssertTrue(
+            result.contains(where: { $0.stage == .deep }),
+            "Longer cluster B must coexist with shorter cluster A"
+        )
+    }
+
     func testBucketAgainstCPAPDaysAttachesMidnightCrossingSessionToRecordingStartDay() {
         // CPAP recording: 23:45 Nov 14 → 06:30 Nov 15 (~6h45m).
         // Watch session: full continuous sleep across the same window.

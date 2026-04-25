@@ -86,15 +86,16 @@ public enum NightBucketing {
     }
 
     /// Bucket watch sessions onto ResMed days by **CPAP recording
-    /// overlap**. For each clustered watch session, picks the
-    /// `CPAPDayWindow` that overlaps the most. When no window
-    /// overlaps (the user wore the watch but didn't use CPAP that
-    /// night), falls back to the session-start calendar day so the
-    /// data still lands on a meaningful date.
-    ///
-    /// Longest-watch-session-wins on collisions, matching the
-    /// older `bucketByNight` behaviour so a daytime nap never
-    /// displaces a night's main session.
+    /// overlap**. Each clustered watch session is matched to the
+    /// `CPAPDayWindow` it overlaps the most. **All clusters that
+    /// match the same CPAP day are accumulated together** so a night
+    /// the watch split into several sessions (bathroom break, brief
+    /// wake-up, etc.) still produces one combined summary for that
+    /// CPAP day. When a cluster doesn't overlap any window — usually
+    /// a daytime nap on a day with no CPAP recording — it falls
+    /// back to the session-start calendar day with longest-wins so
+    /// a 20-minute nap never displaces an existing main session
+    /// on a no-CPAP day.
     public static func bucketAgainstCPAPDays(
         samples: [SleepStageSample],
         cpapWindows: [CPAPDayWindow],
@@ -103,26 +104,35 @@ public enum NightBucketing {
     ) -> [Date: [SleepStageSample]] {
         var out: [Date: [SleepStageSample]] = [:]
         for session in sessions(from: samples, gap: gap) {
-            guard let key = bestKey(
-                for: session,
-                cpapWindows: cpapWindows,
-                calendar: calendar
-            ) else { continue }
-            let existing = out[key] ?? []
-            if sessionDuration(session) > sessionDuration(existing) {
-                out[key] = session
+            let match = matchedCPAPDay(for: session, in: cpapWindows)
+            if let matchedKey = match {
+                // CPAP-overlap match → accumulate. Multiple clusters
+                // from the same night all belong together; keeping
+                // only the longest would drop bathroom-break splits
+                // and produce a per-night summary that's missing
+                // half the user's sleep.
+                out[matchedKey, default: []].append(contentsOf: session)
+            } else {
+                // No CPAP overlap → fall back to session-start day
+                // with longest-wins, so a daytime nap doesn't pollute
+                // a day that already has a longer no-CPAP session.
+                guard let fallbackKey = nightKey(
+                    for: session, calendar: calendar
+                ) else { continue }
+                let existing = out[fallbackKey] ?? []
+                if sessionDuration(session) > sessionDuration(existing) {
+                    out[fallbackKey] = session
+                }
             }
         }
         return out
     }
 
-    /// Pick the night key for a single clustered session: maximal
-    /// CPAP-window overlap if any window overlaps, otherwise the
-    /// session-start calendar date.
-    private static func bestKey(
+    /// Return the CPAP day key whose window has maximal overlap
+    /// with this clustered session, or `nil` if no window overlaps.
+    private static func matchedCPAPDay(
         for session: [SleepStageSample],
-        cpapWindows: [CPAPDayWindow],
-        calendar: Calendar
+        in cpapWindows: [CPAPDayWindow]
     ) -> Date? {
         guard !session.isEmpty else { return nil }
         let watchStart = session.map(\.start).min()!
@@ -139,12 +149,12 @@ public enum NightBucketing {
                 bestKey = window.nightKey
             }
         }
-        if bestOverlap > 0 { return bestKey }
-        return nightKey(for: session, calendar: calendar)
+        return bestOverlap > 0 ? bestKey : nil
     }
 
     /// Older bucketing entry point — kept for callers that don't
-    /// have CPAP windows in hand. Buckets by `nightKey` (session-
+    /// have CPAP windows in hand. With no windows every cluster
+    /// hits the fallback path, which buckets by `nightKey` (session-
     /// start day) and picks the longest session per key.
     public static func bucketByNight(
         samples: [SleepStageSample],
