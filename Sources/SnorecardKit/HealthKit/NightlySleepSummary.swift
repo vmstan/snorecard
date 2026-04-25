@@ -51,14 +51,16 @@ public struct NightlySleepSummary: Codable, Sendable, Equatable {
     ///   to overlap-any.
     /// - v4 → v5: HKSampleQuery replaced with HKSampleQueryDescriptor.
     /// - v5 → v6: descriptor query no longer composes a date
-    ///   predicate inside `HKSamplePredicate.categorySample` — that
-    ///   path silently dropped multi-source samples down to one.
-    ///   We now query newest-first with no date predicate and
+    ///   predicate inside `HKSamplePredicate.categorySample` —
+    ///   we now query newest-first with no date predicate and
     ///   filter in Swift.
+    /// - v6 → v7: diagnostic-only bump to force a re-fetch on the
+    ///   build that adds recent-sample logging — no behavioural
+    ///   change in summary semantics.
     /// `SleepStageCache.load` requires equality with this constant,
     /// so older sidecars are dropped on load and rebuilt by the next
     /// attach().
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     public init(
         nightDate: Date,

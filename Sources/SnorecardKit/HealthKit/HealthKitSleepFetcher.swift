@@ -127,10 +127,55 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
         for source in sources {
             healthKitLog.info("fetchRange source: \(source, privacy: .public)")
         }
+        // Diagnostic — what does HealthKit think Snorecard's view of
+        // recent data actually is? We need to know whether our app
+        // simply isn't seeing multi-source samples in the last
+        // 30 days, or whether the date filter is somehow dropping
+        // them despite them being in `allRecent`.
+        Self.logRecentDiagnostic(allRecent: allRecent)
         // Re-sort ascending for the bucketing pass, which expects
         // chronological order so its session-clustering walk is
         // monotonic.
         return mapped.sorted { $0.start < $1.start }
+    }
+
+    /// Snapshot of what HealthKit reports as Snorecard's view of
+    /// sleep-analysis data. Logs:
+    ///  - oldest + newest startDate in the descending-sorted result
+    ///  - top 5 newest samples with date / source / stage value
+    ///  - per-source count for samples inside the last 30 days
+    /// Diagnostic only — never feeds the data path.
+    private static func logRecentDiagnostic(allRecent: [HKCategorySample]) {
+        guard !allRecent.isEmpty else {
+            healthKitLog.info("recent-diagnostic: empty")
+            return
+        }
+        // `allRecent` is sorted DESCENDING (newest first), so first =
+        // newest, last = oldest.
+        let newest = allRecent.first!
+        let oldest = allRecent.last!
+        healthKitLog.info(
+            "recent-diagnostic: total=\(allRecent.count) newest=\(newest.startDate, privacy: .public) oldest=\(oldest.startDate, privacy: .public)"
+        )
+        for sample in allRecent.prefix(5) {
+            healthKitLog.info(
+                "recent-diagnostic top: start=\(sample.startDate, privacy: .public) end=\(sample.endDate, privacy: .public) value=\(sample.value) source=\(sample.sourceRevision.source.bundleIdentifier, privacy: .public)"
+            )
+        }
+        let cutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        let last30 = allRecent.filter { $0.startDate >= cutoff }
+        var bySource30: [String: Int] = [:]
+        for sample in last30 {
+            bySource30[sample.sourceRevision.source.bundleIdentifier, default: 0] += 1
+        }
+        healthKitLog.info(
+            "recent-diagnostic last30: total=\(last30.count) sources=\(bySource30.count)"
+        )
+        for (bid, count) in bySource30.sorted(by: { $0.value > $1.value }) {
+            healthKitLog.info(
+                "recent-diagnostic last30 source: \(bid, privacy: .public) count=\(count)"
+            )
+        }
     }
 
     /// Long-running observer so a new night that lands on the watch
