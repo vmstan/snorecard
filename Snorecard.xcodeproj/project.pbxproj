@@ -93,6 +93,12 @@
 		F8777E909FC7A13D1EF3E2CF /* Snorecard-Royale.icon in Resources */ = {isa = PBXBuildFile; fileRef = A86607131992DF43ED4E80ED /* Snorecard-Royale.icon */; };
 		F9FC6D02360537E5E45D49CF /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
 		FDFC4456A06B7E0170BA208E /* Snorecard-Callan.icon in Resources */ = {isa = PBXBuildFile; fileRef = 857059FD0458DE1E0DCE89C9 /* Snorecard-Callan.icon */; };
+		AABF000000000000AABF0002 /* AppleWatchSleepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */; };
+		AABF000000000000AABF0003 /* AppleWatchSleepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */; };
+		AABF000000000000AABF0011 /* SleepByHourChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0010 /* SleepByHourChart.swift */; };
+		AABF000000000000AABF0012 /* SleepByHourChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0010 /* SleepByHourChart.swift */; };
+		AABF000000000000AABF0021 /* SleepStageTrendsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */; };
+		AABF000000000000AABF0022 /* SleepStageTrendsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -146,6 +152,9 @@
 		EA0E592B08C8DAE5450663B5 /* Snorecard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Snorecard.entitlements; sourceTree = "<group>"; };
 		F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySignalSummaryTable.swift; sourceTree = "<group>"; };
 		FB115042FD0555DF4AFECD0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleWatchSleepCard.swift; sourceTree = "<group>"; };
+		AABF000000000000AABF0010 /* SleepByHourChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepByHourChart.swift; sourceTree = "<group>"; };
+		AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepStageTrendsSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -276,6 +285,9 @@
 				86917F47386EB72167DE2A0F /* StatCard.swift */,
 				4FA139BDBDFF7D621A0CAFE0 /* TrendNarrativeCard.swift */,
 				0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */,
+				AABF000000000000AABF0001 /* AppleWatchSleepCard.swift */,
+				AABF000000000000AABF0010 /* SleepByHourChart.swift */,
+				AABF000000000000AABF0020 /* SleepStageTrendsSection.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -438,6 +450,9 @@
 				8088C122E1E00BB6138F5C98 /* StatCard.swift in Sources */,
 				8DDFF4E0A64DDDAF9EAE48D7 /* TrendNarrativeCard.swift in Sources */,
 				5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */,
+				AABF000000000000AABF0003 /* AppleWatchSleepCard.swift in Sources */,
+				AABF000000000000AABF0012 /* SleepByHourChart.swift in Sources */,
+				AABF000000000000AABF0022 /* SleepStageTrendsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,6 +493,9 @@
 				1A890808947AEFF17CE27908 /* StatCard.swift in Sources */,
 				0E244EDF4E0543DA8B838869 /* TrendNarrativeCard.swift in Sources */,
 				5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */,
+				AABF000000000000AABF0002 /* AppleWatchSleepCard.swift in Sources */,
+				AABF000000000000AABF0011 /* SleepByHourChart.swift in Sources */,
+				AABF000000000000AABF0021 /* SleepStageTrendsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
