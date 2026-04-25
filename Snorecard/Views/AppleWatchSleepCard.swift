@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import SnorecardKit
 
 /// Per-night sleep-stage summary card. Renders next to the existing
@@ -28,7 +29,7 @@ struct AppleWatchSleepCard: View {
             }
 
             if let summary {
-                stagesBar(for: summary)
+                hypnogram(for: summary)
                 if let start = summary.inBedStart, let end = summary.inBedEnd {
                     Text("In bed \(timeFormatter.string(from: start)) – \(timeFormatter.string(from: end))")
                         .font(.caption2.monospacedDigit())
@@ -49,37 +50,99 @@ struct AppleWatchSleepCard: View {
         )
     }
 
-    /// Horizontal bar made of `Capsule` segments weighted by stage
-    /// seconds. Falls back to a flat track when the night has no
-    /// asleep time so the card doesn't render an empty box.
-    private func stagesBar(for summary: NightlySleepSummary) -> some View {
-        let total = summary.timeAsleep + summary.awakeSeconds
-        return GeometryReader { geo in
-            HStack(spacing: 2) {
-                if total > 0 {
-                    segment(width: width(summary.deepSeconds, total: total, fullWidth: geo.size.width), color: .indigo)
-                    segment(width: width(summary.coreSeconds, total: total, fullWidth: geo.size.width), color: .blue)
-                    segment(width: width(summary.remSeconds, total: total, fullWidth: geo.size.width), color: .teal)
-                    segment(width: width(summary.unspecifiedSeconds, total: total, fullWidth: geo.size.width), color: .gray.opacity(0.6))
-                    segment(width: width(summary.awakeSeconds, total: total, fullWidth: geo.size.width), color: .orange)
-                } else {
-                    Capsule().fill(Color.secondary.opacity(0.25))
+    /// Hypnogram-style timeline matching how the iOS Health app
+    /// renders a night: four stage rows (Awake on top, REM, Core,
+    /// Deep on bottom) with one rectangle per `SleepStageSample` at
+    /// its actual wall-clock start/end. `inBed` records are filtered
+    /// out — Apple writes them as overlapping envelope rows that
+    /// would obscure the real stages.
+    private func hypnogram(for summary: NightlySleepSummary) -> some View {
+        let stages = summary.samples
+            .filter { $0.stage != .inBed }
+            .sorted { $0.start < $1.start }
+        guard !stages.isEmpty else {
+            return AnyView(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(height: 14)
+                    .overlay(
+                        Text("No stage data")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    )
+            )
+        }
+        return AnyView(
+            Chart {
+                ForEach(stages) { sample in
+                    RectangleMark(
+                        xStart: .value("Start", sample.start),
+                        xEnd: .value("End", sample.end),
+                        yStart: .value("Stage", Self.stageRow(for: sample.stage)),
+                        yEnd: .value("Stage", Self.stageRow(for: sample.stage) + 0.85)
+                    )
+                    .foregroundStyle(Self.color(for: sample.stage))
                 }
             }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.hour().minute())
+                        .font(.caption2.monospacedDigit())
+                }
+            }
+            .chartYAxis {
+                // Mid-row tick positions so the label centres in
+                // each stage band rather than sitting on its edge.
+                AxisMarks(position: .leading, values: [0.4, 1.4, 2.4, 3.4]) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Double.self),
+                           let label = Self.label(forRow: v - 0.4) {
+                            Text(label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .chartYScale(domain: 0...4)
+            .frame(height: 100)
+        )
+    }
+
+    /// Stage → row index. Top→bottom in the rendered chart is
+    /// Awake (3) → REM (2) → Core (1) → Deep (0), matching the
+    /// Health app's visual ordering. `asleepUnspecified` is
+    /// folded into Core because it represents legacy watchOS
+    /// pre-iOS-16 records that didn't differentiate stages.
+    private static func stageRow(for stage: SleepStageSample.Stage) -> Double {
+        switch stage {
+        case .deep: return 0
+        case .core, .asleepUnspecified: return 1
+        case .rem: return 2
+        case .awake: return 3
+        case .inBed: return -1   // never rendered — filtered out
         }
-        .frame(height: 14)
     }
 
-    private func width(_ value: TimeInterval, total: TimeInterval, fullWidth: CGFloat) -> CGFloat {
-        guard total > 0, value > 0 else { return 0 }
-        return CGFloat(value / total) * fullWidth
+    private static func label(forRow row: Double) -> String? {
+        switch Int(row.rounded()) {
+        case 0: return "Deep"
+        case 1: return "Core"
+        case 2: return "REM"
+        case 3: return "Awake"
+        default: return nil
+        }
     }
 
-    private func segment(width: CGFloat, color: Color) -> some View {
-        Capsule()
-            .fill(color)
-            .frame(width: max(0, width), height: 14)
-            .opacity(width > 0 ? 1 : 0)
+    private static func color(for stage: SleepStageSample.Stage) -> Color {
+        switch stage {
+        case .deep: return .indigo
+        case .core, .asleepUnspecified: return .blue
+        case .rem: return .teal
+        case .awake: return .orange
+        case .inBed: return .gray
+        }
     }
 
     private func stageLegend(for summary: NightlySleepSummary) -> some View {
