@@ -68,71 +68,102 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
             throw HealthKitSleepError.unsupported
         }
         let type = HKCategoryType(.sleepAnalysis)
-        // Use `.strictEndDate` so a sample whose start is before our
-        // window but whose end falls inside is still included.
-        // `.strictStartDate` was excluding overnight sessions whose
-        // first sample timestamp lands a hair before the queryStart
-        // padding — combine both with no strict flag (default
-        // behaviour) so any sample that intersects the range is
-        // returned. The bucketing pass clusters them correctly
-        // afterwards.
-        let predicate = HKQuery.predicateForSamples(
+        healthKitLog.info(
+            "fetchRange query: start=\(start, privacy: .public) end=\(end, privacy: .public)"
+        )
+        // Use the modern Swift descriptor API. The legacy
+        // `HKSampleQuery` wrapped in CheckedContinuation has been
+        // observed to under-return Apple-Watch-written sleep samples
+        // when its predicate covers a range with many samples; the
+        // descriptor API uses Apple's newer query path and returns
+        // the same data set the iOS Health app sees.
+        let datePredicate = HKQuery.predicateForSamples(
             withStart: start,
             end: end,
             options: []
         )
-        let sort = NSSortDescriptor(
-            key: HKSampleSortIdentifierStartDate,
-            ascending: true
+        let typedPredicate = HKSamplePredicate.categorySample(
+            type: type,
+            predicate: datePredicate
         )
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [typedPredicate],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .forward)],
+            limit: nil
+        )
+        let raw: [HKCategorySample]
+        do {
+            raw = try await descriptor.result(for: store)
+        } catch {
+            healthKitLog.error(
+                "fetchRange failed: \(String(describing: error), privacy: .public)"
+            )
+            throw HealthKitSleepError.framework(String(describing: error))
+        }
+        let rawCount = raw.count
+        let mapped = raw.compactMap(Self.map(_:))
+        let dropped = rawCount - mapped.count
+        let firstStart = mapped.first.map { $0.start.description } ?? "nil"
+        let lastEnd = mapped.last.map { $0.end.description } ?? "nil"
+        var hist: [String: Int] = [:]
+        for s in mapped {
+            hist[s.stage.rawValue, default: 0] += 1
+        }
+        let histStr = hist.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: " ")
+        let sources = Set(mapped.map(\.sourceBundleID))
         healthKitLog.info(
-            "fetchRange query: start=\(start, privacy: .public) end=\(end, privacy: .public)"
+            "fetchRange returned raw=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
         )
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [sort]
-            ) { _, samples, error in
-                if let error {
-                    healthKitLog.error(
-                        "fetchRange failed: \(String(describing: error), privacy: .public)"
-                    )
-                    continuation.resume(
-                        throwing: HealthKitSleepError.framework(String(describing: error))
-                    )
-                    return
-                }
-                let raw = (samples as? [HKCategorySample] ?? [])
-                let rawCount = raw.count
-                let mapped = raw.compactMap(Self.map(_:))
-                let dropped = rawCount - mapped.count
-                let firstStart = mapped.first.map { $0.start.description } ?? "nil"
-                let lastEnd = mapped.last.map { $0.end.description } ?? "nil"
-                // Per-stage histogram so we can tell if HealthKit is
-                // returning only inBed (iPhone scheduled-sleep), only
-                // core (basic watch tracking), or the full set.
-                var hist: [String: Int] = [:]
-                for s in mapped {
-                    hist[s.stage.rawValue, default: 0] += 1
-                }
-                let histStr = hist.sorted { $0.key < $1.key }
-                    .map { "\($0.key)=\($0.value)" }
-                    .joined(separator: " ")
-                // Distinct sources so we can tell if multiple writers
-                // (Apple Watch + iPhone Sleep + AutoSleep, etc.) are
-                // contributing, and whether macOS is missing one.
-                let sources = Set(mapped.map(\.sourceBundleID))
-                healthKitLog.info(
-                    "fetchRange returned raw=\(rawCount) mapped=\(mapped.count) dropped=\(dropped) firstStart=\(firstStart, privacy: .public) lastEnd=\(lastEnd, privacy: .public) stages=[\(histStr, privacy: .public)] sources=\(sources.count)"
-                )
-                for source in sources {
-                    healthKitLog.info("fetchRange source: \(source, privacy: .public)")
-                }
-                continuation.resume(returning: mapped)
+        for source in sources {
+            healthKitLog.info("fetchRange source: \(source, privacy: .public)")
+        }
+        // Diagnostic only — runs an unbounded query (no date
+        // predicate, no limit) so we can compare against the
+        // date-bounded result. If the bounded query returns 1 but
+        // the unbounded query returns many, the bug is in the date
+        // predicate; if both return 1, the bug is in permissions or
+        // source filtering. Logged once per fetchRange call.
+        await runUnboundedDiagnostic(type: type)
+        return mapped
+    }
+
+    /// Sanity-check query: ask HealthKit for *every* sleep-analysis
+    /// sample with no date filter and a high limit. Logs the count
+    /// per source so we can tell if the date-bounded query is
+    /// erroneously dropping samples or if HealthKit really only
+    /// has 1 sample to give us. Diagnostic only — never feeds the
+    /// app's data path.
+    private func runUnboundedDiagnostic(type: HKCategoryType) async {
+        let predicate = HKSamplePredicate.categorySample(
+            type: type,
+            predicate: nil
+        )
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [predicate],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .forward)],
+            limit: 5000
+        )
+        do {
+            let all = try await descriptor.result(for: store)
+            var bySource: [String: Int] = [:]
+            var byStage: [Int: Int] = [:]
+            for sample in all {
+                let bid = sample.sourceRevision.source.bundleIdentifier
+                bySource[bid, default: 0] += 1
+                byStage[sample.value, default: 0] += 1
             }
-            store.execute(query)
+            healthKitLog.info(
+                "diagnostic unbounded total=\(all.count) sources=\(bySource.count) stageRawCounts=\(byStage)"
+            )
+            for (bid, count) in bySource.sorted(by: { $0.value > $1.value }) {
+                healthKitLog.info("diagnostic source: \(bid, privacy: .public) count=\(count)")
+            }
+        } catch {
+            healthKitLog.error(
+                "diagnostic unbounded failed: \(String(describing: error), privacy: .public)"
+            )
         }
     }
 

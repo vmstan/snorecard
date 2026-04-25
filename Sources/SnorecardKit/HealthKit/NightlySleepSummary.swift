@@ -48,12 +48,14 @@ public struct NightlySleepSummary: Codable, Sendable, Equatable {
     /// - v2 → v3: bucketing accumulates all watch clusters that
     ///   overlap a CPAP window into that day's summary.
     /// - v3 → v4: query predicate widened from `.strictStartDate`
-    ///   to overlap-any so samples whose start lands on a window
-    ///   boundary aren't excluded.
+    ///   to overlap-any.
+    /// - v4 → v5: HKSampleQuery replaced with HKSampleQueryDescriptor
+    ///   to work around Apple-Watch-written samples being silently
+    ///   under-returned on iOS.
     /// `SleepStageCache.load` requires equality with this constant,
     /// so older sidecars are dropped on load and rebuilt by the next
     /// attach().
-    public static let currentSchemaVersion = 4
+    public static let currentSchemaVersion = 5
 
     public init(
         nightDate: Date,
