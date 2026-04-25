@@ -20,38 +20,50 @@ struct AHIHourlyChart: View {
 
     private var buckets: [HourBucket] {
         let calendar = Calendar.current
-        // Snap the first bucket to the hour boundary at or before dayStart so
-        // a 22:39 session bucket starts at 22:00 rather than 22:39.
-        let anchor = calendar.date(
-            bySetting: .minute, value: 0,
-            of: calendar.date(bySetting: .second, value: 0, of: dayStart) ?? dayStart
-        ) ?? dayStart
+        // Snap the first bucket to the hour boundary at or before
+        // dayStart so a 22:39 session bucket starts at 22:00.
+        // `Calendar.date(bySetting:value:of:)` would have been the
+        // obvious choice here but it *rolls forward* to the next
+        // matching component value — chaining `.second=0` then
+        // `.minute=0` on 23:38:39 returns 24:00:00 (the next
+        // midnight), not 23:00:00. `dateInterval(of: .hour, for:)`
+        // returns the [start, end) of the hour containing dayStart,
+        // whose `.start` is the snap-down hour boundary we want.
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
 
-        let lastHour = Int((max(totalDuration, 1) / 3600).rounded(.up)) - 1
+        // Distance from anchor to dayStart — events use offsets
+        // relative to dayStart, but we group into hour slots
+        // relative to anchor so the label and the contained data
+        // describe the same wall-clock window.
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
         guard lastHour >= 0 else { return [] }
+
+        var grouped: [Int: (ob: Int, ce: Int, hy: Int)] = [:]
+        for event in events {
+            let bucket = Int(((event.offset + anchorOffset) / 3600).rounded(.down))
+            guard bucket >= 0, bucket <= lastHour else { continue }
+            let text = event.text.lowercased()
+            var current = grouped[bucket] ?? (0, 0, 0)
+            if text.contains("obstructive") { current.ob += 1 }
+            else if text.contains("central") { current.ce += 1 }
+            else if text.contains("hypopnea") { current.hy += 1 }
+            grouped[bucket] = current
+        }
 
         var out: [HourBucket] = []
         out.reserveCapacity(lastHour + 1)
         for hour in 0...lastHour {
-            let start = TimeInterval(hour) * 3600
-            let end = start + 3600
-            var ob = 0
-            var ce = 0
-            var hy = 0
-            for event in events where event.offset >= start && event.offset < end {
-                let text = event.text.lowercased()
-                if text.contains("obstructive") { ob += 1 }
-                else if text.contains("central") { ce += 1 }
-                else if text.contains("hypopnea") { hy += 1 }
-            }
-            let bucketStart = anchor.addingTimeInterval(start)
+            let bucketStart = anchor.addingTimeInterval(TimeInterval(hour) * 3600)
+            let counts = grouped[hour] ?? (0, 0, 0)
             out.append(
                 HourBucket(
                     startHour: hour,
                     clockLabel: Self.shortClockLabel(for: bucketStart),
-                    obstructive: ob,
-                    central: ce,
-                    hypopnea: hy
+                    obstructive: counts.ob,
+                    central: counts.ce,
+                    hypopnea: counts.hy
                 )
             )
         }
@@ -109,10 +121,10 @@ struct AHIHourlyChart: View {
                 )
             }
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel() {
+                    AxisValueLabel {
                         if let label = value.as(String.self) {
                             Text(label).font(.caption2.monospacedDigit())
                         }
@@ -120,6 +132,8 @@ struct AHIHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            legend
         }
         // Card chrome — matches the StatCard treatment so the
         // events-by-hour panel reads as part of the same set as
@@ -129,6 +143,32 @@ struct AHIHourlyChart: View {
             Color.primary.opacity(0.05),
             in: RoundedRectangle(cornerRadius: 12)
         )
+    }
+
+    /// Colour-keyed legend below the x-axis. Uses the clinical
+    /// names ("Obstructive Apnea", and the user-preferred long
+    /// form for the CA category from `library.centralEventLabel`)
+    /// rather than the internal scale keys so the chart label
+    /// matches what the user sees elsewhere. Built as a flow
+    /// layout so it wraps cleanly on iPhone-width plates.
+    private var legend: some View {
+        FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+            legendItem("Obstructive Apnea", color: library.eventColorPalette.obstructive)
+            legendItem("Hypopnea", color: library.eventColorPalette.hypopnea)
+            legendItem(
+                library.centralEventLabel.displayName,
+                color: library.eventColorPalette.central
+            )
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+
+    private func legendItem(_ label: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
+        }
     }
 
     private static func shortClockLabel(for date: Date) -> String {

@@ -7,7 +7,13 @@ import SnorecardKit
 /// and Y-axis column width as the data charts below) so the plot area — and
 /// therefore the gaps between sessions — line up pixel-perfect.
 struct SessionTimelineView: View {
+    @Environment(Library.self) private var library
     let bundle: WaveformBundle
+    /// Optional Apple Watch sleep summary for the night. When
+    /// present, deep / core / REM samples render as a colour-tinted
+    /// backdrop behind the session bars so the user can read the
+    /// CPAP timeline and the sleep architecture in one place.
+    var sleepSummary: NightlySleepSummary? = nil
     /// Callback fired when the user taps a point on the timeline
     /// strip. Passes the tapped offset in seconds from
     /// `bundle.dayStart`. Caller typically animates the viewport.
@@ -22,6 +28,49 @@ struct SessionTimelineView: View {
     /// portion of the night.
     var viewportStart: TimeInterval = 0
     var viewportLength: TimeInterval = 0
+
+    private struct StageBar: Identifiable {
+        let id: String
+        let startOffset: TimeInterval
+        let endOffset: TimeInterval
+        let color: Color
+    }
+
+    /// Convert the Apple Watch summary's stage samples into the
+    /// timeline's offset space. Awake / inBed records are filtered
+    /// out — the user already gets the in-bed envelope from the
+    /// session bars themselves and an awake tint would obscure
+    /// them. Stages are clipped to the bundle's `[0, totalDuration]`
+    /// so a sample bracketing the night doesn't bleed past the
+    /// chart edge.
+    private var stageBars: [StageBar] {
+        guard let summary = sleepSummary else { return [] }
+        let palette = library.eventColorPalette
+        let totalDuration = bundle.totalDuration
+        return summary.samples
+            .filter { $0.stage != .inBed && $0.stage != .awake }
+            .compactMap { sample in
+                let start = sample.start.timeIntervalSince(bundle.dayStart)
+                let end = sample.end.timeIntervalSince(bundle.dayStart)
+                let clippedStart = max(0, start)
+                let clippedEnd = min(totalDuration, end)
+                guard clippedEnd > clippedStart else { return nil }
+                let color: Color = {
+                    switch sample.stage {
+                    case .deep: return palette.deepSleep
+                    case .core, .asleepUnspecified: return palette.coreSleep
+                    case .rem: return palette.remSleep
+                    case .awake, .inBed: return .clear
+                    }
+                }()
+                return StageBar(
+                    id: sample.id,
+                    startOffset: clippedStart,
+                    endOffset: clippedEnd,
+                    color: color
+                )
+            }
+    }
 
     /// Axis the current drag has committed to. `nil` while we're
     /// still deciding (first few points of motion); `.horizontal`
@@ -47,6 +96,21 @@ struct SessionTimelineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Chart {
+                // Sleep-stage backdrop (deep / core / REM) — drawn
+                // first so the session bars and event rules below
+                // sit on top. ~55 % opacity reads as a tint rather
+                // than a dominant element; the gaps between
+                // sessions still show the stage colour clearly.
+                ForEach(stageBars) { bar in
+                    RectangleMark(
+                        xStart: .value("Stage Start", bar.startOffset),
+                        xEnd: .value("Stage End", bar.endOffset),
+                        yStart: .value("Bottom", 0),
+                        yEnd: .value("Top", 1)
+                    )
+                    .foregroundStyle(bar.color.opacity(0.55))
+                }
+
                 ForEach(bundle.sessions) { session in
                     RectangleMark(
                         xStart: .value("Start", session.startOffset),

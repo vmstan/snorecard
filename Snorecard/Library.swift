@@ -73,6 +73,34 @@ enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// User-facing label for "CA" (the central-apnea / clear-airway
+/// category). ResMed and most CPAP literature uses "Central Apnea";
+/// SleepHQ / OSCAR / sleep clinicians often prefer "Clear Airway"
+/// because the central label can mis-suggest a brain-stem origin
+/// when in practice CA events are most often arousal-related on
+/// CPAP therapy. Default is "Clear Airway" — matches the term the
+/// user would see in OSCAR and most online discussions.
+enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
+    case clearAirway
+    case centralApnea
+
+    var id: String { rawValue }
+
+    /// Long form used in legends, AI narratives, and stat-card
+    /// labels. Reads naturally inline ("3 Clear Airway events").
+    var displayName: String {
+        switch self {
+        case .clearAirway: return "Clear Airway"
+        case .centralApnea: return "Central Apnea"
+        }
+    }
+
+    /// Short form for the event donut and any width-constrained
+    /// chip. Both labels share the same "CA" abbreviation, so this
+    /// is constant across the two cases.
+    var shortName: String { "CA" }
+}
+
 /// User-facing category for a PAP device — shown in the Settings
 /// Device section as a dropdown, used anywhere copy refers to the
 /// machine generically ("this CPAP", "this BiPAP"), and synced
@@ -181,6 +209,18 @@ final class Library {
     /// and the caller hides the surface.
     let narration: NarrationService
 
+    /// Apple Watch sleep-stage coordinator. Owns auth state, the
+    /// in-memory `summaryByDate` map, and the backfill/observer
+    /// pipeline. Views read from this directly via `library.healthSleep`
+    /// instead of holding their own HealthKit handles.
+    let healthSleep: HealthKitSleepCoordinator
+
+    /// Set to `true` when the first-launch flow needs `ContentView` to
+    /// present the "Pull sleep stages from Apple Watch?" prompt. The
+    /// view clears the flag (and writes the persisted "shown" key)
+    /// when the dialog is answered or dismissed.
+    var pendingHealthKitPrompt: Bool = false
+
     /// Non-nil while the user has opened a metric explanation
     /// by tapping a stat card. Drives the iOS sheet and the
     /// macOS inspector pane from a single source of truth so
@@ -210,7 +250,10 @@ final class Library {
     private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
+    private static let centralEventLabelKey = "centralEventLabel"
     private static let defaultJournalTagsKey = "defaultJournalTags"
+    private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
+    private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
@@ -290,6 +333,20 @@ final class Library {
         }
     }
 
+    /// User-preferred long-form label for "CA" events. Drives the
+    /// chart legend, the stat-card label, and the AI narrative
+    /// terminology so the same naming reads consistently across
+    /// the app. Defaults to `.clearAirway`. Local-only.
+    var centralEventLabel: CentralEventLabel {
+        didSet {
+            guard oldValue != centralEventLabel else { return }
+            UserDefaults.standard.set(
+                centralEventLabel.rawValue,
+                forKey: Self.centralEventLabelKey
+            )
+        }
+    }
+
     /// Tags the user wants auto-attached to every imported night.
     /// Applied in `load()` as each day's stats are backfilled, but
     /// only when the day has no existing journal sidecar — so manual
@@ -315,6 +372,26 @@ final class Library {
         // If the model flips to unavailable mid-session, the service
         // throws `sessionFailed` and the caller hides its card.
         self.narration = FoundationNarrationService()
+
+        // HealthKit coordinator. iOS only — macOS HealthKit sleep
+        // sync from iPhone is unreliable in practice (sample
+        // returns drop most multi-source data and lag the iPhone
+        // store by hours), so we ship the feature as iOS-only.
+        // The coordinator is still constructed on macOS but stays
+        // permanently disabled, which keeps every Library API
+        // reachable from shared view code without a `#if` at every
+        // call site.
+        #if os(iOS)
+        let healthEnabled = UserDefaults.standard.bool(
+            forKey: Self.appleWatchSleepEnabledKey
+        )
+        #else
+        let healthEnabled = false
+        #endif
+        self.healthSleep = HealthKitSleepCoordinator(
+            fetcher: HealthKitSleepFetcher(),
+            isEnabled: healthEnabled
+        )
 
         let storedInterval = UserDefaults.standard.object(
             forKey: Self.backgroundReloadIntervalKey
@@ -352,6 +429,14 @@ final class Library {
             self.eventColorPalette = palette
         } else {
             self.eventColorPalette = .topher
+        }
+
+        if let rawLabel = UserDefaults.standard.string(
+            forKey: Self.centralEventLabelKey
+        ), let label = CentralEventLabel(rawValue: rawLabel) {
+            self.centralEventLabel = label
+        } else {
+            self.centralEventLabel = .clearAirway
         }
 
         // Default tags default to empty so upgrading users don't
@@ -646,6 +731,11 @@ final class Library {
             for dir in dayDirs {
                 try? fm.removeItem(at: dir.appendingPathComponent(DailyStatsCache.filename))
                 try? fm.removeItem(at: dir.appendingPathComponent(IntelligenceCache.dayFilename))
+                // Sleep-stage sidecars are derived data from
+                // HealthKit, so the rebuild path drops them too.
+                // The next attach() will re-fetch from HealthKit
+                // when the user has the toggle on.
+                try? fm.removeItem(at: dir.appendingPathComponent(SleepStageCache.filename))
             }
         }
         // Device-level intelligence sidecar (Trends narratives +
@@ -653,6 +743,79 @@ final class Library {
         // not inside DATALOG.
         try? fm.removeItem(at: url.appendingPathComponent(IntelligenceCache.deviceFilename))
         load(url)
+    }
+
+    // MARK: - Apple Watch sleep
+
+    /// Whether the user has opted in to pulling Apple Watch sleep
+    /// stages. Mirrors the `HealthKitSleepCoordinator.isEnabled`
+    /// flag so views that only have `Library` can render the toggle
+    /// without fishing into the coordinator.
+    var appleWatchSleepEnabled: Bool {
+        healthSleep.isEnabled
+    }
+
+    /// Flip the Apple Watch sleep toggle. Persists the choice to
+    /// `UserDefaults` and, when enabling, triggers an authorization
+    /// request followed by a backfill against the currently-loaded
+    /// card. Disabling clears the in-memory map but leaves sidecars
+    /// on disk so re-enabling picks up where the user left off.
+    func setAppleWatchSleepEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: Self.appleWatchSleepEnabledKey)
+        healthSleep.setEnabled(enabled)
+        guard enabled else { return }
+        Task { [weak self] in
+            await self?.healthSleep.requestAuthorization()
+            if let card = self?.card {
+                await self?.healthSleep.backfill(card: card)
+            }
+        }
+    }
+
+    /// Manually re-run the backfill — used by the Settings "Re-sync
+    /// now" button when a user adds older nights from another device
+    /// and wants the local app to catch up immediately.
+    func resyncAppleWatchSleep() {
+        guard let card else { return }
+        Task { [weak self] in
+            await self?.healthSleep.backfill(card: card)
+        }
+    }
+
+    /// Decide whether to surface the first-launch confirmation. Only
+    /// fires once per device install (gated on
+    /// `appleWatchSleepPromptShownKey`) and never when the user has
+    /// already enabled the feature explicitly. macOS skips it
+    /// entirely — the Apple Watch sleep integration is iOS-only.
+    fileprivate func maybeShowHealthKitFirstRunPrompt() {
+        #if os(macOS)
+        return
+        #else
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.appleWatchSleepPromptShownKey),
+              !defaults.bool(forKey: Self.appleWatchSleepEnabledKey) else {
+            return
+        }
+        pendingHealthKitPrompt = true
+        #endif
+    }
+
+    /// Called by `ContentView` when the user taps "Yes" on the
+    /// confirmation dialog. Records the prompt as shown, flips the
+    /// toggle on, and kicks off the auth+backfill sequence.
+    func acceptHealthKitFirstRunPrompt() {
+        UserDefaults.standard.set(true, forKey: Self.appleWatchSleepPromptShownKey)
+        pendingHealthKitPrompt = false
+        setAppleWatchSleepEnabled(true)
+    }
+
+    /// Called by `ContentView` when the user taps "Not now" or
+    /// dismisses the dialog. Records the prompt as shown so we don't
+    /// nag again on subsequent imports; the user can still flip the
+    /// toggle on from Settings later.
+    func declineHealthKitFirstRunPrompt() {
+        UserDefaults.standard.set(true, forKey: Self.appleWatchSleepPromptShownKey)
+        pendingHealthKitPrompt = false
     }
 
     // MARK: - Per-day notes
@@ -854,12 +1017,14 @@ final class Library {
             from: allStats
         )
         let note = DailyNotesCache.load(for: folder)
+        let sleepSummary = healthSleep.summaryByDate[day.date]
         let input = IntelligenceInputBuilder.nightSummary(
             stats: stats,
             baseline: baseline,
             userNote: note?.text,
             subjectiveScore: note?.subjectiveScore,
-            userTags: note?.effectiveTags ?? []
+            userTags: note?.effectiveTags ?? [],
+            sleepSummary: sleepSummary
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadNightSummary(
@@ -895,13 +1060,20 @@ final class Library {
         guard intelligence.isReady else { return nil }
         guard let folder = card?.rootURL else { return nil }
         guard !stats.isEmpty else { return nil }
+        // Apple Watch sleep summaries that fall inside the same
+        // range — gives the narrative access to deep/core/REM
+        // averages alongside the CPAP aggregates.
+        let sleepSummaries = healthSleep.summaryByDate.values
+            .filter { $0.nightDate >= rangeStart && $0.nightDate <= rangeEnd }
+            .sorted { $0.nightDate < $1.nightDate }
         let input = IntelligenceInputBuilder.trendsNarrative(
             stats: stats,
             rangeStart: rangeStart,
             rangeEnd: rangeEnd,
             complianceTargetHours: complianceTarget(
                 for: card?.identification?.serialNumber
-            )
+            ),
+            sleepSummaries: sleepSummaries
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsNarrative(
@@ -927,20 +1099,36 @@ final class Library {
 
     /// Explain a single metric for the selected day. `trailing`
     /// should be the recent window the caller has already filtered
-    /// (typically the last 14 days with usage).
+    /// (typically the last 14 days with usage). Sleep-stage metrics
+    /// pull their value from the watch summary instead of stats —
+    /// the caller passes those in via `sleepSummary` /
+    /// `trailingSleepSummaries`.
     func explainMetric(
         _ metric: ExplainableMetric,
         for day: ResMedDay,
-        trailing: [DailyStatistics]
+        trailing: [DailyStatistics],
+        sleepSummary: NightlySleepSummary? = nil,
+        trailingSleepSummaries: [NightlySleepSummary] = []
     ) async -> MetricExplainOutput? {
         guard intelligence.isReady else { return nil }
         guard let folder = day.files.first?.url.deletingLastPathComponent(),
               let stats = day.stats else { return nil }
-        guard let input = IntelligenceInputBuilder.metricExplain(
-            metric: metric,
-            stats: stats,
-            trailing: trailing
-        ) else { return nil }
+        let input: MetricExplainInput?
+        if metric.isSleepStage {
+            guard let sleepSummary else { return nil }
+            input = IntelligenceInputBuilder.metricExplain(
+                metric: metric,
+                summary: sleepSummary,
+                trailingSummaries: trailingSleepSummaries
+            )
+        } else {
+            input = IntelligenceInputBuilder.metricExplain(
+                metric: metric,
+                stats: stats,
+                trailing: trailing
+            )
+        }
+        guard let input else { return nil }
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadMetricExplain(
             for: folder,
@@ -1030,10 +1218,21 @@ final class Library {
             let trailing = card.days
                 .compactMap(\.stats)
                 .filter { $0.hasUsage && $0.date >= windowStart && $0.date < day.date }
+            // Sleep-stage explanations need the watch summary for
+            // this night plus the trailing 14 days of summaries
+            // for the recent-mean anchor. Both are pulled from the
+            // coordinator's already-hydrated map; an empty list is
+            // fine for non-sleep metrics.
+            let sleepSummary = healthSleep.summaryByDate[day.date]
+            let trailingSleepSummaries = healthSleep.summaryByDate.values
+                .filter { $0.nightDate >= windowStart && $0.nightDate < day.date }
+                .sorted { $0.nightDate < $1.nightDate }
             return await explainMetric(
                 request.metric,
                 for: day,
-                trailing: trailing
+                trailing: trailing,
+                sleepSummary: sleepSummary,
+                trailingSleepSummaries: trailingSleepSummaries
             )
         case .trends(let averageValue, let rangeStart, let rangeEnd, let sampleSize):
             return await explainTrendsMetric(
@@ -1432,6 +1631,25 @@ final class Library {
                     // the sidebar before any I/O completes.
                     CardSnapshot.save(finalCard)
                     self?.applyDefaultSelection(for: finalCard)
+                }
+                // Hydrate the sleep-stage map from on-disk sidecars
+                // and, if the user has opted in and HealthKit is
+                // ready, run the single-batched backfill for any
+                // missing/stale nights. Runs after `.loaded` so the
+                // sleep card on the day view appears as soon as the
+                // sidecars finish loading.
+                //
+                // macOS runs this too — the coordinator's `attach`
+                // disk-hydrates first and bails before any HealthKit
+                // call when `isEnabled == false`, which it always
+                // is on macOS. That gives Mac a read-only view of
+                // whatever the iPhone wrote to iCloud Drive without
+                // touching the (unreliable) macOS HealthKit store.
+                // `maybeShowHealthKitFirstRunPrompt` is also a
+                // no-op on macOS by its own internal guard.
+                await self?.healthSleep.attach(card: finalCard)
+                await MainActor.run {
+                    self?.maybeShowHealthKitFirstRunPrompt()
                 }
             } catch {
                 await MainActor.run {

@@ -8,7 +8,7 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 
 **Each night**
 
-- Your AHI for the night, broken down into obstructive apnea, hypopnea, and central apnea
+- Your AHI for the night, broken down into obstructive apnea, hypopnea, and clear airway / central apnea (label preference selectable in Settings)
 - Quick-glance cards for usage hours, time spent in apnea, EPAP, IPAP, leak, flow limitation, snore, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
 - A bar chart showing when events happened hour by hour
 - Hourly charts for leak, flow limitation, and pressure
@@ -17,9 +17,19 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 - Your machine's exact therapy settings for that specific night — pressure, mode, EPR, ramp, humidifier, mask type, and more
 - A Sleep Journal entry for writing your own notes about the night
 
+**Apple Watch sleep stages**
+
+If you wear an Apple Watch to bed, Snorecard pulls the watch's deep / core / REM detections from Health and lays them alongside your therapy data, with no data ever leaving your iCloud account.
+
+- A **Sleep Stages tint** layered behind the session bars on the Detailed Waveforms timeline — the colored backdrop tells you which stages the watch detected during each part of the recording
+- A **Sleep by Hour** chart that stacks deep / core / REM minutes per clock hour with your CPAP / APAP / BiPAP / ASV mask-on minutes overlaid as a line, so you can spot whether your therapy time aligned with your actual sleep
+- **Deep Sleep** and **REM Sleep** percentage chips on the day view and Trends, including range averages
+- A **Stage minutes per night** chart in Trends showing how the architecture of your sleep changes across a 7 / 14 / 30-day window
+- The Apple Intelligence narratives reference your sleep architecture when a watch summary exists
+
 **Across all your nights**
 
-- Compliance, average AHI (with obstructive / hypopnea / central breakdown), average usage, and other long-running averages
+- Compliance, average AHI (with obstructive / hypopnea / clear airway breakdown), average usage, average deep and REM sleep, and other long-running averages
 - A [Glasgow Index](https://www.fortaspen.com/sleep/Intro.html) score for breath quality
 - Trend charts you can filter to the last 7 / 14 / 30 days or a custom range
 - Tap any chart to jump straight to that day
@@ -58,6 +68,8 @@ If your device doesn't support Apple Intelligence, or you've turned it off, thes
 ## Privacy
 
 Snorecard is a viewer — it doesn't send your data anywhere except your own iCloud account, which is what keeps your nights synced between your Mac and iPhone. There are no third-party accounts, no tracking, and no analytics. The Apple Intelligence narratives run on Apple's on-device Foundation Models; your therapy data is never sent to a server.
+
+Apple Watch sleep data is imported from your iPhone's Health store and saved alongside the rest of your CPAP data in your own iCloud Drive container. Your Mac picks the summaries up automatically once iCloud has synced them, so the timeline tint and Trends averages are available on both platforms — import once on the iPhone, view anywhere. Snorecard reads sleep samples from Health but never writes anything back.
 
 ## A note on accuracy
 

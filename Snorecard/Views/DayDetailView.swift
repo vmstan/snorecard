@@ -282,6 +282,29 @@ struct DayDetailView: View {
                             onTap: explainTap(.timeInApnea)
                         )
                     }
+                    // Apple Watch sleep-stage chips. Mirror the
+                    // Trends Deep / REM averages so the per-night
+                    // and per-range views read the same. Only on
+                    // nights where we have a summary with non-zero
+                    // asleep time (otherwise the percentage is
+                    // undefined). Reads from the sidecars regardless
+                    // of platform — HealthKit is queried only on
+                    // iOS, but Mac shows whatever iCloud synced.
+                    if let sleep = library.healthSleep.summaryByDate[day.date],
+                       sleep.timeAsleep > 0 {
+                        let deepPct = sleep.fractionAsleep(in: .deep) * 100
+                        let remPct = sleep.fractionAsleep(in: .rem) * 100
+                        StatCard(
+                            label: "Deep Sleep",
+                            value: String(format: "%.0f%%", deepPct),
+                            onTap: explainTap(.deepSleepPercent)
+                        )
+                        StatCard(
+                            label: "REM Sleep",
+                            value: String(format: "%.0f%%", remPct),
+                            onTap: explainTap(.remSleepPercent)
+                        )
+                    }
                     // IPAP gets its own card only when the device
                     // actually delivers extra inspiratory pressure.
                     // On plain CPAP therapy IPAP equals EPAP, so
@@ -410,6 +433,22 @@ struct DayDetailView: View {
                 if let bundle = loadedWaveform, !bundle.events.isEmpty {
                     AHIHourlyChart(
                         events: bundle.events,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                // Sleep-by-hour stack with CPAP usage overlay. Only
+                // renders when both a watch summary and the parsed
+                // waveform bundle are present — needs the bundle's
+                // session list to draw the CPAP-minutes line and
+                // the summary's raw samples to bucket the stages.
+                // Renders on both platforms — the underlying data
+                // comes from sidecars synced via iCloud Drive.
+                if let bundle = loadedWaveform,
+                   let sleep = library.healthSleep.summaryByDate[day.date] {
+                    SleepByHourChart(
+                        summary: sleep,
+                        sessions: bundle.sessions,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
@@ -543,6 +582,8 @@ struct DayDetailView: View {
         case .usage:            return "Usage"
         case .timeInApnea:      return "Time in Apnea"
         case .flowLimit:        return "Flow Limit (95%)"
+        case .deepSleepPercent: return "Deep Sleep"
+        case .remSleepPercent:  return "REM Sleep"
         // Trends-only metrics fall back to their enum label —
         // the daily view never opens the sheet for these, but
         // the switch has to be exhaustive.
@@ -584,6 +625,14 @@ struct DayDetailView: View {
             return String(format: "%.2f%% of usage", pct)
         case .flowLimit:
             return stats.flowLimit95.map { String(format: "%.2f", $0) } ?? "—"
+        case .deepSleepPercent:
+            guard let sleep = library.healthSleep.summaryByDate[day.date],
+                  sleep.timeAsleep > 0 else { return "—" }
+            return String(format: "%.0f%%", sleep.fractionAsleep(in: .deep) * 100)
+        case .remSleepPercent:
+            guard let sleep = library.healthSleep.summaryByDate[day.date],
+                  sleep.timeAsleep > 0 else { return "—" }
+            return String(format: "%.0f%%", sleep.fractionAsleep(in: .rem) * 100)
         // Trends-only metrics have no per-day value — the sheet
         // path on DayDetailView never hits these cases, but
         // exhaustive switching still requires them.

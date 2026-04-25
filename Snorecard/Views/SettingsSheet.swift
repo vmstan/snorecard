@@ -285,6 +285,43 @@ struct SettingsSheet: View {
         }
     }
 
+    /// Master switch for the Apple Watch sleep-stage integration.
+    /// Flipping on triggers an authorization request followed by a
+    /// backfill against the currently-loaded card; flipping off
+    /// clears the in-memory map but leaves sidecars on disk so
+    /// re-enabling picks up where the user left off.
+    @ViewBuilder
+    private var appleWatchSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { library.appleWatchSleepEnabled },
+                set: { library.setAppleWatchSleepEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Watch Sleep")
+                    if library.healthSleep.authState == .unsupported {
+                        Text("Health data isn't available on this device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(library.healthSleep.authState == .unsupported)
+
+            if library.appleWatchSleepEnabled {
+                Button("Re-sync now") {
+                    library.resyncAppleWatchSleep()
+                }
+                .disabled(library.card == nil
+                          || library.healthSleep.backfillProgress != nil)
+            }
+        } header: {
+            Text("Apple Watch")
+        } footer: {
+            Text("Reads sleep stages from the Health app so Snorecard can show them next to each night's CPAP data. Snorecard never writes anything to Health.")
+        }
+    }
+
     /// Cadence picker for the in-app auto-reload. Mirrors the
     /// existing Apple Intelligence toggle pattern (Binding wrapping
     /// a Library property) so both controls read from one source of
@@ -396,6 +433,10 @@ struct SettingsSheet: View {
     /// H / CA colours in the event donut and the Events-by-Hour
     /// chart. Named presets swap in alternative schemes for users
     /// who find the default muted red/yellow/blue hard to read.
+    /// Also exposes the long-form label preference for the CA
+    /// category so the user can pick "Clear Airway" (default,
+    /// matches OSCAR / SleepHQ / clinician usage) or the more
+    /// formal "Central Apnea".
     @ViewBuilder
     private var eventPaletteSection: some View {
         Section {
@@ -410,10 +451,21 @@ struct SettingsSheet: View {
                     Text(palette.displayName).tag(palette)
                 }
             }
+            Picker(
+                "CA Label",
+                selection: Binding(
+                    get: { library.centralEventLabel },
+                    set: { library.centralEventLabel = $0 }
+                )
+            ) {
+                ForEach(CentralEventLabel.allCases) { label in
+                    Text(label.displayName).tag(label)
+                }
+            }
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events.")
         }
     }
 
@@ -525,6 +577,11 @@ struct SettingsSheet: View {
     private var advancedTab: some View {
         Form {
             appleIntelligenceSection
+            #if os(iOS)
+            // Apple Watch sleep is iOS-only — macOS HealthKit
+            // sleep sync from iPhone is unreliable.
+            appleWatchSection
+            #endif
             backgroundReloadSection
             maintenanceSection
         }

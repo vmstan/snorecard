@@ -39,6 +39,36 @@ struct TrendsView: View {
         allStats.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
     }
 
+    /// Apple Watch sleep summaries that fall inside the currently-
+    /// selected range, oldest first. Pulled from the coordinator's
+    /// in-memory map so the view doesn't re-query HealthKit when the
+    /// range changes.
+    private var sleepSummariesInRange: [NightlySleepSummary] {
+        library.healthSleep.summaryByDate.values
+            .filter { $0.nightDate >= rangeStart && $0.nightDate <= rangeEnd }
+            .sorted { $0.nightDate < $1.nightDate }
+    }
+
+    /// Average % of asleep time spent in Deep sleep across the
+    /// in-range summaries, or `nil` when the range has no Apple
+    /// Watch data. Only summaries with non-zero `timeAsleep`
+    /// contribute — otherwise the fraction is undefined and would
+    /// drag the average toward zero.
+    private var avgDeepPercent: Double? {
+        let scored = sleepSummariesInRange.filter { $0.timeAsleep > 0 }
+        guard !scored.isEmpty else { return nil }
+        let sum = scored.reduce(0) { $0 + $1.fractionAsleep(in: .deep) }
+        return (sum / Double(scored.count)) * 100
+    }
+
+    /// Same as `avgDeepPercent` but for REM.
+    private var avgRemPercent: Double? {
+        let scored = sleepSummariesInRange.filter { $0.timeAsleep > 0 }
+        guard !scored.isEmpty else { return nil }
+        let sum = scored.reduce(0) { $0 + $1.fractionAsleep(in: .rem) }
+        return (sum / Double(scored.count)) * 100
+    }
+
     private var rangeStart: Date {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
@@ -110,6 +140,14 @@ struct TrendsView: View {
                         usageChart
                         glasgowChart
                         timeInApneaChart
+                        // "Stage minutes per night" stacked bar
+                        // chart sits next to Time in Apnea so the
+                        // sleep-architecture story reads alongside
+                        // the apnea metrics it's most often
+                        // compared to.
+                        if !sleepSummariesInRange.isEmpty {
+                            sleepStagesChart
+                        }
                         pressureChart
                         flowLimitChart
                         tidalVolumeChart
@@ -363,6 +401,36 @@ struct TrendsView: View {
                     )
                 )
             }
+            // Apple Watch sleep-stage chips. Sit alongside the rest
+            // of the night-aggregate cards so the per-stage averages
+            // read at the same level as Compliance / Usage / Time
+            // in Apnea. Both platforms: the data comes from the
+            // sidecars iCloud Drive syncs, not from a HealthKit
+            // query (which only runs on iOS). Tap-to-explain wiring
+            // routes through the same `explainTap` helper as every
+            // other Trends card.
+            if let deepPct = avgDeepPercent {
+                card(
+                    "Deep Sleep (AVG)",
+                    value: String(format: "%.0f%%", deepPct),
+                    explain: TrendsExplainContext(
+                        metric: .deepSleepPercent,
+                        displayValue: String(format: "%.0f%%", deepPct),
+                        averageValue: deepPct
+                    )
+                )
+            }
+            if let remPct = avgRemPercent {
+                card(
+                    "REM Sleep (AVG)",
+                    value: String(format: "%.0f%%", remPct),
+                    explain: TrendsExplainContext(
+                        metric: .remSleepPercent,
+                        displayValue: String(format: "%.0f%%", remPct),
+                        averageValue: remPct
+                    )
+                )
+            }
             // IPAP gets a separate card only when the range's
             // average IPAP sits meaningfully above EPAP — i.e.
             // some nights used bilevel or EPR-style therapy. On
@@ -581,6 +649,8 @@ struct TrendsView: View {
         case .compliance:       return "Compliance"
         case .daysWithData:     return "Days with Data"
         case .sessionsPerNight: return "Sessions / Night (AVG)"
+        case .deepSleepPercent: return "Deep Sleep (AVG)"
+        case .remSleepPercent:  return "REM Sleep (AVG)"
         }
     }
 
@@ -664,6 +734,52 @@ struct TrendsView: View {
                 }
             } else {
                 emptyPlaceholder("No event-duration data recorded.")
+            }
+        }
+    }
+
+    /// Per-night stacked-bar of Deep / Core / REM minutes — the
+    /// "Stage minutes per night" panel formerly inside the
+    /// dedicated Apple Watch Sleep section, now part of the main
+    /// chart list. Only built when `sleepSummariesInRange` is
+    /// non-empty (caller gates rendering on the same condition).
+    private var sleepStagesChart: some View {
+        struct StackPoint: Identifiable {
+            var id: String { "\(date.timeIntervalSinceReferenceDate)|\(stage)" }
+            let date: Date
+            let stage: String
+            let minutes: Double
+        }
+        let points: [StackPoint] = sleepSummariesInRange.flatMap { summary in
+            [
+                StackPoint(date: summary.nightDate, stage: "Deep", minutes: summary.deepSeconds / 60),
+                StackPoint(date: summary.nightDate, stage: "Core", minutes: summary.coreSeconds / 60),
+                StackPoint(date: summary.nightDate, stage: "REM", minutes: summary.remSeconds / 60)
+            ]
+        }
+        return chartSection(title: "Sleep Stages", subtitle: "minutes per night") {
+            Chart(points) { point in
+                BarMark(
+                    x: .value("Night", point.date, unit: .day),
+                    y: .value("Minutes", point.minutes)
+                )
+                .foregroundStyle(by: .value("Stage", point.stage))
+            }
+            .chartForegroundStyleScale([
+                "Deep": library.eventColorPalette.deepSleep,
+                "Core": library.eventColorPalette.coreSleep,
+                "REM": library.eventColorPalette.remSleep
+            ])
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let m = value.as(Double.self) {
+                            Text("\(Int(m))m").font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
             }
         }
     }
@@ -901,26 +1017,19 @@ struct TrendsView: View {
     /// day, 14-day windows show every other day, 30-day windows show
     /// weekly.
     private var xAxisTickDates: [Date] {
+        // Label every day in the range — matches the daily-view
+        // hourly charts where every hour gets its own label
+        // regardless of width. SwiftUI Charts handles layout when
+        // the labels run together; the user explicitly preferred
+        // a complete x-axis to a strided one.
         let cal = Calendar.current
-        let days = cal.dateComponents([.day], from: rangeStart, to: rangeEnd).day ?? 0
-        let stride: Int
-        switch days {
-        case ..<8:  stride = 1
-        case ..<15: stride = 2
-        case ..<22: stride = 3
-        default:    stride = 5
-        }
         var dates: [Date] = []
         var current = cal.startOfDay(for: rangeStart)
         let end = cal.startOfDay(for: rangeEnd)
         while current <= end {
             dates.append(current)
-            guard let next = cal.date(byAdding: .day, value: stride, to: current) else { break }
+            guard let next = cal.date(byAdding: .day, value: 1, to: current) else { break }
             current = next
-        }
-        // Always include the last day in the range for context.
-        if let last = dates.last, last != end {
-            dates.append(end)
         }
         return dates
     }

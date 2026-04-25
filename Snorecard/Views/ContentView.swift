@@ -284,6 +284,35 @@ struct ContentView: View {
         } message: {
             Text(rebuildCacheWarning)
         }
+        // Apple Watch sleep first-launch prompt. macOS never sets
+        // `pendingHealthKitPrompt` (the Library's
+        // `maybeShowHealthKitFirstRunPrompt` is a no-op there), so
+        // the alert is silently inert on Mac without needing a
+        // platform gate.
+        .alert(
+            "Pull sleep stages from Apple Watch?",
+            isPresented: Binding(
+                get: { library.pendingHealthKitPrompt },
+                set: { newValue in
+                    // Treat dismissal-by-tap-outside the same as
+                    // "Not now" so we don't keep re-presenting on
+                    // every subsequent import.
+                    if !newValue { library.declineHealthKitFirstRunPrompt() }
+                }
+            )
+        ) {
+            Button("Not now", role: .cancel) {
+                library.declineHealthKitFirstRunPrompt()
+            }
+            Button("Connect") {
+                library.acceptHealthKitFirstRunPrompt()
+            }
+        } message: {
+            Text(
+                "Snorecard can show your Apple Watch sleep stages alongside each night's CPAP data. "
+                + "You'll be asked to grant Health access — Snorecard only reads sleep samples and never writes anything."
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardRebuildCache)) { _ in
             if library.card?.identification?.serialNumber != nil {
                 isConfirmingRebuild = true
