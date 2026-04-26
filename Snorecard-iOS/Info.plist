@@ -23,7 +23,7 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.medical</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Snorecard reads Apple Watch sleep stages so it can show them next to your CPAP data. Snorecard never writes anything to Health.</string>
+	<string>Snorecard reads Apple Watch sleep stages and your height and weight from Apple Health so it can show them alongside your CPAP data and personalize your profile. Snorecard never writes anything to Health.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026</string>
 	<key>NSUbiquitousContainers</key>
