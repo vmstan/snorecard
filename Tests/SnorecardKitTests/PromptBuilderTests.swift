@@ -109,7 +109,12 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertEqual(input.usageHours, 7.2, accuracy: 0.0001)
         XCTAssertEqual(input.ahi, 3.1, accuracy: 0.0001)
         XCTAssertEqual(input.glasgowIndex, 1.82)
-        XCTAssertEqual(input.pressure95, 11.5)
+        // `NightSummaryInput.pressure95` sources from `epap95`
+        // (the target EPAP shown on `DayDetailView`'s EPAP card),
+        // not from the measured `pressure95` field, so the prompt
+        // number matches the on-screen number. Round of 11.1 is
+        // identity here.
+        XCTAssertEqual(input.pressure95, 11.1)
         XCTAssertEqual(input.eprSupport, 2.1)
         XCTAssertEqual(input.leak95LPerMin, 6)
         XCTAssertEqual(input.tidalVolumeMedianML, 481)
