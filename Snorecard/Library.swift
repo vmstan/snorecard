@@ -472,6 +472,25 @@ final class Library {
         kvs.synchronize()
 
         restartBackgroundReload()
+
+        // Register the HealthKit observer + background delivery
+        // immediately when the toggle is on, before any card has
+        // loaded. Required for HealthKit-triggered cold launches:
+        // iOS background-launches the app when new sleep samples
+        // arrive, but only fires the observer if it was registered
+        // during this launch — so we can't wait for the card-load
+        // path that runs from `ContentView.task`. Idempotent at
+        // both layers (Library + Coordinator + Fetcher), so
+        // foreground launches re-call this without duplicating
+        // work. iOS only — macOS keeps the coordinator disabled.
+        #if os(iOS)
+        if healthEnabled {
+            Task { [weak self] in
+                await self?.healthSleep.requestAuthorization()
+                await self?.healthSleep.startObservingIfNeeded()
+            }
+        }
+        #endif
     }
 
     /// Clamp a stored/externally-supplied interval to the picker's
@@ -769,6 +788,11 @@ final class Library {
             if let card = self?.card {
                 await self?.healthSleep.backfill(card: card)
             }
+            // Register the HealthKit observer + enable background
+            // delivery now that auth has been requested. Idempotent,
+            // so calling on every toggle-on (or every launch via the
+            // init path) is harmless.
+            await self?.healthSleep.startObservingIfNeeded()
         }
     }
 

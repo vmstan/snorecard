@@ -25,6 +25,21 @@ public final class HealthKitSleepCoordinator {
     /// fetches without round-tripping through `Library` state.
     public private(set) var isEnabled: Bool
 
+    /// Most recently `attach`ed card, captured so the
+    /// background-delivery observer's handler has a card to refresh
+    /// against when HealthKit posts a new sample. `nil` while no
+    /// card is loaded — e.g. between Library init and the first
+    /// successful `load(_:)`. The handler degrades gracefully in
+    /// that case (acks the event, leaves the next foreground
+    /// `attach` to pick the data up).
+    public private(set) var lastCard: ResMedSDCard?
+
+    /// `true` once `startObservingIfNeeded` succeeded so the
+    /// coordinator doesn't re-register on every `attach`. Reset on
+    /// `setEnabled(false)` so toggle-off / toggle-on cycles
+    /// re-register with a fresh handler.
+    private var isObserving = false
+
     private let fetcher: SleepSampleFetching
     private let calendar: Calendar
     /// Soft floor: don't re-query a sidecar whose `generatedAt` is
@@ -44,11 +59,22 @@ public final class HealthKitSleepCoordinator {
     }
 
     /// Toggle the user-facing on/off switch. Disabling clears the
-    /// in-memory map but leaves sidecars on disk so the user can flip
-    /// it back on without losing history.
+    /// in-memory map AND tears down the HealthKit observer +
+    /// background delivery so iOS doesn't keep waking us. Sidecars
+    /// stay on disk so flipping back on re-hydrates without
+    /// losing history.
     public func setEnabled(_ enabled: Bool) {
+        let wasEnabled = isEnabled
         isEnabled = enabled
-        if !enabled { summaryByDate = [:] }
+        if !enabled {
+            summaryByDate = [:]
+            if wasEnabled, isObserving {
+                isObserving = false
+                Task { [fetcher] in
+                    await fetcher.stopObserving()
+                }
+            }
+        }
     }
 
     /// Ask HealthKit for read access to sleep analysis. Idempotent —
@@ -70,6 +96,10 @@ public final class HealthKitSleepCoordinator {
     /// Hydrate the in-memory map from disk for the days in `card` and,
     /// when authorization is in hand and any day is missing or stale,
     /// run a single batched fetch + bucket pass to fill the gaps.
+    /// Also captures `card` as `lastCard` so the
+    /// background-delivery observer's handler has a card to refresh
+    /// against, and starts the observer + background delivery if
+    /// not already running.
     public func attach(card: ResMedSDCard) async {
         // 1. Disk hydration — always runs, regardless of auth state.
         var loaded: [Date: NightlySleepSummary] = [:]
@@ -80,6 +110,7 @@ public final class HealthKitSleepCoordinator {
             }
         }
         summaryByDate = loaded
+        lastCard = card
 
         guard isEnabled else { return }
         // `authState` is in-memory only, so a relaunch always starts
@@ -93,6 +124,40 @@ public final class HealthKitSleepCoordinator {
         }
         guard authState == .requested else { return }
         await backfill(card: card)
+        await startObservingIfNeeded()
+    }
+
+    /// Register the HealthKit observer + enable background delivery
+    /// if we haven't already. Idempotent at the fetcher level too,
+    /// so calling repeatedly (every `attach`, every cold launch with
+    /// the toggle on) is harmless.
+    ///
+    /// Background-delivery handler captures `self` weakly and
+    /// dispatches its async refresh on the main actor. The handler
+    /// is required to invoke `done()` exactly once after the work
+    /// finishes — iOS revokes background delivery for apps that
+    /// don't acknowledge events.
+    public func startObservingIfNeeded() async {
+        guard isEnabled, authState == .requested, !isObserving else { return }
+        do {
+            try await fetcher.startObserving { [weak self] done in
+                Task { @MainActor [weak self] in
+                    defer { done() }
+                    guard let self,
+                          let card = self.lastCard else { return }
+                    await self.refreshRecent(days: 3, in: card)
+                }
+            }
+            isObserving = true
+            healthKitLog.debug("observer registered")
+        } catch {
+            // Best-effort; the observer is a "wake me up when new
+            // data arrives" optimisation, not load-bearing for the
+            // foreground experience.
+            healthKitLog.error(
+                "startObserving failed: \(String(describing: error), privacy: .public)"
+            )
+        }
     }
 
     /// Fetch every missing/stale night for `card` in a single

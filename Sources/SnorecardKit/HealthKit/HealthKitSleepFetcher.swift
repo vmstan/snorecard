@@ -32,6 +32,23 @@ public protocol SleepSampleFetching: Sendable {
     /// Single round-trip; HealthKit pages internally. Sorted by
     /// `start` ascending so the bucketing pass can stream.
     func fetchRange(start: Date, end: Date) async throws -> [SleepStageSample]
+
+    /// Begin observing new sleep-analysis samples and enable
+    /// HealthKit background delivery so the OS wakes the app
+    /// when the watch posts a new night. The handler receives a
+    /// `done` closure that **must** be invoked once the async
+    /// follow-up work has finished — iOS revokes background
+    /// delivery for handlers that don't acknowledge events
+    /// promptly. Calling this method twice is a no-op so
+    /// callers can re-invoke after relaunch without bookkeeping.
+    func startObserving(
+        _ handler: @Sendable @escaping (@Sendable @escaping () -> Void) -> Void
+    ) async throws
+
+    /// Tear down the active observer (if any) and disable
+    /// background delivery. Safe to call when nothing is
+    /// observed.
+    func stopObserving() async
 }
 
 public enum HealthKitSleepError: Error, Sendable {
@@ -44,9 +61,25 @@ public enum HealthKitSleepError: Error, Sendable {
 
 #if canImport(HealthKit)
 
+/// Bridges HealthKit's non-`@Sendable` completion handler into a
+/// `@Sendable` closure so the observer-query callback can hand it
+/// off to async tails. Apple's `HKObserverQueryCompletionHandler`
+/// is documented as safe to invoke from any thread; the lack of
+/// `@Sendable` on the typealias is purely an annotation gap.
+private struct UncheckedSendableCompletion: @unchecked Sendable {
+    let invoke: () -> Void
+    init(_ block: @escaping () -> Void) { self.invoke = block }
+    func callAsFunction() { invoke() }
+}
+
 /// Production fetcher backed by `HKHealthStore`.
 public actor HealthKitSleepFetcher: SleepSampleFetching {
     private let store: HKHealthStore
+    /// Currently-active observer query, retained so we can
+    /// `stop` it on tear-down. `nil` when not observing — also
+    /// the "is observing?" gate that makes `startObserving`
+    /// idempotent across relaunches.
+    private var observerQuery: HKObserverQuery?
 
     public init(store: HKHealthStore = HKHealthStore()) {
         self.store = store
@@ -105,43 +138,73 @@ public actor HealthKitSleepFetcher: SleepSampleFetching {
         return mapped.sorted { $0.start < $1.start }
     }
 
-    /// Long-running observer so a new night that lands on the watch
-    /// while the app is open re-bucketed into the in-memory map.
-    /// The handler is invoked with the date the observer last fired
-    /// (always `Date()` — there's no per-sample resolution at the
-    /// `HKObserverQuery` layer; coordinators interpret this as
-    /// "re-query recent days").
-    @discardableResult
+    /// Register an `HKObserverQuery` for sleep-analysis and turn
+    /// on background delivery (iOS only). When HealthKit reports
+    /// new samples the handler runs with a `done` closure it must
+    /// invoke once any follow-up work completes — iOS revokes
+    /// background delivery for apps that don't ack events. The
+    /// caller should NOT call `done` directly inside the handler
+    /// if it spawns async work; instead capture and call it from
+    /// the async tail.
+    ///
+    /// Idempotent: a second invocation is a no-op so the
+    /// coordinator can call this both at app launch and after
+    /// a card load without bookkeeping.
     public func startObserving(
-        _ handler: @Sendable @escaping (Date) -> Void
-    ) async throws -> HKObserverQuery {
+        _ handler: @Sendable @escaping (@Sendable @escaping () -> Void) -> Void
+    ) async throws {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HealthKitSleepError.unsupported
         }
+        if observerQuery != nil { return }
         let type = HKCategoryType(.sleepAnalysis)
         let observer = HKObserverQuery(
             sampleType: type,
             predicate: nil
         ) { _, completion, _ in
-            handler(Date())
-            completion()
+            // HealthKit's completion handler isn't typed `@Sendable`
+            // even though it's safe to call from any actor; wrap it
+            // in an unchecked-Sendable box so the caller's async tail
+            // can invoke it once the follow-up work finishes.
+            let boxed = UncheckedSendableCompletion(completion)
+            handler { boxed.callAsFunction() }
         }
         store.execute(observer)
+        observerQuery = observer
         #if os(iOS)
         // Background delivery on the watch's own cadence — iOS only.
         // Errors are non-fatal (background delivery isn't load-bearing
-        // for foreground use); log via the framework-error path so
-        // callers can surface them if they care.
-        try? await store.enableBackgroundDelivery(
-            for: type,
-            frequency: .immediate
-        )
+        // for foreground use); the observer still fires while the
+        // app is open even if this fails.
+        do {
+            try await store.enableBackgroundDelivery(
+                for: type,
+                frequency: .immediate
+            )
+            healthKitLog.info("background delivery enabled for sleep analysis")
+        } catch {
+            healthKitLog.error(
+                "enableBackgroundDelivery failed: \(String(describing: error), privacy: .public)"
+            )
+        }
         #endif
-        return observer
     }
 
-    public func stopObserving(_ query: HKObserverQuery) {
-        store.stop(query)
+    public func stopObserving() async {
+        if let query = observerQuery {
+            store.stop(query)
+            observerQuery = nil
+        }
+        #if os(iOS)
+        let type = HKCategoryType(.sleepAnalysis)
+        do {
+            try await store.disableBackgroundDelivery(for: type)
+            healthKitLog.debug("background delivery disabled")
+        } catch {
+            // Non-fatal — disabling can fail if it was never
+            // enabled in this process.
+        }
+        #endif
     }
 
     /// Map an `HKCategorySample` to our framework-free shape. Returns
