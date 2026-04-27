@@ -4,33 +4,42 @@ import os.log
 import HealthKit
 #endif
 
-/// Read-only fetcher for the small handful of Apple Health fields
-/// that map onto Snorecard's user profile (height + body mass).
-/// Apple HealthKit doesn't expose the Medical-ID name to third-
-/// party apps so name stays manual; date-of-birth / biological
-/// sex aren't surfaced today either, though they could be added
-/// later via `HKCharacteristicType` if the profile grows.
+/// Read-only fetcher for the Apple Health fields that map onto
+/// Snorecard's user profile — height, body mass, biological sex,
+/// and date of birth. Apple HealthKit doesn't expose the Medical-
+/// ID name to third-party apps so name stays manual.
 ///
 /// The protocol stays HealthKit-free so a mock can drop in for
 /// tests without `import HealthKit`.
 public protocol ProfileFetching: Sendable {
-    /// Ask the user for read access to bodyMass + height, then
-    /// fetch the most recent sample of each. Returns metric values
-    /// regardless of the user's display unit preference — Apple
-    /// Health stores in metric internally.
+    /// Ask the user for read access to bodyMass, height, biological
+    /// sex, and date of birth, then fetch the most recent sample /
+    /// characteristic of each. Returns metric values regardless of
+    /// the user's display unit preference — Apple Health stores in
+    /// metric internally.
     func fetchProfile() async throws -> ProfileFetchResult
 }
 
-/// Result bundle for `ProfileFetching.fetchProfile`. Both fields
-/// are independently optional so a user with weight in Health but
-/// no height (or vice versa) still gets a usable import.
+/// Result bundle for `ProfileFetching.fetchProfile`. Every field is
+/// independently optional so a user with weight in Health but no
+/// height (or no Medical-ID date-of-birth) still gets a usable
+/// import.
 public struct ProfileFetchResult: Sendable, Equatable {
     public let heightCm: Double?
     public let weightKg: Double?
+    public let biologicalSex: BiologicalSex?
+    public let dateOfBirth: Date?
 
-    public init(heightCm: Double?, weightKg: Double?) {
+    public init(
+        heightCm: Double?,
+        weightKg: Double?,
+        biologicalSex: BiologicalSex? = nil,
+        dateOfBirth: Date? = nil
+    ) {
         self.heightCm = heightCm
         self.weightKg = weightKg
+        self.biologicalSex = biologicalSex
+        self.dateOfBirth = dateOfBirth
     }
 }
 
@@ -54,10 +63,12 @@ public actor HealthKitProfileFetcher: ProfileFetching {
         }
         let height = HKQuantityType(.height)
         let mass = HKQuantityType(.bodyMass)
+        let sexType = HKCharacteristicType(.biologicalSex)
+        let dobType = HKCharacteristicType(.dateOfBirth)
         do {
             try await store.requestAuthorization(
                 toShare: [],
-                read: [height, mass]
+                read: [height, mass, sexType, dobType]
             )
         } catch {
             throw HealthKitSleepError.framework(String(describing: error))
@@ -66,10 +77,56 @@ public actor HealthKitProfileFetcher: ProfileFetching {
         async let weightKg = latestSample(of: mass, unit: .gramUnit(with: .kilo))
         let h = await heightCm
         let w = await weightKg
+        let sex = readBiologicalSex()
+        let dob = readDateOfBirth()
         healthKitLog.debug(
-            "fetchProfile heightCm=\(h ?? -1, privacy: .public) weightKg=\(w ?? -1, privacy: .public)"
+            "fetchProfile heightCm=\(h ?? -1, privacy: .public) weightKg=\(w ?? -1, privacy: .public) sex=\(sex?.rawValue ?? "nil", privacy: .public) dob=\(dob?.description ?? "nil", privacy: .public)"
         )
-        return ProfileFetchResult(heightCm: h, weightKg: w)
+        return ProfileFetchResult(
+            heightCm: h,
+            weightKg: w,
+            biologicalSex: sex,
+            dateOfBirth: dob
+        )
+    }
+
+    /// Read the Medical-ID biological-sex characteristic. Returns
+    /// `nil` when the user hasn't filled it in (or denied access);
+    /// HealthKit's `notSet` collapses into `nil` so callers don't
+    /// have to special-case it.
+    private func readBiologicalSex() -> BiologicalSex? {
+        do {
+            let object = try store.biologicalSex()
+            switch object.biologicalSex {
+            case .notSet: return nil
+            case .female: return .female
+            case .male:   return .male
+            case .other:  return .other
+            @unknown default: return nil
+            }
+        } catch {
+            healthKitLog.error(
+                "biologicalSex read failed: \(String(describing: error), privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    /// Read the Medical-ID date-of-birth characteristic. HealthKit
+    /// returns calendar `DateComponents`; resolve them through the
+    /// current calendar so we end up with a `Date` at midnight on
+    /// the user's birthday.
+    private func readDateOfBirth() -> Date? {
+        do {
+            let components = try store.dateOfBirthComponents()
+            return Calendar(identifier: components.calendar?.identifier ?? .gregorian)
+                .date(from: components)
+        } catch {
+            healthKitLog.error(
+                "dateOfBirth read failed: \(String(describing: error), privacy: .public)"
+            )
+            return nil
+        }
     }
 
     /// Fetch the single most recent sample for `type`, expressed

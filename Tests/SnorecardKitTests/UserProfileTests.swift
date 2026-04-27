@@ -18,13 +18,6 @@ final class UserProfileTests: XCTestCase {
         XCTAssertTrue(p.isEmpty)
     }
 
-    func testProfileWithEmptyPrescriptionIsStillEmpty() {
-        var p = UserProfile.empty
-        p.prescription = UserProfilePrescription(mode: .cpap)
-        XCTAssertTrue(p.isEmpty,
-                      "A prescription with only the default mode and no values shouldn't count as filled.")
-    }
-
     func testProfileWithDiagnosisDateIsNotEmpty() {
         var p = UserProfile.empty
         p.diagnosisDate = Date()
@@ -38,13 +31,10 @@ final class UserProfileTests: XCTestCase {
             weightKg: 80,
             heightSource: .healthKit,
             weightSource: .manual,
-            prescription: UserProfilePrescription(
-                mode: .bipap,
-                pressureMin: 9,
-                pressureMax: 16,
-                pressureSupport: 4,
-                notes: "Dr. Lee — ResMed AirCurve 10 VAuto"
-            ),
+            biologicalSex: .female,
+            biologicalSexSource: .healthKit,
+            dateOfBirth: Date(timeIntervalSince1970: 500_000_000),
+            dateOfBirthSource: .healthKit,
             untreatedAHI: 22.4,
             diagnosisDate: Date(timeIntervalSince1970: 1_700_000_000)
         )
@@ -61,18 +51,32 @@ final class UserProfileTests: XCTestCase {
         let profile = UserProfile()
         XCTAssertEqual(profile.heightSource, .manual)
         XCTAssertEqual(profile.weightSource, .manual)
+        XCTAssertEqual(profile.biologicalSexSource, .manual)
+        XCTAssertEqual(profile.dateOfBirthSource, .manual)
     }
 
-    func testPrescriptionHasAnyValueDetectsPopulatedFields() {
-        var rx = UserProfilePrescription(mode: .cpap)
-        XCTAssertFalse(rx.hasAnyValue)
-        rx.pressureMin = 9
-        XCTAssertTrue(rx.hasAnyValue)
-        rx.pressureMin = nil
-        rx.notes = "  "
-        XCTAssertFalse(rx.hasAnyValue,
-                       "Whitespace-only notes shouldn't count as a populated field.")
-        rx.notes = "Auto-titration"
-        XCTAssertTrue(rx.hasAnyValue)
+    func testAgeYearsDerivesFromDateOfBirth() {
+        var p = UserProfile.empty
+        XCTAssertNil(p.ageYears)
+        p.dateOfBirth = Calendar.current.date(byAdding: .year, value: -42, to: Date())
+        XCTAssertEqual(p.ageYears, 42)
+    }
+
+    func testAgeYearsNilsOutForFutureDates() {
+        var p = UserProfile.empty
+        p.dateOfBirth = Calendar.current.date(byAdding: .year, value: 5, to: Date())
+        XCTAssertNil(p.ageYears)
+    }
+
+    func testProfileWithBiologicalSexIsNotEmpty() {
+        var p = UserProfile.empty
+        p.biologicalSex = .male
+        XCTAssertFalse(p.isEmpty)
+    }
+
+    func testProfileWithDateOfBirthIsNotEmpty() {
+        var p = UserProfile.empty
+        p.dateOfBirth = Date(timeIntervalSince1970: 500_000_000)
+        XCTAssertFalse(p.isEmpty)
     }
 }

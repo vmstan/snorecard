@@ -381,9 +381,9 @@ struct SettingsSheet: View {
     }
 
     /// Profile tab — user's own details (name, height, weight,
-    /// prescription, diagnosis). On iOS the height + weight rows
-    /// can be filled from Apple Health; on macOS those values come
-    /// across via iCloud KVS, read-only.
+    /// untreated AHI, diagnosis date). On iOS the height + weight
+    /// rows can be filled from Apple Health; on macOS those values
+    /// come across via iCloud KVS, read-only.
     @ViewBuilder
     private var profileTab: some View {
         ProfileTab()

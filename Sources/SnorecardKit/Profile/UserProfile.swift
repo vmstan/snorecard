@@ -11,78 +11,24 @@ public enum ProfileFieldSource: String, Codable, Sendable, Equatable {
     case healthKit
 }
 
-/// User-supplied therapy prescription details. Snorecard never
-/// imports these — they live with the patient, not the device, and
-/// no exposed Health API surfaces them — so every field is
-/// editable on both platforms. `mode` drives whether the UI shows
-/// a single fixed pressure or a min/max range.
-public struct UserProfilePrescription: Codable, Sendable, Equatable {
-    public enum Mode: String, Codable, Sendable, CaseIterable, Identifiable, Equatable {
-        case cpap
-        case apap
-        case bipap
-        case asv
+/// Biological sex as Apple Health's Medical-ID surfaces it, mirrored
+/// here so the model stays HealthKit-free. The `HKBiologicalSex.notSet`
+/// case maps to `nil` rather than its own enum member — "the user
+/// hasn't recorded a value" is the same idea on both sides of the
+/// import.
+public enum BiologicalSex: String, Codable, Sendable, CaseIterable, Identifiable, Equatable {
+    case female
+    case male
+    case other
 
-        public var id: String { rawValue }
+    public var id: String { rawValue }
 
-        /// Long form for pickers and prose. Keep symmetric with
-        /// `DeviceType.displayName` so the prescription mode reads
-        /// the same as the user's device-type selection elsewhere.
-        public var displayName: String {
-            switch self {
-            case .cpap:  return "CPAP"
-            case .apap:  return "APAP"
-            case .bipap: return "BiPAP"
-            case .asv:   return "ASV"
-            }
+    public var displayName: String {
+        switch self {
+        case .female: return "Female"
+        case .male:   return "Male"
+        case .other:  return "Other"
         }
-    }
-
-    /// Therapy mode the prescription specifies. Drives the UI's
-    /// single-pressure-vs-range branching.
-    public var mode: Mode
-    /// Lower bound of the prescribed pressure range, in cmH2O. For
-    /// fixed-pressure CPAP this is the only pressure field used —
-    /// the UI hides `pressureMax` and treats this as "the
-    /// prescribed pressure".
-    public var pressureMin: Double?
-    /// Upper bound of the prescribed pressure range, in cmH2O.
-    /// Only meaningful for auto-titrating modes (APAP, BiPAP-auto,
-    /// ASV); the UI hides this for plain CPAP.
-    public var pressureMax: Double?
-    /// Bilevel pressure support delta or EPR level, in cmH2O — the
-    /// difference between IPAP and EPAP for bilevel modes, or the
-    /// EPR drop for CPAP/APAP. Optional because not every
-    /// prescription specifies one.
-    public var pressureSupport: Double?
-    /// Free-form notes (clinician name, prescription date, mask
-    /// recommendation, anything else worth carrying).
-    public var notes: String?
-
-    public init(
-        mode: Mode = .cpap,
-        pressureMin: Double? = nil,
-        pressureMax: Double? = nil,
-        pressureSupport: Double? = nil,
-        notes: String? = nil
-    ) {
-        self.mode = mode
-        self.pressureMin = pressureMin
-        self.pressureMax = pressureMax
-        self.pressureSupport = pressureSupport
-        self.notes = notes
-    }
-
-    /// `true` when the prescription has at least one numeric value
-    /// or note set — used by the UI to decide whether to render a
-    /// "Not set" placeholder vs the populated fields.
-    public var hasAnyValue: Bool {
-        if pressureMin != nil { return true }
-        if pressureMax != nil { return true }
-        if pressureSupport != nil { return true }
-        if let trimmed = notes?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !trimmed.isEmpty { return true }
-        return false
     }
 }
 
@@ -111,10 +57,20 @@ public struct UserProfile: Codable, Sendable, Equatable {
     public var heightSource: ProfileFieldSource
     /// Where `weightKg` came from — same semantics as `heightSource`.
     public var weightSource: ProfileFieldSource
-    /// Active CPAP / bilevel prescription details, if known. `nil`
-    /// when the user hasn't filled any of the prescription fields
-    /// in Settings.
-    public var prescription: UserProfilePrescription?
+    /// Biological sex from the user's Apple Health Medical ID, or
+    /// the manual override they typed in Snorecard.
+    public var biologicalSex: BiologicalSex?
+    /// Where `biologicalSex` came from — same `.healthKit` /
+    /// `.manual` semantics as `heightSource`.
+    public var biologicalSexSource: ProfileFieldSource
+    /// Date of birth from the user's Apple Health Medical ID, or a
+    /// manual override. Stored at calendar-day precision; the UI
+    /// derives age from it rather than storing age directly so the
+    /// number doesn't go stale on a birthday.
+    public var dateOfBirth: Date?
+    /// Where `dateOfBirth` came from — same semantics as
+    /// `heightSource`.
+    public var dateOfBirthSource: ProfileFieldSource
     /// Untreated AHI from the user's diagnostic sleep study, in
     /// events per hour. Useful as a long-running anchor so the
     /// user can see "how bad was it before therapy started".
@@ -129,7 +85,10 @@ public struct UserProfile: Codable, Sendable, Equatable {
         weightKg: Double? = nil,
         heightSource: ProfileFieldSource = .manual,
         weightSource: ProfileFieldSource = .manual,
-        prescription: UserProfilePrescription? = nil,
+        biologicalSex: BiologicalSex? = nil,
+        biologicalSexSource: ProfileFieldSource = .manual,
+        dateOfBirth: Date? = nil,
+        dateOfBirthSource: ProfileFieldSource = .manual,
         untreatedAHI: Double? = nil,
         diagnosisDate: Date? = nil
     ) {
@@ -138,9 +97,22 @@ public struct UserProfile: Codable, Sendable, Equatable {
         self.weightKg = weightKg
         self.heightSource = heightSource
         self.weightSource = weightSource
-        self.prescription = prescription
+        self.biologicalSex = biologicalSex
+        self.biologicalSexSource = biologicalSexSource
+        self.dateOfBirth = dateOfBirth
+        self.dateOfBirthSource = dateOfBirthSource
         self.untreatedAHI = untreatedAHI
         self.diagnosisDate = diagnosisDate
+    }
+
+    /// Convenience for the UI — current age in whole years derived
+    /// from `dateOfBirth`. Returns `nil` if DOB isn't set or sits in
+    /// the future.
+    public var ageYears: Int? {
+        guard let dob = dateOfBirth else { return nil }
+        let years = Calendar.current.dateComponents([.year], from: dob, to: Date()).year
+        guard let years, years >= 0 else { return nil }
+        return years
     }
 
     /// Empty profile — every field nil, both sources defaulting to
@@ -158,7 +130,8 @@ public struct UserProfile: Codable, Sendable, Equatable {
         }
         if heightCm != nil { return false }
         if weightKg != nil { return false }
-        if prescription?.hasAnyValue == true { return false }
+        if biologicalSex != nil { return false }
+        if dateOfBirth != nil { return false }
         if untreatedAHI != nil { return false }
         if diagnosisDate != nil { return false }
         return true

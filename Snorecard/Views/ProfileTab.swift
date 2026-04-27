@@ -2,17 +2,14 @@ import SwiftUI
 import SnorecardKit
 
 /// First Settings tab — gathers the user's own details rather
-/// than the machine's. Three sections:
+/// than the machine's. Two sections:
 ///
 /// 1. **Personal** — name, height, weight. Height + weight can
 ///    be filled from Apple Health on iOS; when imported, the
 ///    field is read-only and labelled with a "Sourced from
 ///    Apple Health" note plus a deep-link to the Health app.
 ///    Switching back to manual is a single tap.
-/// 2. **Prescription** — therapy mode, prescribed pressure
-///    range, pressure support, and free-form notes. Always
-///    user-editable on both platforms.
-/// 3. **Diagnosis** — untreated AHI from the user's diagnostic
+/// 2. **Diagnosis** — untreated AHI from the user's diagnostic
 ///    sleep study and the diagnosis date.
 ///
 /// All fields persist to iCloud KVS via `Library.setProfile`,
@@ -24,7 +21,6 @@ struct ProfileTab: View {
     var body: some View {
         Form {
             personalSection
-            prescriptionSection
             diagnosisSection
         }
         .formStyle(.grouped)
@@ -39,15 +35,19 @@ struct ProfileTab: View {
             // surface the Medical-ID name to third-party apps.
             LabeledContent("Name") {
                 TextField(
-                    "Your name",
-                    text: nameBinding
+                    "",
+                    text: nameBinding,
+                    prompt: Text("Your name")
                 )
                 .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 #endif
             }
 
+            sexRow
+            dateOfBirthRow
             heightRow
             weightRow
 
@@ -73,6 +73,8 @@ struct ProfileTab: View {
     private var personalFooter: String {
         let imported = library.userProfile.heightSource == .healthKit
             || library.userProfile.weightSource == .healthKit
+            || library.userProfile.biologicalSexSource == .healthKit
+            || library.userProfile.dateOfBirthSource == .healthKit
         if imported {
             #if os(iOS)
             return "Height and weight imported from Apple Health appear as locked fields. Edit them in the Health app to keep both apps in sync."
@@ -85,6 +87,62 @@ struct ProfileTab: View {
         #else
         return "Profile fields sync via iCloud. To pull height and weight from Apple Health, run the import on your iPhone."
         #endif
+    }
+
+    private var sexRow: some View {
+        profileRow(
+            label: "Sex",
+            source: library.userProfile.biologicalSexSource,
+            placeholder: "—",
+            displayValue: library.userProfile.biologicalSex?.displayName,
+            onUnlock: {
+                var p = library.userProfile
+                p.biologicalSexSource = .manual
+                library.setProfile(p)
+            },
+            manualField: {
+                Picker(
+                    "",
+                    selection: biologicalSexBinding
+                ) {
+                    Text("—").tag(BiologicalSex?.none)
+                    ForEach(BiologicalSex.allCases) { sex in
+                        Text(sex.displayName).tag(BiologicalSex?.some(sex))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+        )
+    }
+
+    private var dateOfBirthRow: some View {
+        profileRow(
+            label: "Date of Birth",
+            source: library.userProfile.dateOfBirthSource,
+            placeholder: "—",
+            displayValue: library.userProfile.dateOfBirth.map(Self.formatDateOfBirth),
+            onUnlock: {
+                var p = library.userProfile
+                p.dateOfBirthSource = .manual
+                library.setProfile(p)
+            },
+            manualField: {
+                // The DatePicker carries its own label so the row
+                // shows "Date of Birth" on the leading side and the
+                // picker's compact field on the trailing side. The
+                // outer `LabeledContent("Date of Birth")` renders the
+                // leading label on macOS; the picker's own label is
+                // hidden so the row doesn't read it twice.
+                DatePicker(
+                    "",
+                    selection: dateOfBirthBinding,
+                    in: ...Date(),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+            }
+        )
     }
 
     private var heightRow: some View {
@@ -100,11 +158,13 @@ struct ProfileTab: View {
             },
             manualField: {
                 TextField(
-                    "cm",
+                    "",
                     value: heightBinding,
-                    format: .number.precision(.fractionLength(0...1))
+                    format: .number.precision(.fractionLength(0...1)),
+                    prompt: Text("cm")
                 )
                 .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
                 #endif
@@ -125,11 +185,13 @@ struct ProfileTab: View {
             },
             manualField: {
                 TextField(
-                    "kg",
+                    "",
                     value: weightBinding,
-                    format: .number.precision(.fractionLength(0...1))
+                    format: .number.precision(.fractionLength(0...1)),
+                    prompt: Text("kg")
                 )
                 .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
                 #endif
@@ -183,78 +245,6 @@ struct ProfileTab: View {
         }
     }
 
-    // MARK: - Prescription
-
-    @ViewBuilder
-    private var prescriptionSection: some View {
-        Section {
-            Picker(
-                "Mode",
-                selection: prescriptionModeBinding
-            ) {
-                ForEach(UserProfilePrescription.Mode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            }
-
-            // CPAP is a single fixed pressure; everything else has
-            // a min/max range plus a pressure-support delta.
-            let isFixedPressure = prescription.mode == .cpap
-
-            LabeledContent(isFixedPressure ? "Pressure" : "Min Pressure") {
-                pressureField(
-                    placeholder: "cmH₂O",
-                    binding: pressureMinBinding
-                )
-            }
-
-            if !isFixedPressure {
-                LabeledContent("Max Pressure") {
-                    pressureField(
-                        placeholder: "cmH₂O",
-                        binding: pressureMaxBinding
-                    )
-                }
-            }
-
-            LabeledContent(isFixedPressure ? "EPR" : "Pressure Support") {
-                pressureField(
-                    placeholder: "cmH₂O",
-                    binding: pressureSupportBinding
-                )
-            }
-
-            LabeledContent("Notes") {
-                TextField(
-                    "Clinician, mask, etc.",
-                    text: prescriptionNotesBinding,
-                    axis: .vertical
-                )
-                .lineLimit(1...4)
-                .multilineTextAlignment(.trailing)
-            }
-        } header: {
-            Text("Prescription")
-        } footer: {
-            Text("Your prescribed therapy settings — used as a reference alongside what your machine is actually delivering. Snorecard never changes anything on the device.")
-        }
-    }
-
-    private func pressureField(
-        placeholder: String,
-        binding: Binding<Double?>
-    ) -> some View {
-        TextField(
-            placeholder,
-            value: binding,
-            format: .number.precision(.fractionLength(0...1))
-        )
-        .multilineTextAlignment(.trailing)
-        #if os(iOS)
-        .keyboardType(.decimalPad)
-        #endif
-    }
-
     // MARK: - Diagnosis
 
     @ViewBuilder
@@ -262,11 +252,13 @@ struct ProfileTab: View {
         Section {
             LabeledContent("Untreated AHI") {
                 TextField(
-                    "events / hour",
+                    "",
                     value: untreatedAHIBinding,
-                    format: .number.precision(.fractionLength(0...1))
+                    format: .number.precision(.fractionLength(0...1)),
+                    prompt: Text("events / hour")
                 )
                 .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
                 #endif
@@ -295,9 +287,6 @@ struct ProfileTab: View {
     // MARK: - Bindings
 
     private var profile: UserProfile { library.userProfile }
-    private var prescription: UserProfilePrescription {
-        profile.prescription ?? UserProfilePrescription()
-    }
 
     private var nameBinding: Binding<String> {
         Binding(
@@ -335,72 +324,6 @@ struct ProfileTab: View {
         )
     }
 
-    private var prescriptionModeBinding: Binding<UserProfilePrescription.Mode> {
-        Binding(
-            get: { prescription.mode },
-            set: { value in
-                var p = profile
-                var rx = p.prescription ?? UserProfilePrescription()
-                rx.mode = value
-                p.prescription = rx
-                library.setProfile(p)
-            }
-        )
-    }
-
-    private var pressureMinBinding: Binding<Double?> {
-        Binding(
-            get: { prescription.pressureMin },
-            set: { value in
-                var p = profile
-                var rx = p.prescription ?? UserProfilePrescription()
-                rx.pressureMin = value
-                p.prescription = rx.hasAnyValue || value != nil ? rx : nil
-                library.setProfile(p)
-            }
-        )
-    }
-
-    private var pressureMaxBinding: Binding<Double?> {
-        Binding(
-            get: { prescription.pressureMax },
-            set: { value in
-                var p = profile
-                var rx = p.prescription ?? UserProfilePrescription()
-                rx.pressureMax = value
-                p.prescription = rx.hasAnyValue || value != nil ? rx : nil
-                library.setProfile(p)
-            }
-        )
-    }
-
-    private var pressureSupportBinding: Binding<Double?> {
-        Binding(
-            get: { prescription.pressureSupport },
-            set: { value in
-                var p = profile
-                var rx = p.prescription ?? UserProfilePrescription()
-                rx.pressureSupport = value
-                p.prescription = rx.hasAnyValue || value != nil ? rx : nil
-                library.setProfile(p)
-            }
-        )
-    }
-
-    private var prescriptionNotesBinding: Binding<String> {
-        Binding(
-            get: { prescription.notes ?? "" },
-            set: { value in
-                var p = profile
-                var rx = p.prescription ?? UserProfilePrescription()
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                rx.notes = trimmed.isEmpty ? nil : value
-                p.prescription = rx.hasAnyValue ? rx : nil
-                library.setProfile(p)
-            }
-        )
-    }
-
     private var untreatedAHIBinding: Binding<Double?> {
         Binding(
             get: { profile.untreatedAHI },
@@ -418,6 +341,38 @@ struct ProfileTab: View {
             set: { value in
                 var p = profile
                 p.diagnosisDate = value
+                library.setProfile(p)
+            }
+        )
+    }
+
+    private var biologicalSexBinding: Binding<BiologicalSex?> {
+        Binding(
+            get: { profile.biologicalSex },
+            set: { value in
+                var p = profile
+                p.biologicalSex = value
+                p.biologicalSexSource = .manual
+                library.setProfile(p)
+            }
+        )
+    }
+
+    private var dateOfBirthBinding: Binding<Date> {
+        // 30 years ago is a reasonable seed when the user hasn't
+        // entered anything yet — keeps the picker out of the
+        // "you've selected today" corner case where age would read
+        // as 0.
+        Binding(
+            get: {
+                profile.dateOfBirth
+                    ?? Calendar.current.date(byAdding: .year, value: -30, to: Date())
+                    ?? Date()
+            },
+            set: { value in
+                var p = profile
+                p.dateOfBirth = value
+                p.dateOfBirthSource = .manual
                 library.setProfile(p)
             }
         )
@@ -444,5 +399,18 @@ struct ProfileTab: View {
         return measurement.formatted(
             .measurement(width: .abbreviated, usage: .personWeight)
         )
+    }
+
+    /// Date of birth formatted with the user's locale, plus a
+    /// computed age in parentheses so the row carries both the raw
+    /// date the user can verify against Health and the derived age
+    /// they probably actually care about.
+    static func formatDateOfBirth(_ date: Date) -> String {
+        let dateText = date.formatted(date: .abbreviated, time: .omitted)
+        let years = Calendar.current.dateComponents([.year], from: date, to: Date()).year
+        if let years, years >= 0 {
+            return "\(dateText) (\(years))"
+        }
+        return dateText
     }
 }

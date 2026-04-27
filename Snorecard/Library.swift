@@ -193,8 +193,8 @@ final class Library {
     /// infers from the product name". Synced via iCloud KVS so the
     /// pick follows the user across devices.
     private(set) var deviceTypeOverrides: [String: String] = [:]
-    /// User profile (name, height, weight, prescription, untreated
-    /// AHI, diagnosis date). Populated by Settings → Profile and
+    /// User profile (name, height, weight, untreated AHI, diagnosis
+    /// date). Populated by Settings → Profile and
     /// optionally by an Apple Health import on iOS. Synced via
     /// iCloud KVS so the same fields appear on every device the
     /// user signs into.
@@ -647,6 +647,14 @@ final class Library {
         if let weight = result.weightKg {
             updated.weightKg = weight
             updated.weightSource = .healthKit
+        }
+        if let sex = result.biologicalSex {
+            updated.biologicalSex = sex
+            updated.biologicalSexSource = .healthKit
+        }
+        if let dob = result.dateOfBirth {
+            updated.dateOfBirth = dob
+            updated.dateOfBirthSource = .healthKit
         }
         setProfile(updated)
         #endif
