@@ -58,6 +58,13 @@ struct SettingsSheet: View {
         NavigationStack {
             List {
                 NavigationLink {
+                    profileTab
+                        .navigationTitle("Profile")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Profile", systemImage: "person.crop.circle")
+                }
+                NavigationLink {
                     deviceTab
                         .navigationTitle("Machine")
                         .navigationBarTitleDisplayMode(.inline)
@@ -120,6 +127,8 @@ struct SettingsSheet: View {
         // pane per concern so the window chrome + tab bar carry
         // context instead of the content repeating it.
         TabView {
+            profileTab
+                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
             deviceTab
                 .tabItem { Label("Machine", systemImage: "externaldrive") }
             backupsTab
@@ -369,6 +378,15 @@ struct SettingsSheet: View {
         } footer: {
             Text("Rebuilds the cached analysis for this \(library.deviceType(for: library.card).displayName) from the original source data. Useful if the analysis appears stale or incorrect.")
         }
+    }
+
+    /// Profile tab — user's own details (name, height, weight,
+    /// untreated AHI, diagnosis date). On iOS the height + weight
+    /// rows can be filled from Apple Health; on macOS those values
+    /// come across via iCloud KVS, read-only.
+    @ViewBuilder
+    private var profileTab: some View {
+        ProfileTab()
     }
 
     /// Device tab — PAP-device alias + model + serial plus the

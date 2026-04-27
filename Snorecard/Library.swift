@@ -193,6 +193,12 @@ final class Library {
     /// infers from the product name". Synced via iCloud KVS so the
     /// pick follows the user across devices.
     private(set) var deviceTypeOverrides: [String: String] = [:]
+    /// User profile (name, height, weight, untreated AHI, diagnosis
+    /// date). Populated by Settings → Profile and
+    /// optionally by an Apple Health import on iOS. Synced via
+    /// iCloud KVS so the same fields appear on every device the
+    /// user signs into.
+    public private(set) var userProfile: UserProfile = .empty
     /// Non-nil while iCloud placeholder sidecars are being fetched so
     /// the sidebar can show a "Downloading from iCloud — N/M" hint
     /// instead of looking stuck.
@@ -245,6 +251,7 @@ final class Library {
     private static let deviceNamesKey = "deviceNameOverrides"
     private static let complianceTargetsKey = "complianceTargets"
     private static let deviceTypesKey = "deviceTypeOverrides"
+    private static let userProfileKey = "userProfile"
     private static let lastOpenedSerialKey = "lastOpenedSerial"
     private static let backgroundReloadIntervalKey = "backgroundReloadIntervalMinutes"
     private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
@@ -457,6 +464,7 @@ final class Library {
             as? [String: Double]) ?? [:]
         deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
             as? [String: String] ?? [:]
+        userProfile = Self.decodeProfile(from: kvs.data(forKey: Self.userProfileKey))
 
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -571,6 +579,85 @@ final class Library {
             as? [String: Double]) ?? [:]
         deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
             as? [String: String] ?? [:]
+        userProfile = Self.decodeProfile(from: kvs.data(forKey: Self.userProfileKey))
+    }
+
+    /// Decode a `UserProfile` payload from KVS-stored bytes,
+    /// falling back to `.empty` on any failure (corrupt JSON, key
+    /// missing, schema drift). Stable JSON encoding so two
+    /// devices that round-trip the same profile end up with the
+    /// same KVS bytes.
+    private static func decodeProfile(from data: Data?) -> UserProfile {
+        guard let data else { return .empty }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode(UserProfile.self, from: data)) ?? .empty
+    }
+
+    /// Encode a `UserProfile` payload for KVS, returning `nil` if
+    /// encoding throws (treated upstream as "leave the previous
+    /// KVS value alone" rather than overwriting with a corrupt
+    /// blob).
+    private static func encodeProfile(_ profile: UserProfile) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(profile)
+    }
+
+    // MARK: - User profile
+
+    /// Replace the stored profile and persist to iCloud KVS so the
+    /// new fields propagate to every device the user signs into.
+    /// `setProfile` is the single entry point for both manual
+    /// edits and Health imports — the source flags inside
+    /// `UserProfile` carry which fields the user can edit on the
+    /// other device.
+    public func setProfile(_ profile: UserProfile) {
+        guard userProfile != profile else { return }
+        userProfile = profile
+        if let data = Self.encodeProfile(profile) {
+            let kvs = NSUbiquitousKeyValueStore.default
+            kvs.set(data, forKey: Self.userProfileKey)
+            kvs.synchronize()
+        }
+    }
+
+    /// Pull the latest height + body mass from Apple Health and
+    /// fold them into the existing profile, marking each imported
+    /// field as `.healthKit` so the UI locks it. Other fields stay
+    /// untouched. iOS only — macOS skips the import entirely
+    /// (HealthKit reads on Mac are unreliable enough that the
+    /// rest of the integration is read-only-from-sidecars; profile
+    /// follows the same rule).
+    public func importProfileFromHealthKit() async {
+        #if os(iOS)
+        let fetcher = HealthKitProfileFetcher()
+        let result: ProfileFetchResult
+        do {
+            result = try await fetcher.fetchProfile()
+        } catch {
+            return
+        }
+        var updated = userProfile
+        if let height = result.heightCm {
+            updated.heightCm = height
+            updated.heightSource = .healthKit
+        }
+        if let weight = result.weightKg {
+            updated.weightKg = weight
+            updated.weightSource = .healthKit
+        }
+        if let sex = result.biologicalSex {
+            updated.biologicalSex = sex
+            updated.biologicalSexSource = .healthKit
+        }
+        if let dob = result.dateOfBirth {
+            updated.dateOfBirth = dob
+            updated.dateOfBirthSource = .healthKit
+        }
+        setProfile(updated)
+        #endif
     }
 
     // MARK: - Compliance target
