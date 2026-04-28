@@ -109,21 +109,19 @@ private func shortClockLabel(for date: Date) -> String {
     }
 }
 
-/// Card chrome used by every per-signal hourly chart. Matches
-/// `AHIHourlyChart`'s inset plate so the panels below the stat
-/// grid read as one cohesive set. When `legendLabel` is provided,
-/// a single coloured-dot legend row appears beneath the chart so
-/// the colour key matches the labelling AHIHourlyChart shows for
-/// its multi-category bars.
-private struct HourlyChartCard<Content: View>: View {
+/// Card chrome shared by every per-hour chart on the day view —
+/// AHI, Sleep, Leak, Flow Limit, Tidal Volume, Mask Pressure. The
+/// title/subtitle layout, padding, and translucent backplate live
+/// here so all six panels read as one cohesive set; callers slot
+/// the Chart and any legend into the content closure and own the
+/// chart's `.frame(minHeight:)`.
+struct HourlyChartCard<Content: View>: View {
     let title: String
     let subtitle: String?
-    var legendLabel: String? = nil
-    var legendColor: Color = .primary
-    @ViewBuilder var chart: () -> Content
+    @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title)
                     .font(.caption.weight(.medium))
@@ -135,16 +133,7 @@ private struct HourlyChartCard<Content: View>: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            chart()
-                .frame(minHeight: 140)
-            if let legendLabel {
-                HStack(spacing: 4) {
-                    Circle().fill(legendColor).frame(width: 8, height: 8)
-                    Text(legendLabel)
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
+            content()
         }
         .padding(14)
         .background(
@@ -153,6 +142,14 @@ private struct HourlyChartCard<Content: View>: View {
         )
     }
 }
+
+/// Shared y-axis label width for every per-hour chart on the day
+/// view. Driving this through one constant keeps the leading edge
+/// of every chart's plot area aligned across the column — without
+/// the fixed width, each chart's y-axis column sizes to its own
+/// label content and the X-axis hour labels drift horizontally.
+/// 28pt fits the widest label we render (Flow Limit's "0.75").
+let hourlyAxisLabelWidth: CGFloat = 28
 
 // MARK: - Leak by Hour
 
@@ -174,9 +171,7 @@ struct LeakHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Leak by Hour",
-            subtitle: "95th percentile · L/min",
-            legendLabel: "Leak",
-            legendColor: library.eventColorPalette.leak
+            subtitle: "95th percentile · L/min"
         ) {
             Chart(buckets) { bucket in
                 BarMark(
@@ -188,18 +183,27 @@ struct LeakHourlyChart: View {
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: 0 ... max(peak, 24))
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
-            }
-            .chartXAxis {
-                // Per-signal hourly charts share the AHI chart's
-                // hour grid right above them, so the gridlines
-                // line up visually without the labels — keeping
-                // labels here just doubles the visual noise on a
-                // stacked column. Grid + tick stay so the bars
-                // still read as bucketed.
-                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine()
                     AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
                 }
             }
             .chartOverlay { proxy in
@@ -222,6 +226,7 @@ struct LeakHourlyChart: View {
                     }
                 }
             }
+            .frame(minHeight: 140)
         }
     }
 }
@@ -242,9 +247,7 @@ struct FlowLimitHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Flow Limit by Hour",
-            subtitle: "95th percentile · 0–1 scale",
-            legendLabel: "Flow Limitation",
-            legendColor: library.eventColorPalette.flowLimit
+            subtitle: "95th percentile · 0–1 scale"
         ) {
             Chart(buckets) { bucket in
                 BarMark(
@@ -259,20 +262,30 @@ struct FlowLimitHourlyChart: View {
                 AxisMarks(
                     position: .leading,
                     values: [0, 0.25, 0.5, 0.75, 1]
-                )
-            }
-            .chartXAxis {
-                // Per-signal hourly charts share the AHI chart's
-                // hour grid right above them, so the gridlines
-                // line up visually without the labels — keeping
-                // labels here just doubles the visual noise on a
-                // stacked column. Grid + tick stay so the bars
-                // still read as bucketed.
-                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
+                ) { value in
                     AxisGridLine()
                     AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
                 }
             }
+            .chartXAxis {
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
         }
     }
 }
@@ -313,9 +326,7 @@ struct TidalVolumeHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Tidal Volume by Hour",
-            subtitle: "median · mL",
-            legendLabel: "Tidal Volume",
-            legendColor: library.eventColorPalette.tidalVolume
+            subtitle: "median · mL"
         ) {
             Chart(plottedBuckets) { bucket in
                 LineMark(
@@ -336,20 +347,30 @@ struct TidalVolumeHourlyChart: View {
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: valueRange)
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
-            }
-            .chartXAxis {
-                // Per-signal hourly charts share the AHI chart's
-                // hour grid right above them, so the gridlines
-                // line up visually without the labels — keeping
-                // labels here just doubles the visual noise on a
-                // stacked column. Grid + tick stay so the bars
-                // still read as bucketed.
-                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine()
                     AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
                 }
             }
+            .chartXAxis {
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
         }
     }
 }
@@ -390,9 +411,7 @@ struct PressureHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Mask Pressure by Hour",
-            subtitle: "median · cmH₂O",
-            legendLabel: "Mask Pressure",
-            legendColor: library.eventColorPalette.pressureMedian
+            subtitle: "median · cmH₂O"
         ) {
             Chart(plottedBuckets) { bucket in
                 LineMark(
@@ -413,20 +432,30 @@ struct PressureHourlyChart: View {
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: valueRange)
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
-            }
-            .chartXAxis {
-                // Per-signal hourly charts share the AHI chart's
-                // hour grid right above them, so the gridlines
-                // line up visually without the labels — keeping
-                // labels here just doubles the visual noise on a
-                // stacked column. Grid + tick stay so the bars
-                // still read as bucketed.
-                AxisMarks(values: buckets.map(\.clockLabel)) { _ in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine()
                     AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
                 }
             }
+            .chartXAxis {
+                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
         }
     }
 }

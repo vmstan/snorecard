@@ -34,7 +34,7 @@ struct LoadingView: View {
         if let deviceName, !deviceName.isEmpty {
             return "Loading \(deviceName)"
         }
-        return "This may take a few moments…"
+        return "Importing Sleep Data"
     }
 
     private var statusText: String {

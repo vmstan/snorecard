@@ -132,12 +132,7 @@ struct SleepByHourChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Sleep by Hour")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
+        HourlyChartCard(title: "Sleep by Hour", subtitle: "minutes") {
             if hasAnyData {
                 Chart {
                     ForEach(buckets) { bucket in
@@ -198,7 +193,9 @@ struct SleepByHourChart: View {
                         AxisTick()
                         AxisValueLabel {
                             if let m = value.as(Double.self) {
-                                Text("\(Int(m))m").font(.caption2.monospacedDigit())
+                                Text("\(Int(m))")
+                                    .font(.caption2.monospacedDigit())
+                                    .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
                             }
                         }
                     }
@@ -228,11 +225,6 @@ struct SleepByHourChart: View {
                     .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             }
         }
-        .padding(14)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
     /// Colour-keyed legend rendered outside the Chart's drawing
