@@ -75,16 +75,7 @@ struct AHIHourlyChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Now that the panel is wrapped in a StatCard-style
-            // plate, match the card label treatment — small
-            // uppercase caption — instead of the in-place chart
-            // headline used for free-floating charts.
-            Text("Events by Hour")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
+        HourlyChartCard(title: "Events by Hour", subtitle: nil) {
             Chart {
                 ForEach(buckets) { bucket in
                     BarMark(
@@ -118,7 +109,17 @@ struct AHIHourlyChart: View {
                 AxisMarks(
                     position: .leading,
                     values: .automatic(desiredCount: min(4, max(1, peakEventCount)))
-                )
+                ) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
             }
             .chartXAxis {
                 AxisMarks(values: buckets.map(\.clockLabel)) { value in
@@ -135,14 +136,6 @@ struct AHIHourlyChart: View {
 
             legend
         }
-        // Card chrome — matches the StatCard treatment so the
-        // events-by-hour panel reads as part of the same set as
-        // the metrics grid above it instead of a loose chart.
-        .padding(14)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
     }
 
     /// Colour-keyed legend below the x-axis. Uses the clinical

@@ -2,6 +2,20 @@ import SwiftUI
 import Charts
 import SnorecardKit
 
+/// Y-axis label content shared by every Trends chart. Right-aligns
+/// the rendered number in a fixed-width frame so the leading edge
+/// of every chart's plot area lines up across the column — without
+/// it, each chart's y-axis sizes to its own content and the X-axis
+/// date labels drift horizontally between rows.
+@ViewBuilder
+fileprivate func trendsYAxisLabel(for value: AxisValue) -> some View {
+    if let v = value.as(Double.self) {
+        Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+            .font(.caption2.monospacedDigit())
+            .frame(width: 32, alignment: .trailing)
+    }
+}
+
 struct TrendsView: View {
     let card: ResMedSDCard
     @Environment(Library.self) private var library
@@ -667,11 +681,15 @@ struct TrendsView: View {
             }
             .chartYScale(domain: 0 ... max(5, (stats.map(\.ahi).max() ?? 0) * 1.2))
             .chartYAxis {
-                AxisMarks(position: .leading)
-                AxisMarks(values: [5]) { _ in
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel { trendsYAxisLabel(for: value) }
+                }
+                AxisMarks(position: .leading, values: [5]) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3]))
                         .foregroundStyle(.secondary)
-                    AxisValueLabel("5")
+                    AxisValueLabel { trendsYAxisLabel(for: value) }
                         .foregroundStyle(.secondary)
                 }
             }
@@ -696,6 +714,13 @@ struct TrendsView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
             }
             .chartYScale(domain: 0 ... max(8, (stats.map(\.usageHours).max() ?? 0) * 1.15))
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel { trendsYAxisLabel(for: value) }
+                }
+            }
         }
     }
 
@@ -711,6 +736,13 @@ struct TrendsView: View {
                         )
                         .foregroundStyle(library.eventColorPalette.glasgowIndex)
                         .symbol(Circle())
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
                     }
                 }
             } else {
@@ -730,6 +762,13 @@ struct TrendsView: View {
                             y: .value("Minutes", s / 60)
                         )
                         .foregroundStyle(library.eventColorPalette.obstructive)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
                     }
                 }
             } else {
@@ -774,11 +813,7 @@ struct TrendsView: View {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()
                     AxisTick()
-                    AxisValueLabel {
-                        if let m = value.as(Double.self) {
-                            Text("\(Int(m))m").font(.caption2.monospacedDigit())
-                        }
-                    }
+                    AxisValueLabel { trendsYAxisLabel(for: value) }
                 }
             }
         }
@@ -820,6 +855,13 @@ struct TrendsView: View {
                     "95th": library.eventColorPalette.pressureP95,
                     "Median": library.eventColorPalette.pressureMedian
                 ])
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
             } else {
                 emptyPlaceholder("No pressure data recorded.")
             }
@@ -841,6 +883,13 @@ struct TrendsView: View {
                     }
                 }
                 .chartYScale(domain: 0...max(0.2, (stats.compactMap(\.flowLimit95).max() ?? 0) * 1.2))
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
             } else {
                 emptyPlaceholder("No flow-limit data recorded.")
             }
@@ -864,6 +913,13 @@ struct TrendsView: View {
                         .foregroundStyle(Color.secondary)
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
                 }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
             } else {
                 emptyPlaceholder("No leak data recorded.")
             }
@@ -881,6 +937,13 @@ struct TrendsView: View {
                             y: .value("Percent", pct)
                         )
                         .foregroundStyle(pct > 5 ? library.eventColorPalette.severityMedium : library.eventColorPalette.severityLow)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
                     }
                 }
             } else {
@@ -911,6 +974,13 @@ struct TrendsView: View {
                     }
                 }
                 .chartYScale(domain: yDomain)
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
             } else {
                 emptyPlaceholder("No tidal-volume data recorded.")
             }
@@ -928,7 +998,7 @@ struct TrendsView: View {
         subtitle: String,
         @ViewBuilder content: () -> C
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title)
                     .font(.caption.weight(.medium))

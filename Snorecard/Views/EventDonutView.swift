@@ -88,18 +88,30 @@ struct EventDonutView: View {
                         "OA",
                         value: obstructiveApneaIndex,
                         color: palette.obstructive,
+                        tooltip: tooltip(
+                            for: "Obstructive Apnea",
+                            value: obstructiveApneaIndex
+                        ),
                         availableWidth: geo.size.width
                     )
                     segment(
                         "H",
                         value: hypopneaIndex,
                         color: palette.hypopnea,
+                        tooltip: tooltip(
+                            for: "Hypopnea",
+                            value: hypopneaIndex
+                        ),
                         availableWidth: geo.size.width
                     )
                     segment(
                         "CA",
                         value: centralApneaIndex,
                         color: palette.central,
+                        tooltip: tooltip(
+                            for: library.centralEventLabel.displayName,
+                            value: centralApneaIndex
+                        ),
                         availableWidth: geo.size.width
                     )
                 } else {
@@ -117,6 +129,14 @@ struct EventDonutView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
+    /// Hover tooltip / VoiceOver label for one segment of the
+    /// stacked bar — the long-form event name plus its index value.
+    /// `.help()` on macOS surfaces this as a hover tooltip; on iOS
+    /// it becomes the segment's accessibility hint.
+    private func tooltip(for name: String, value: Double) -> String {
+        String(format: "%@: %.1f events / hour", name, value)
+    }
+
     /// One coloured segment of the stacked bar. Width is computed
     /// from the segment's share of the day's total events; the
     /// caller supplies the bar's full width via the GeometryReader
@@ -126,6 +146,7 @@ struct EventDonutView: View {
         _ shortName: String,
         value: Double,
         color: Color,
+        tooltip: String,
         availableWidth: CGFloat
     ) -> some View {
         let total = obstructiveApneaIndex
@@ -145,6 +166,8 @@ struct EventDonutView: View {
                         .minimumScaleFactor(0.7)
                 }
             }
+            .help(tooltip)
+            .accessibilityLabel(tooltip)
     }
 
     /// Only label segments that take up at least ~8 % of the bar so the
