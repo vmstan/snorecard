@@ -103,47 +103,56 @@ enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
 
 /// User-facing category for a PAP device — shown in the Settings
 /// Device section as a dropdown, used anywhere copy refers to the
-/// machine generically ("this CPAP", "this BiPAP"), and synced
+/// machine generically ("this CPAP", "this Bilevel"), and synced
 /// per-serial via iCloud so the user only picks once. `infer(from:)`
 /// handles the standard ResMed product-name patterns so most devices
 /// resolve correctly without the user touching the picker.
+///
+/// Two top-level categories the user actually thinks in: CPAP
+/// (single-pressure machines, including auto-titrating "APAP"
+/// variants) and Bilevel (separate IPAP / EPAP, including VAuto,
+/// S / T / ST, and ASV servo-ventilators). The clinical distinction
+/// between Bilevel and ASV doesn't change anything Snorecard
+/// surfaces, so it stays out of the picker.
 enum DeviceType: String, CaseIterable, Identifiable, Sendable {
     case cpap = "CPAP"
-    case apap = "APAP"
     case bipap = "BiPAP"
-    case asv = "ASV"
 
     var id: String { rawValue }
-    var displayName: String { rawValue }
+
+    /// Long form for pickers and prose. The bilevel rawValue stays
+    /// "BiPAP" for KVS compatibility with existing user picks; the
+    /// label the user sees is "Bilevel".
+    var displayName: String {
+        switch self {
+        case .cpap:  return "CPAP"
+        case .bipap: return "Bilevel"
+        }
+    }
 
     /// Best-effort mapping from a ResMed product name (e.g.
     /// "AirSense 10 AutoSet", "AirCurve 10 VAuto") to a `DeviceType`.
     /// Returns `nil` on unknown names so callers can decide whether
     /// to fall back to a default rather than guess silently.
+    ///
+    /// Auto-detection only resolves CPAP and Bilevel — every
+    /// AirSense lands on CPAP, every AirCurve (including ASV
+    /// variants) lands on Bilevel. ASV is never inferred; users
+    /// who run a servo-ventilator pick it from the Type dropdown
+    /// once and the choice rides iCloud KVS to their other devices.
     static func infer(fromProductName name: String?) -> DeviceType? {
         guard let name else { return nil }
         let lower = name.lowercased()
-        // AirCurve family — BiLevel + ASV machines. ASV variants
-        // (ASV / ASVauto) map to .asv; everything else AirCurve
-        // (VAuto, S, ST, iVAPS) is BiPAP-family.
-        if lower.contains("aircurve") {
-            if lower.contains("asv") { return .asv }
-            return .bipap
-        }
-        // AirSense family — CPAP machines. "AutoSet" is ResMed's
-        // APAP product line; bare "AirSense 10/11" is plain CPAP.
-        if lower.contains("airsense") {
-            if lower.contains("autoset") { return .apap }
-            return .cpap
-        }
+        if lower.contains("aircurve") { return .bipap }
+        if lower.contains("airsense") { return .cpap }
         // Keyword fallbacks for older / relabelled models where
         // the family prefix is missing.
-        if lower.contains("asv") { return .asv }
         if lower.contains("vauto") || lower.contains("bilevel") || lower.contains("bipap") {
             return .bipap
         }
-        if lower.contains("autoset") || lower.contains("apap") { return .apap }
-        if lower.contains("cpap") { return .cpap }
+        if lower.contains("autoset") || lower.contains("apap") || lower.contains("cpap") {
+            return .cpap
+        }
         return nil
     }
 }
@@ -358,15 +367,19 @@ final class Library {
     /// Applied in `load()` as each day's stats are backfilled, but
     /// only when the day has no existing journal sidecar — so manual
     /// edits (including an intentionally empty tag list) always win
-    /// over this default. Local-only: a user's default tag picks are
-    /// a per-device workflow preference, not therapy data.
+    /// over this default. Synced via iCloud KVS so a user who picks
+    /// defaults on iPhone gets the same auto-tagging when they
+    /// import on macOS — without the sync, the import device never
+    /// sees the picks made on the configuring device.
     var defaultJournalTags: Set<NoteTag> {
         didSet {
             guard oldValue != defaultJournalTags else { return }
-            UserDefaults.standard.set(
+            let kvs = NSUbiquitousKeyValueStore.default
+            kvs.set(
                 defaultJournalTags.map(\.rawValue).sorted(),
                 forKey: Self.defaultJournalTagsKey
             )
+            kvs.synchronize()
         }
     }
 
@@ -446,17 +459,6 @@ final class Library {
             self.centralEventLabel = .clearAirway
         }
 
-        // Default tags default to empty so upgrading users don't
-        // suddenly see every night pre-tagged. Raw values that no
-        // longer exist in the taxonomy are dropped silently.
-        if let rawTags = UserDefaults.standard.array(
-            forKey: Self.defaultJournalTagsKey
-        ) as? [String] {
-            self.defaultJournalTags = Set(rawTags.compactMap(NoteTag.init(rawValue:)))
-        } else {
-            self.defaultJournalTags = []
-        }
-
         let kvs = NSUbiquitousKeyValueStore.default
         deviceNameOverrides = kvs.dictionary(forKey: Self.deviceNamesKey)
             as? [String: String] ?? [:]
@@ -465,6 +467,25 @@ final class Library {
         deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
             as? [String: String] ?? [:]
         userProfile = Self.decodeProfile(from: kvs.data(forKey: Self.userProfileKey))
+
+        // Default tags default to empty so upgrading users don't
+        // suddenly see every night pre-tagged. Raw values that no
+        // longer exist in the taxonomy are dropped silently. KVS is
+        // the source of truth; if it's empty but UserDefaults has
+        // values from a build that stored locally, migrate them up
+        // so the user's existing picks ride iCloud without needing
+        // to be re-set.
+        if let rawTags = kvs.array(forKey: Self.defaultJournalTagsKey) as? [String] {
+            self.defaultJournalTags = Set(rawTags.compactMap(NoteTag.init(rawValue:)))
+        } else if let legacy = UserDefaults.standard.array(
+            forKey: Self.defaultJournalTagsKey
+        ) as? [String] {
+            self.defaultJournalTags = Set(legacy.compactMap(NoteTag.init(rawValue:)))
+            kvs.set(legacy, forKey: Self.defaultJournalTagsKey)
+            UserDefaults.standard.removeObject(forKey: Self.defaultJournalTagsKey)
+        } else {
+            self.defaultJournalTags = []
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -580,6 +601,15 @@ final class Library {
         deviceTypeOverrides = kvs.dictionary(forKey: Self.deviceTypesKey)
             as? [String: String] ?? [:]
         userProfile = Self.decodeProfile(from: kvs.data(forKey: Self.userProfileKey))
+        if let rawTags = kvs.array(forKey: Self.defaultJournalTagsKey) as? [String] {
+            // Skip the assignment when the value hasn't actually
+            // moved — the property's didSet would otherwise echo the
+            // change straight back to KVS.
+            let resolved = Set(rawTags.compactMap(NoteTag.init(rawValue:)))
+            if resolved != defaultJournalTags {
+                defaultJournalTags = resolved
+            }
+        }
     }
 
     /// Decode a `UserProfile` payload from KVS-stored bytes,
