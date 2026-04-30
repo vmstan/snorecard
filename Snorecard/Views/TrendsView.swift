@@ -1027,10 +1027,7 @@ struct TrendsView: View {
                 }
         }
         .padding(14)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
+        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
     }
 
     /// Transparent tap-catcher layered over every chart — translates a

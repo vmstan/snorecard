@@ -27,10 +27,7 @@ struct CorrelationHintsCard: View {
             innerView
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(
-                    Color.primary.opacity(0.05),
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
+                .glassEffect(in: RoundedRectangle(cornerRadius: 12))
                 .task(id: reloadKey) {
                     await load()
                 }

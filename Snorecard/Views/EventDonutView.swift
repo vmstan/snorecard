@@ -62,6 +62,7 @@ struct EventDonutView: View {
             stackedBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
 
         if let onTap {
             Button(action: onTap) {
@@ -141,6 +142,12 @@ struct EventDonutView: View {
     /// from the segment's share of the day's total events; the
     /// caller supplies the bar's full width via the GeometryReader
     /// so the segments add up to the bar's actual size.
+    ///
+    /// The segment renders as a tinted Liquid Glass slab — the
+    /// category colour layered onto the system glass material
+    /// rather than a flat fill — so the bar reads as part of the
+    /// macOS 26 / iOS 26 material set without losing the colour
+    /// identity that signals the event category.
     @ViewBuilder
     private func segment(
         _ shortName: String,
@@ -154,9 +161,9 @@ struct EventDonutView: View {
             + hypopneaIndex
         let share = total > 0 ? value / total : 0
         let width = max(0, availableWidth * CGFloat(share))
-        Rectangle()
-            .fill(color)
+        Color.clear
             .frame(width: width)
+            .glassEffect(.regular.tint(color), in: Rectangle())
             .overlay {
                 if shouldLabel(value) {
                     Text(String(format: "%@ %.1f", shortName, value))
