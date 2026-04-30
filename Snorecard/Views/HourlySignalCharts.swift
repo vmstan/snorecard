@@ -136,10 +136,7 @@ struct HourlyChartCard<Content: View>: View {
             content()
         }
         .padding(14)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
+        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

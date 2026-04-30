@@ -1030,8 +1030,7 @@ struct WaveformSection: View {
             }
         }
         .padding(10)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .glassEffect(in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)

@@ -19,10 +19,7 @@ struct JournalEditor: View {
                 .padding(10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            Color.primary.opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
+        .glassEffect(in: RoundedRectangle(cornerRadius: 10))
         .padding(.horizontal, -4)
     }
 }

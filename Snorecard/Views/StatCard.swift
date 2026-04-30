@@ -33,8 +33,17 @@ struct StatCard: View {
         }
     }
 
+    @ViewBuilder
     private var content: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // `.contentShape` is load-bearing on tappable cards:
+        // `.glassEffect(...)` doesn't extend the view's hit-test
+        // area the way a solid `.background(...)` fill does, so
+        // without it the wrapping Button only fires on the actual
+        // text glyphs and the empty space inside the card swallows
+        // taps. Setting the shape on the padded card before the
+        // glass effect means hits land anywhere inside the card
+        // outline.
+        let card = VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(label)
                     .font(.caption.weight(.medium))
@@ -71,23 +80,23 @@ struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: StatCard.cardHeight, alignment: .topLeading)
         .padding(12)
-        .background(
-            backgroundFill,
-            in: RoundedRectangle(cornerRadius: 12)
-        )
-    }
+        .contentShape(RoundedRectangle(cornerRadius: 12))
 
-    /// Neutral cards (no meaningful severity) and "good" cards both
-    /// get the same translucent plate — green-tinting every healthy
-    /// metric made the grid feel noisy, so green is now the implicit
-    /// default and only amber/red wash the plate with severity colour.
-    /// The tinted cases stay low-opacity so amber/red cards read as
-    /// attention cues rather than alarms.
-    private var backgroundFill: Color {
+        // Every card sits on Liquid Glass so the chrome stays
+        // visually consistent with the per-hour and Trends panels
+        // below. Severity-tinted cards (amber / red) layer the
+        // colour onto the glass material via `tint(_:)` rather
+        // than swapping in a solid fill — that way the wash still
+        // reads as an attention cue without flattening the
+        // material's blur and depth.
         if isNeutralTint {
-            return Color.primary.opacity(0.05)
+            card.glassEffect(in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            card.glassEffect(
+                .regular.tint(tint.opacity(0.4)),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
         }
-        return tint.opacity(0.18)
     }
 
     private var isNeutralTint: Bool {
