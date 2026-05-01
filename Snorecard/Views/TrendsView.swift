@@ -316,14 +316,22 @@ struct TrendsView: View {
     /// headline metric reads first, matching the Daily layout.
     private var ahiHero: some View {
         let days = stats.count
+        // Pass raw averages through — `EventDonutView` honours the
+        // user's CA-display preference internally so the donut head-
+        // line and stacked bar both drop CA when hidden. The explain
+        // sheet's `displayValue` and `averageValue` mirror that
+        // adjustment so the tap target reads the same number.
         let avgAHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.ahi } / Double(days)
         let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
         let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
         let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
+        let displayedAvgAHI = library.includesCentralEvents
+            ? avgAHI
+            : max(0, avgAHI - avgCAI)
         let explainCtx = TrendsExplainContext(
             metric: .ahi,
-            displayValue: String(format: "%.1f events/hr", avgAHI),
-            averageValue: avgAHI
+            displayValue: String(format: "%.1f events/hr", displayedAvgAHI),
+            averageValue: displayedAvgAHI
         )
         return EventDonutView(
             ahi: avgAHI,
@@ -673,13 +681,14 @@ struct TrendsView: View {
     private var ahiChart: some View {
         chartSection(title: "AHI", subtitle: "events per hour") {
             Chart(stats, id: \.date) { stat in
+                let value = library.displayedAHI(stat)
                 BarMark(
                     x: .value("Day", stat.date, unit: .day),
-                    y: .value("AHI", stat.ahi)
+                    y: .value("AHI", value)
                 )
-                .foregroundStyle(ahiColor(stat.ahi))
+                .foregroundStyle(ahiColor(value))
             }
-            .chartYScale(domain: 0 ... max(5, (stats.map(\.ahi).max() ?? 0) * 1.2))
+            .chartYScale(domain: 0 ... max(5, (stats.map { library.displayedAHI($0) }.max() ?? 0) * 1.2))
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()

@@ -161,7 +161,7 @@ struct DayListView: View {
         let values = card.days
             .compactMap(\.stats)
             .filter(\.hasUsage)
-            .map(\.ahi)
+            .map { library.displayedAHI($0) }
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
     }
@@ -175,7 +175,7 @@ struct DayListView: View {
             // when disabled the calendar glyph falls back to the
             // accent tint so the sidebar reads as a flat list.
             guard library.sidebarSeverityColorsEnabled else { return .accentColor }
-            return iconSeverityColor(stats.ahi)
+            return iconSeverityColor(library.displayedAHI(stats))
         }()
         HStack(alignment: .center, spacing: 10) {
             CalendarDayTile(
@@ -221,7 +221,7 @@ struct DayListView: View {
     private func sidebarMetricValue(for stats: DailyStatistics) -> String? {
         switch library.sidebarRowMetric {
         case .ahi:
-            return String(format: "%.1f", stats.ahi)
+            return String(format: "%.1f", library.displayedAHI(stats))
         case .glasgowIndex:
             guard let g = stats.glasgowIndex else { return nil }
             return String(format: "%.1f", g)

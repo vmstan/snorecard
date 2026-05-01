@@ -79,7 +79,9 @@ enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
 /// because the central label can mis-suggest a brain-stem origin
 /// when in practice CA events are most often arousal-related on
 /// CPAP therapy. Default is "Clear Airway" — matches the term the
-/// user would see in OSCAR and most online discussions.
+/// user would see in OSCAR and most online discussions. Whether
+/// CA events appear at all is governed by `Library.showsCentralEvents`,
+/// not by this enum.
 enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
     case clearAirway
     case centralApnea
@@ -96,7 +98,7 @@ enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Short form for the event donut and any width-constrained
-    /// chip. Both labels share the same "CA" abbreviation, so this
+    /// chip. Both labels share the "CA" abbreviation, so this
     /// is constant across the two cases.
     var shortName: String { "CA" }
 }
@@ -267,6 +269,7 @@ final class Library {
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
     private static let centralEventLabelKey = "centralEventLabel"
+    private static let showsCentralEventsKey = "showsCentralEvents"
     private static let defaultJournalTagsKey = "defaultJournalTags"
     private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
     private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
@@ -352,13 +355,33 @@ final class Library {
     /// User-preferred long-form label for "CA" events. Drives the
     /// chart legend, the stat-card label, and the AI narrative
     /// terminology so the same naming reads consistently across
-    /// the app. Defaults to `.clearAirway`. Local-only.
+    /// the app. Defaults to `.clearAirway`. Local-only. The choice
+    /// only matters when `showsCentralEvents` is true; flipping the
+    /// toggle off and back on restores whatever label the user had
+    /// picked before.
     var centralEventLabel: CentralEventLabel {
         didSet {
             guard oldValue != centralEventLabel else { return }
             UserDefaults.standard.set(
                 centralEventLabel.rawValue,
                 forKey: Self.centralEventLabelKey
+            )
+        }
+    }
+
+    /// Whether CA events should appear in charts, summaries, and
+    /// AHI calculations. Defaults to true. Some users have been
+    /// told by their clinician that their CA events are arousal
+    /// artefacts unrelated to therapy and want them out of the
+    /// number entirely; turning this off drops the CA segment from
+    /// charts and subtracts the central index from every displayed
+    /// AHI. Local-only — visual / clinical-framing preference.
+    var showsCentralEvents: Bool {
+        didSet {
+            guard oldValue != showsCentralEvents else { return }
+            UserDefaults.standard.set(
+                showsCentralEvents,
+                forKey: Self.showsCentralEventsKey
             )
         }
     }
@@ -451,12 +474,27 @@ final class Library {
             self.eventColorPalette = .topher
         }
 
-        if let rawLabel = UserDefaults.standard.string(
-            forKey: Self.centralEventLabelKey
-        ), let label = CentralEventLabel(rawValue: rawLabel) {
+        // Visibility lives on a separate Bool key so flipping the
+        // Show CA Events toggle off and back on restores the user's
+        // previously-picked label. An earlier iteration encoded
+        // "disabled" as a third enum case; treat any leftover raw
+        // value of that shape as "hidden + label defaulted to Clear
+        // Airway" so users who set it during the prerelease don't
+        // see a missing-case crash on first launch.
+        let rawLabel = UserDefaults.standard.string(forKey: Self.centralEventLabelKey)
+        if rawLabel == "disabled" {
+            self.centralEventLabel = .clearAirway
+            self.showsCentralEvents = false
+        } else if let raw = rawLabel, let label = CentralEventLabel(rawValue: raw) {
             self.centralEventLabel = label
+            self.showsCentralEvents = UserDefaults.standard.object(
+                forKey: Self.showsCentralEventsKey
+            ) as? Bool ?? true
         } else {
             self.centralEventLabel = .clearAirway
+            self.showsCentralEvents = UserDefaults.standard.object(
+                forKey: Self.showsCentralEventsKey
+            ) as? Bool ?? true
         }
 
         let kvs = NSUbiquitousKeyValueStore.default
@@ -1129,9 +1167,11 @@ final class Library {
         guard let folder = day.files.first?.url.deletingLastPathComponent(),
               let stats = day.stats, stats.hasUsage else { return nil }
         let allStats = (card?.days.compactMap(\.stats) ?? []).filter(\.hasUsage)
+        let excludeCentral = !includesCentralEvents
         let baseline = IntelligenceInputBuilder.Baseline.trailing14(
             before: day.date,
-            from: allStats
+            from: allStats,
+            excludeCentralFromAHI: excludeCentral
         )
         let note = DailyNotesCache.load(for: folder)
         let sleepSummary = healthSleep.summaryByDate[day.date]
@@ -1141,7 +1181,8 @@ final class Library {
             userNote: note?.text,
             subjectiveScore: note?.subjectiveScore,
             userTags: note?.effectiveTags ?? [],
-            sleepSummary: sleepSummary
+            sleepSummary: sleepSummary,
+            excludeCentralFromAHI: excludeCentral
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadNightSummary(
@@ -1190,7 +1231,8 @@ final class Library {
             complianceTargetHours: complianceTarget(
                 for: card?.identification?.serialNumber
             ),
-            sleepSummaries: sleepSummaries
+            sleepSummaries: sleepSummaries,
+            excludeCentralFromAHI: !includesCentralEvents
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsNarrative(
@@ -1242,7 +1284,8 @@ final class Library {
             input = IntelligenceInputBuilder.metricExplain(
                 metric: metric,
                 stats: stats,
-                trailing: trailing
+                trailing: trailing,
+                excludeCentralFromAHI: !includesCentralEvents
             )
         }
         guard let input else { return nil }
@@ -1395,7 +1438,10 @@ final class Library {
                 stats: stat
             )
         }
-        let observations = TagCorrelator.correlate(days: dayInputs)
+        let observations = TagCorrelator.correlate(
+            days: dayInputs,
+            excludeCentralFromAHI: !includesCentralEvents
+        )
         guard !observations.isEmpty else { return nil }
         let truncated = Array(observations.prefix(6))
         let input = CorrelationNarrativeInput(
@@ -2227,5 +2273,29 @@ final class Library {
             return date
         }
         return legacyBackupFilenameFormatter.date(from: stamp)
+    }
+}
+
+extension Library {
+    /// Convenience alias for `showsCentralEvents` — keeps call
+    /// sites readable when the bool is consumed as a "should I
+    /// include this in the calculation" question.
+    var includesCentralEvents: Bool {
+        showsCentralEvents
+    }
+
+    /// AHI as it should appear in the UI for this library's
+    /// preference. Convenience wrapper around
+    /// `DailyStatistics.displayedAHI(includingCentral:)` so view code
+    /// reads as `library.displayedAHI(stats)` instead of having to
+    /// thread the bool through itself.
+    func displayedAHI(_ stats: DailyStatistics) -> Double {
+        stats.displayedAHI(includingCentral: includesCentralEvents)
+    }
+
+    /// CA index for the stacked-bar denominator. Zero when CA is
+    /// hidden so the segment drops cleanly without a separate guard.
+    func displayedCentralApneaIndex(_ stats: DailyStatistics) -> Double {
+        stats.displayedCentralApneaIndex(visible: includesCentralEvents)
     }
 }

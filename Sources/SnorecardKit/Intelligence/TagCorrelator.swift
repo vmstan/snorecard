@@ -41,8 +41,13 @@ public enum TagCorrelator {
 
     /// Compute correlation observations for the supplied range.
     /// Returns an empty array when thresholds aren't met so the
-    /// caller can hide the card.
-    public static func correlate(days: [DayInput]) -> [CorrelationNarrativeInput.Observation] {
+    /// caller can hide the card. `excludeCentralFromAHI` mirrors
+    /// the user's CA-display preference so tagged-vs-untagged AHI
+    /// deltas use the same projection the rest of the app shows.
+    public static func correlate(
+        days: [DayInput],
+        excludeCentralFromAHI: Bool = false
+    ) -> [CorrelationNarrativeInput.Observation] {
         guard days.count >= minimumRangeSize else { return [] }
 
         var observations: [CorrelationNarrativeInput.Observation] = []
@@ -60,8 +65,16 @@ public enum TagCorrelator {
                 .leak95LPerMin,
                 .glasgowIndex
             ] {
-                guard let taggedMean = mean(of: metric, days: tagged),
-                      let untaggedMean = mean(of: metric, days: untagged)
+                guard let taggedMean = mean(
+                    of: metric,
+                    days: tagged,
+                    excludeCentralFromAHI: excludeCentralFromAHI
+                ),
+                      let untaggedMean = mean(
+                    of: metric,
+                    days: untagged,
+                    excludeCentralFromAHI: excludeCentralFromAHI
+                )
                 else { continue }
                 let delta = taggedMean - untaggedMean
                 let floor = noiseFloors[metric] ?? 0
@@ -95,11 +108,13 @@ public enum TagCorrelator {
 
     private static func mean(
         of metric: CorrelatedMetric,
-        days: [DayInput]
+        days: [DayInput],
+        excludeCentralFromAHI: Bool
     ) -> Double? {
         let values: [Double] = days.compactMap { day in
             switch metric {
-            case .ahi:              return day.stats.ahi
+            case .ahi:
+                return day.stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
             case .usageHours:       return day.stats.usageHours
             case .leak95LPerMin:    return day.stats.leak95LPerMin
             case .glasgowIndex:     return day.stats.glasgowIndex

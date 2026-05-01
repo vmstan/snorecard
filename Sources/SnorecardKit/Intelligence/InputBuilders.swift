@@ -19,10 +19,17 @@ public enum IntelligenceInputBuilder {
         userNote: String?,
         subjectiveScore: Int? = nil,
         userTags: [NoteTag] = [],
-        sleepSummary: NightlySleepSummary? = nil
+        sleepSummary: NightlySleepSummary? = nil,
+        excludeCentralFromAHI: Bool = false
     ) -> NightSummaryInput {
         let usageHours = PromptRounding.round1(stats.usageHours)
-        let ahi = PromptRounding.round1(stats.ahi)
+        // The user can hide CA events from the UI via an Appearance
+        // preference. When that's on, the prompt sees the same AHI
+        // the user reads on screen — otherwise the narrative would
+        // anchor on a number the user can't find anywhere in the app.
+        let ahi = PromptRounding.round1(
+            stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
+        )
         let glasgowIndex = stats.glasgowIndex.map(PromptRounding.round2)
         // `DayDetailView`'s EPAP card renders `epap95` with an
         // optional IPAP subtitle (shown only when IPAP > EPAP),
@@ -52,8 +59,12 @@ public enum IntelligenceInputBuilder {
         let tidalMedianML = stats.tidalVolume50.map { PromptRounding.toInt($0 * 1000) }
 
         let diff = baseline.map { baseline -> NightSummaryInput.BaselineDiff in
-            NightSummaryInput.BaselineDiff(
-                ahiDelta: PromptRounding.round1(stats.ahi - baseline.ahi),
+            // `baseline.ahi` is computed by `trailing14`, which here
+            // is also given the CA-excluded preference, so both sides
+            // of the delta use the same projection.
+            let nightlyAHI = stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
+            return NightSummaryInput.BaselineDiff(
+                ahiDelta: PromptRounding.round1(nightlyAHI - baseline.ahi),
                 usageHoursDelta: PromptRounding.round1(stats.usageHours - baseline.usageHours),
                 leakDelta: baseline.leak95LPerMin.flatMap { base in
                     stats.leak95LPerMin.map { PromptRounding.round1($0 - base) }
@@ -150,7 +161,8 @@ public enum IntelligenceInputBuilder {
         /// inside the window — too little signal to anchor a diff.
         public static func trailing14(
             before date: Date,
-            from stats: [DailyStatistics]
+            from stats: [DailyStatistics],
+            excludeCentralFromAHI: Bool = false
         ) -> Baseline? {
             let calendar = Calendar.current
             guard let windowStart = calendar.date(
@@ -162,7 +174,9 @@ public enum IntelligenceInputBuilder {
                 $0.hasUsage && $0.date >= windowStart && $0.date < date
             }
             guard window.count >= 3 else { return nil }
-            let ahi = window.reduce(0) { $0 + $1.ahi } / Double(window.count)
+            let ahi = window.reduce(0) {
+                $0 + $1.displayedAHI(includingCentral: !excludeCentralFromAHI)
+            } / Double(window.count)
             let usage = window.reduce(0) { $0 + $1.usageHours } / Double(window.count)
             let leaks = window.compactMap(\.leak95LPerMin)
             let leakMean = leaks.isEmpty
@@ -194,7 +208,8 @@ public enum IntelligenceInputBuilder {
         rangeStart: Date,
         rangeEnd: Date,
         complianceTargetHours: Double = 4,
-        sleepSummaries: [NightlySleepSummary] = []
+        sleepSummaries: [NightlySleepSummary] = [],
+        excludeCentralFromAHI: Bool = false
     ) -> TrendsNarrativeInput {
         let days = stats.filter(\.hasUsage)
         let sample = days.count
@@ -204,7 +219,9 @@ public enum IntelligenceInputBuilder {
             : Double(compliantDays) / Double(sample) * 100
         let avgAHI = sample == 0
             ? 0
-            : days.reduce(0) { $0 + $1.ahi } / Double(sample)
+            : days.reduce(0) {
+                $0 + $1.displayedAHI(includingCentral: !excludeCentralFromAHI)
+            } / Double(sample)
         let gis = days.compactMap(\.glasgowIndex)
         let avgGI = gis.isEmpty ? nil : gis.reduce(0, +) / Double(gis.count)
         let avgUsageMinutes = sample == 0
@@ -227,7 +244,7 @@ public enum IntelligenceInputBuilder {
             ? nil
             : largePcts.reduce(0, +) / Double(largePcts.count)
 
-        let trends = trendBuckets(days: days)
+        let trends = trendBuckets(days: days, excludeCentralFromAHI: excludeCentralFromAHI)
 
         // Apple Watch sleep-stage averages — only computed from
         // nights with non-zero asleep time (otherwise the
@@ -271,7 +288,8 @@ public enum IntelligenceInputBuilder {
     /// leak, GI), "improving" means the second half dropped below
     /// a per-metric noise floor. Usage flips the polarity.
     private static func trendBuckets(
-        days: [DailyStatistics]
+        days: [DailyStatistics],
+        excludeCentralFromAHI: Bool = false
     ) -> TrendsNarrativeInput.Trends {
         let sorted = days.sorted { $0.date < $1.date }
         guard sorted.count >= 4 else {
@@ -304,8 +322,8 @@ public enum IntelligenceInputBuilder {
         }
 
         let ahiBucket = direction(
-            firstHalf: first.map(\.ahi),
-            secondHalf: second.map(\.ahi),
+            firstHalf: first.map { $0.displayedAHI(includingCentral: !excludeCentralFromAHI) },
+            secondHalf: second.map { $0.displayedAHI(includingCentral: !excludeCentralFromAHI) },
             noiseFloor: 0.5,
             lowerIsBetter: true
         )
@@ -466,10 +484,17 @@ public enum IntelligenceInputBuilder {
     public static func metricExplain(
         metric: ExplainableMetric,
         stats: DailyStatistics,
-        trailing: [DailyStatistics]
+        trailing: [DailyStatistics],
+        excludeCentralFromAHI: Bool = false
     ) -> MetricExplainInput? {
-        guard let value = rawValue(of: metric, in: stats) else { return nil }
-        let trailingValues = trailing.compactMap { rawValue(of: metric, in: $0) }
+        guard let value = rawValue(
+            of: metric,
+            in: stats,
+            excludeCentralFromAHI: excludeCentralFromAHI
+        ) else { return nil }
+        let trailingValues = trailing.compactMap {
+            rawValue(of: metric, in: $0, excludeCentralFromAHI: excludeCentralFromAHI)
+        }
         let mean: Double? = trailingValues.isEmpty
             ? nil
             : trailingValues.reduce(0, +) / Double(trailingValues.count)
@@ -485,9 +510,14 @@ public enum IntelligenceInputBuilder {
         )
     }
 
-    static func rawValue(of metric: ExplainableMetric, in stats: DailyStatistics) -> Double? {
+    static func rawValue(
+        of metric: ExplainableMetric,
+        in stats: DailyStatistics,
+        excludeCentralFromAHI: Bool = false
+    ) -> Double? {
         switch metric {
-        case .ahi:              return stats.ahi
+        case .ahi:
+            return stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
         case .glasgowIndex:     return stats.glasgowIndex
         // `DayDetailView`'s EPAP card sources `epap95` (target
         // EPAP), not `pressure95` (measured mask P95). Feed the
