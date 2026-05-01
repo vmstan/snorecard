@@ -194,7 +194,7 @@ struct DayListView: View {
             }
             Spacer()
             if let stats = day.stats, stats.hasUsage,
-               let display = sidebarMetricValue(for: stats) {
+               let display = sidebarMetricValue(for: stats, day: day) {
                 VStack(alignment: .trailing, spacing: 1) {
                     // Colour lives on the calendar glyph to the
                     // left now; the number stays in the row's
@@ -218,7 +218,10 @@ struct DayListView: View {
     /// Glasgow Index on STR-only AirSense 11 nights) so the caller
     /// can drop the trailing value stack rather than render an
     /// em-dash placeholder.
-    private func sidebarMetricValue(for stats: DailyStatistics) -> String? {
+    private func sidebarMetricValue(
+        for stats: DailyStatistics,
+        day: ResMedDay
+    ) -> String? {
         switch library.sidebarRowMetric {
         case .ahi:
             return String(format: "%.1f", library.displayedAHI(stats))
@@ -229,6 +232,16 @@ struct DayListView: View {
             guard let p = stats.pressure95 else { return nil }
             return String(format: "%.1f", p)
         case .sessions:
+            // `stats.maskEvents` is STR.edf's `MaskEvents` scalar —
+            // a count of mask-on/off transitions, not sessions, so
+            // it tends to read ~2× the actual session count on
+            // AirSense 10 firmware. The daily detail header and
+            // Trends average both count BRP files instead, which
+            // matches OSCAR / SleepHQ. Mirror that here. STR-only
+            // days (AirSense 11 with no BRP files) fall back to
+            // the device counter.
+            let brpCount = day.files(of: .breath).count
+            if brpCount > 0 { return "\(brpCount)" }
             return "\(stats.maskEvents)"
         }
     }
