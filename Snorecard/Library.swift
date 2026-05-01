@@ -79,40 +79,28 @@ enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
 /// because the central label can mis-suggest a brain-stem origin
 /// when in practice CA events are most often arousal-related on
 /// CPAP therapy. Default is "Clear Airway" — matches the term the
-/// user would see in OSCAR and most online discussions. The
-/// `.disabled` case hides CA entirely from charts and subtracts
-/// the central component from displayed AHI — for users whose
-/// clinician has told them their CA events are arousal artefacts
-/// and not part of their treatment picture.
+/// user would see in OSCAR and most online discussions. Whether
+/// CA events appear at all is governed by `Library.showsCentralEvents`,
+/// not by this enum.
 enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
     case clearAirway
     case centralApnea
-    case disabled
 
     var id: String { rawValue }
 
     /// Long form used in legends, AI narratives, and stat-card
     /// labels. Reads naturally inline ("3 Clear Airway events").
-    /// `.disabled` is the picker label — it never appears as an
-    /// inline event name because the events aren't shown at all.
     var displayName: String {
         switch self {
         case .clearAirway: return "Clear Airway"
         case .centralApnea: return "Central Apnea"
-        case .disabled: return "Disabled"
         }
     }
 
     /// Short form for the event donut and any width-constrained
-    /// chip. Both visible labels share the "CA" abbreviation;
-    /// `.disabled` is never rendered next to a value.
+    /// chip. Both labels share the "CA" abbreviation, so this
+    /// is constant across the two cases.
     var shortName: String { "CA" }
-
-    /// Whether CA events should appear in charts, summaries, and
-    /// AHI calculations. False for `.disabled` — callers should
-    /// drop the CA segment and subtract the central index from
-    /// displayed AHI so the screen and the number agree.
-    var isVisible: Bool { self != .disabled }
 }
 
 /// User-facing category for a PAP device — shown in the Settings
@@ -281,6 +269,7 @@ final class Library {
     private static let sidebarRowMetricKey = "sidebarRowMetric"
     private static let eventColorPaletteKey = "eventColorPalette"
     private static let centralEventLabelKey = "centralEventLabel"
+    private static let showsCentralEventsKey = "showsCentralEvents"
     private static let defaultJournalTagsKey = "defaultJournalTags"
     private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
     private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
@@ -366,13 +355,33 @@ final class Library {
     /// User-preferred long-form label for "CA" events. Drives the
     /// chart legend, the stat-card label, and the AI narrative
     /// terminology so the same naming reads consistently across
-    /// the app. Defaults to `.clearAirway`. Local-only.
+    /// the app. Defaults to `.clearAirway`. Local-only. The choice
+    /// only matters when `showsCentralEvents` is true; flipping the
+    /// toggle off and back on restores whatever label the user had
+    /// picked before.
     var centralEventLabel: CentralEventLabel {
         didSet {
             guard oldValue != centralEventLabel else { return }
             UserDefaults.standard.set(
                 centralEventLabel.rawValue,
                 forKey: Self.centralEventLabelKey
+            )
+        }
+    }
+
+    /// Whether CA events should appear in charts, summaries, and
+    /// AHI calculations. Defaults to true. Some users have been
+    /// told by their clinician that their CA events are arousal
+    /// artefacts unrelated to therapy and want them out of the
+    /// number entirely; turning this off drops the CA segment from
+    /// charts and subtracts the central index from every displayed
+    /// AHI. Local-only — visual / clinical-framing preference.
+    var showsCentralEvents: Bool {
+        didSet {
+            guard oldValue != showsCentralEvents else { return }
+            UserDefaults.standard.set(
+                showsCentralEvents,
+                forKey: Self.showsCentralEventsKey
             )
         }
     }
@@ -465,12 +474,27 @@ final class Library {
             self.eventColorPalette = .topher
         }
 
-        if let rawLabel = UserDefaults.standard.string(
-            forKey: Self.centralEventLabelKey
-        ), let label = CentralEventLabel(rawValue: rawLabel) {
+        // Visibility lives on a separate Bool key so flipping the
+        // Show CA Events toggle off and back on restores the user's
+        // previously-picked label. An earlier iteration encoded
+        // "disabled" as a third enum case; treat any leftover raw
+        // value of that shape as "hidden + label defaulted to Clear
+        // Airway" so users who set it during the prerelease don't
+        // see a missing-case crash on first launch.
+        let rawLabel = UserDefaults.standard.string(forKey: Self.centralEventLabelKey)
+        if rawLabel == "disabled" {
+            self.centralEventLabel = .clearAirway
+            self.showsCentralEvents = false
+        } else if let raw = rawLabel, let label = CentralEventLabel(rawValue: raw) {
             self.centralEventLabel = label
+            self.showsCentralEvents = UserDefaults.standard.object(
+                forKey: Self.showsCentralEventsKey
+            ) as? Bool ?? true
         } else {
             self.centralEventLabel = .clearAirway
+            self.showsCentralEvents = UserDefaults.standard.object(
+                forKey: Self.showsCentralEventsKey
+            ) as? Bool ?? true
         }
 
         let kvs = NSUbiquitousKeyValueStore.default
@@ -2253,11 +2277,11 @@ final class Library {
 }
 
 extension Library {
-    /// Whether CA events should appear in charts, summaries, and
-    /// AHI calculations — drives every display-side adjustment so
-    /// callers don't have to compare against the enum case directly.
+    /// Convenience alias for `showsCentralEvents` — keeps call
+    /// sites readable when the bool is consumed as a "should I
+    /// include this in the calculation" question.
     var includesCentralEvents: Bool {
-        centralEventLabel.isVisible
+        showsCentralEvents
     }
 
     /// AHI as it should appear in the UI for this library's

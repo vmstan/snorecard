@@ -469,21 +469,30 @@ struct SettingsSheet: View {
                     Text(palette.displayName).tag(palette)
                 }
             }
-            Picker(
-                "CA Label",
-                selection: Binding(
-                    get: { library.centralEventLabel },
-                    set: { library.centralEventLabel = $0 }
+            Toggle(
+                "Show CA Events",
+                isOn: Binding(
+                    get: { library.showsCentralEvents },
+                    set: { library.showsCentralEvents = $0 }
                 )
-            ) {
-                ForEach(CentralEventLabel.allCases) { label in
-                    Text(label.displayName).tag(label)
+            )
+            if library.showsCentralEvents {
+                Picker(
+                    "CA Label",
+                    selection: Binding(
+                        get: { library.centralEventLabel },
+                        set: { library.centralEventLabel = $0 }
+                    )
+                ) {
+                    ForEach(CentralEventLabel.allCases) { label in
+                        Text(label.displayName).tag(label)
+                    }
                 }
             }
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events. Choose Disabled to hide CA from charts and exclude it from the displayed AHI.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events. Hiding CA events also excludes them from the displayed AHI.")
         }
     }
 
