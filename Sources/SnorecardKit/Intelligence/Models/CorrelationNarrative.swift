@@ -120,10 +120,10 @@ extension CorrelationNarrativeInput {
 
 @Generable
 public struct CorrelationNarrativeOutput: Codable, Hashable, Sendable {
-    @Guide(description: "Up to 3 short bullet strings, each starting with 'On nights you noted …'. Purely observational — never say an activity 'caused', 'led to', or 'made' anything happen.")
+    @Guide(description: "Up to 3 short bullet strings. Each MUST contrast the tagged-night average with the untagged-night average so the reader sees both numbers (e.g. 'On nights you noted mouth tape, AHI averaged 6, compared with 9 on nights you didn't.'). A bullet with only one number is wrong. Purely observational — never say an activity 'caused', 'led to', or 'made' anything happen.")
     public let bullets: [String]
 
-    @Guide(description: "One sentence intro, fewer than 20 words, framing the bullets as observations rather than advice.")
+    @Guide(description: "Exactly one sentence, 18 words or fewer, framing the bullets as patterns observed in the reader's own nights. Do NOT mention medical advice, disclaimers, or cause-and-effect — the card chrome already shows that footer. Do not repeat any sentence.")
     public let intro: String
 
     public init(intro: String, bullets: [String]) {
