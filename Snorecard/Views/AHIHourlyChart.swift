@@ -41,13 +41,16 @@ struct AHIHourlyChart: View {
         guard lastHour >= 0 else { return [] }
 
         var grouped: [Int: (ob: Int, ce: Int, hy: Int)] = [:]
+        let countsCentral = library.includesCentralEvents
         for event in events {
             let bucket = Int(((event.offset + anchorOffset) / 3600).rounded(.down))
             guard bucket >= 0, bucket <= lastHour else { continue }
             let text = event.text.lowercased()
             var current = grouped[bucket] ?? (0, 0, 0)
             if text.contains("obstructive") { current.ob += 1 }
-            else if text.contains("central") { current.ce += 1 }
+            else if text.contains("central") {
+                if countsCentral { current.ce += 1 }
+            }
             else if text.contains("hypopnea") { current.hy += 1 }
             grouped[bucket] = current
         }
@@ -90,11 +93,13 @@ struct AHIHourlyChart: View {
                     )
                     .foregroundStyle(by: .value("Type", "Hypopnea"))
 
-                    BarMark(
-                        x: .value("Hour", bucket.clockLabel),
-                        y: .value("Count", bucket.central)
-                    )
-                    .foregroundStyle(by: .value("Type", "Central"))
+                    if library.includesCentralEvents {
+                        BarMark(
+                            x: .value("Hour", bucket.clockLabel),
+                            y: .value("Count", bucket.central)
+                        )
+                        .foregroundStyle(by: .value("Type", "Central"))
+                    }
                 }
             }
             .chartForegroundStyleScale([
@@ -148,10 +153,12 @@ struct AHIHourlyChart: View {
         FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
             legendItem("Obstructive Apnea", color: library.eventColorPalette.obstructive)
             legendItem("Hypopnea", color: library.eventColorPalette.hypopnea)
-            legendItem(
-                library.centralEventLabel.displayName,
-                color: library.eventColorPalette.central
-            )
+            if library.includesCentralEvents {
+                legendItem(
+                    library.centralEventLabel.displayName,
+                    color: library.eventColorPalette.central
+                )
+            }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)

@@ -650,3 +650,24 @@ extension DailyStatistics {
         return out
     }
 }
+
+public extension DailyStatistics {
+    /// AHI as it should appear in the UI given the user's CA-display
+    /// preference. When the user has chosen to hide CA events, the
+    /// central component is subtracted so the headline number reflects
+    /// only obstructive + hypopnea + unspecified events. The stored
+    /// `ahi` is left untouched — this is a display-time projection so
+    /// the canonical device/computed value stays a single source of
+    /// truth in the cache.
+    func displayedAHI(includingCentral: Bool) -> Double {
+        includingCentral ? ahi : max(0, ahi - centralApneaIndex)
+    }
+
+    /// CA index as it should appear in charts and stat-card stacks.
+    /// Zeroed out when the user has hidden CA events so the segment
+    /// drops out of stacked-bar denominators without callers having
+    /// to special-case the preference at every site.
+    func displayedCentralApneaIndex(visible: Bool) -> Double {
+        visible ? centralApneaIndex : 0
+    }
+}

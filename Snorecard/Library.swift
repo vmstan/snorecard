@@ -79,26 +79,40 @@ enum EventColorPalette: String, CaseIterable, Identifiable, Sendable {
 /// because the central label can mis-suggest a brain-stem origin
 /// when in practice CA events are most often arousal-related on
 /// CPAP therapy. Default is "Clear Airway" — matches the term the
-/// user would see in OSCAR and most online discussions.
+/// user would see in OSCAR and most online discussions. The
+/// `.disabled` case hides CA entirely from charts and subtracts
+/// the central component from displayed AHI — for users whose
+/// clinician has told them their CA events are arousal artefacts
+/// and not part of their treatment picture.
 enum CentralEventLabel: String, CaseIterable, Identifiable, Sendable {
     case clearAirway
     case centralApnea
+    case disabled
 
     var id: String { rawValue }
 
     /// Long form used in legends, AI narratives, and stat-card
     /// labels. Reads naturally inline ("3 Clear Airway events").
+    /// `.disabled` is the picker label — it never appears as an
+    /// inline event name because the events aren't shown at all.
     var displayName: String {
         switch self {
         case .clearAirway: return "Clear Airway"
         case .centralApnea: return "Central Apnea"
+        case .disabled: return "Disabled"
         }
     }
 
     /// Short form for the event donut and any width-constrained
-    /// chip. Both labels share the same "CA" abbreviation, so this
-    /// is constant across the two cases.
+    /// chip. Both visible labels share the "CA" abbreviation;
+    /// `.disabled` is never rendered next to a value.
     var shortName: String { "CA" }
+
+    /// Whether CA events should appear in charts, summaries, and
+    /// AHI calculations. False for `.disabled` — callers should
+    /// drop the CA segment and subtract the central index from
+    /// displayed AHI so the screen and the number agree.
+    var isVisible: Bool { self != .disabled }
 }
 
 /// User-facing category for a PAP device — shown in the Settings
@@ -1129,9 +1143,11 @@ final class Library {
         guard let folder = day.files.first?.url.deletingLastPathComponent(),
               let stats = day.stats, stats.hasUsage else { return nil }
         let allStats = (card?.days.compactMap(\.stats) ?? []).filter(\.hasUsage)
+        let excludeCentral = !includesCentralEvents
         let baseline = IntelligenceInputBuilder.Baseline.trailing14(
             before: day.date,
-            from: allStats
+            from: allStats,
+            excludeCentralFromAHI: excludeCentral
         )
         let note = DailyNotesCache.load(for: folder)
         let sleepSummary = healthSleep.summaryByDate[day.date]
@@ -1141,7 +1157,8 @@ final class Library {
             userNote: note?.text,
             subjectiveScore: note?.subjectiveScore,
             userTags: note?.effectiveTags ?? [],
-            sleepSummary: sleepSummary
+            sleepSummary: sleepSummary,
+            excludeCentralFromAHI: excludeCentral
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadNightSummary(
@@ -1190,7 +1207,8 @@ final class Library {
             complianceTargetHours: complianceTarget(
                 for: card?.identification?.serialNumber
             ),
-            sleepSummaries: sleepSummaries
+            sleepSummaries: sleepSummaries,
+            excludeCentralFromAHI: !includesCentralEvents
         )
         let hash = IntelligenceCache.hash(of: input)
         if let cached = IntelligenceCache.loadTrendsNarrative(
@@ -1242,7 +1260,8 @@ final class Library {
             input = IntelligenceInputBuilder.metricExplain(
                 metric: metric,
                 stats: stats,
-                trailing: trailing
+                trailing: trailing,
+                excludeCentralFromAHI: !includesCentralEvents
             )
         }
         guard let input else { return nil }
@@ -1395,7 +1414,10 @@ final class Library {
                 stats: stat
             )
         }
-        let observations = TagCorrelator.correlate(days: dayInputs)
+        let observations = TagCorrelator.correlate(
+            days: dayInputs,
+            excludeCentralFromAHI: !includesCentralEvents
+        )
         guard !observations.isEmpty else { return nil }
         let truncated = Array(observations.prefix(6))
         let input = CorrelationNarrativeInput(
@@ -2227,5 +2249,29 @@ final class Library {
             return date
         }
         return legacyBackupFilenameFormatter.date(from: stamp)
+    }
+}
+
+extension Library {
+    /// Whether CA events should appear in charts, summaries, and
+    /// AHI calculations — drives every display-side adjustment so
+    /// callers don't have to compare against the enum case directly.
+    var includesCentralEvents: Bool {
+        centralEventLabel.isVisible
+    }
+
+    /// AHI as it should appear in the UI for this library's
+    /// preference. Convenience wrapper around
+    /// `DailyStatistics.displayedAHI(includingCentral:)` so view code
+    /// reads as `library.displayedAHI(stats)` instead of having to
+    /// thread the bool through itself.
+    func displayedAHI(_ stats: DailyStatistics) -> Double {
+        stats.displayedAHI(includingCentral: includesCentralEvents)
+    }
+
+    /// CA index for the stacked-bar denominator. Zero when CA is
+    /// hidden so the segment drops cleanly without a separate guard.
+    func displayedCentralApneaIndex(_ stats: DailyStatistics) -> Double {
+        stats.displayedCentralApneaIndex(visible: includesCentralEvents)
     }
 }

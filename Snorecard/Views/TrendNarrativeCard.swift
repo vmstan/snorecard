@@ -55,7 +55,7 @@ struct TrendNarrativeCard: View {
 
     private var reloadKey: String {
         let ahiDigest = stats
-            .map { String(format: "%.2f", $0.ahi) }
+            .map { String(format: "%.2f", library.displayedAHI($0)) }
             .joined(separator: ",")
         return "\(rangeStart.timeIntervalSince1970)-\(rangeEnd.timeIntervalSince1970)-\(stats.count)-\(ahiDigest.hashValue)"
     }

@@ -596,7 +596,7 @@ struct DayDetailView: View {
     private func displayValue(for metric: ExplainableMetric) -> String {
         guard let stats = day.stats else { return "—" }
         switch metric {
-        case .ahi:          return String(format: "%.1f", stats.ahi)
+        case .ahi:          return String(format: "%.1f", library.displayedAHI(stats))
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .epap95:

@@ -483,7 +483,7 @@ struct SettingsSheet: View {
         } header: {
             Text("Charting")
         } footer: {
-            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events.")
+            Text("Controls the colors used in Trends, Daily View and Detailed Waveforms, and the long name shown for Clear Airway / Central Apnea events. Choose Disabled to hide CA from charts and exclude it from the displayed AHI.")
         }
     }
 

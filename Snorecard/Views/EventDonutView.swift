@@ -44,14 +44,28 @@ struct EventDonutView: View {
         )
     }
 
+    /// Whether CA events should be shown — driven by the user's
+    /// Appearance preference. When false the segment drops out of
+    /// the stacked bar and the central index is excluded from the
+    /// hero AHI number.
+    private var showsCentral: Bool { library.includesCentralEvents }
+
+    private var displayedCAI: Double {
+        showsCentral ? centralApneaIndex : 0
+    }
+
+    private var displayedAHI: Double {
+        showsCentral ? ahi : max(0, ahi - centralApneaIndex)
+    }
+
     private var hasData: Bool {
-        obstructiveApneaIndex + centralApneaIndex + hypopneaIndex > 0
+        obstructiveApneaIndex + displayedCAI + hypopneaIndex > 0
     }
 
     var body: some View {
         let content = VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.1f", ahi))
+                Text(String(format: "%.1f", displayedAHI))
                     .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 Text(headline)
                     .font(.headline)
@@ -105,16 +119,18 @@ struct EventDonutView: View {
                         ),
                         availableWidth: geo.size.width
                     )
-                    segment(
-                        "CA",
-                        value: centralApneaIndex,
-                        color: palette.central,
-                        tooltip: tooltip(
-                            for: library.centralEventLabel.displayName,
-                            value: centralApneaIndex
-                        ),
-                        availableWidth: geo.size.width
-                    )
+                    if showsCentral {
+                        segment(
+                            "CA",
+                            value: centralApneaIndex,
+                            color: palette.central,
+                            tooltip: tooltip(
+                                for: library.centralEventLabel.displayName,
+                                value: centralApneaIndex
+                            ),
+                            availableWidth: geo.size.width
+                        )
+                    }
                 } else {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.18))
@@ -157,7 +173,7 @@ struct EventDonutView: View {
         availableWidth: CGFloat
     ) -> some View {
         let total = obstructiveApneaIndex
-            + centralApneaIndex
+            + displayedCAI
             + hypopneaIndex
         let share = total > 0 ? value / total : 0
         let width = max(0, availableWidth * CGFloat(share))
@@ -181,7 +197,7 @@ struct EventDonutView: View {
     /// text doesn't overflow its slice.
     private func shouldLabel(_ value: Double) -> Bool {
         let total = obstructiveApneaIndex
-            + centralApneaIndex
+            + displayedCAI
             + hypopneaIndex
         guard total > 0 else { return false }
         return value / total > 0.08
