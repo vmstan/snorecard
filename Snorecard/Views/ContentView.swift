@@ -9,6 +9,9 @@ import UniformTypeIdentifiers
 extension Notification.Name {
     static let snorecardOpenDailyNotes = Notification.Name("Snorecard.OpenDailyNotes")
     static let snorecardOpenDailySettings = Notification.Name("Snorecard.OpenDailySettings")
+    /// Open the per-night Sessions list — fired from the macOS View
+    /// menu, the day-detail toolbar, and the iOS floating bar.
+    static let snorecardOpenSessions = Notification.Name("Snorecard.OpenSessions")
     static let snorecardOpenDeviceNotes = Notification.Name("Snorecard.OpenDeviceNotes")
     /// Per-night AI narrative — fired from the day view.
     static let snorecardOpenSleepAnalysis = Notification.Name("Snorecard.OpenSleepAnalysis")
@@ -51,7 +54,7 @@ struct ContentView: View {
     /// slides out when the pane is nil. Matches the Finder Get
     /// Info / Mail Viewer precedent where one inspector swaps
     /// content instead of spawning extra windows.
-    enum InspectorPane { case notes, deviceNotes, settings, explainMetric, sleepAnalysis, trendsAnalysis }
+    enum InspectorPane { case notes, deviceNotes, settings, sessions, explainMetric, sleepAnalysis, trendsAnalysis }
     @State private var inspectorPane: InspectorPane? = nil
     #endif
     #if os(iOS)
@@ -140,11 +143,13 @@ struct ContentView: View {
             // into a day.
             if case .notes = inspectorPane, case .day = newSelection { return }
             if case .settings = inspectorPane, case .day = newSelection { return }
+            if case .sessions = inspectorPane, case .day = newSelection { return }
             if case .sleepAnalysis = inspectorPane, case .day = newSelection { return }
             if case .deviceNotes = inspectorPane, case .trends = newSelection { return }
             if case .trendsAnalysis = inspectorPane, case .trends = newSelection { return }
             if inspectorPane == .notes
                 || inspectorPane == .settings
+                || inspectorPane == .sessions
                 || inspectorPane == .deviceNotes
                 || inspectorPane == .explainMetric
                 || inspectorPane == .sleepAnalysis
@@ -336,26 +341,12 @@ struct ContentView: View {
         // these accessory views. App-wide Settings is *not* in
         // this list — it opens a standalone window via the
         // SwiftUI `Settings { }` scene declared in SnorecardApp.
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
-            if case .day = library.selection {
-                toggleInspector(.notes)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
-            if case .day = library.selection {
-                toggleInspector(.settings)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDeviceNotes)) { _ in
-            if library.card != nil {
-                toggleInspector(.deviceNotes)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
-            if case .day = library.selection, library.intelligence.isReady {
-                toggleInspector(.sleepAnalysis)
-            }
-        }
+        .modifier(
+            InspectorBridges(
+                library: library,
+                toggleInspector: { toggleInspector($0) }
+            )
+        )
         #endif
     }
 
@@ -417,6 +408,17 @@ struct ContentView: View {
                     deviceAlias: deviceAliasForInspector,
                     deviceType: library.deviceType(for: library.card).displayName
                 )
+            } else {
+                EmptyView()
+            }
+        case .sessions:
+            if let day = library.selectedDay {
+                // Matches `DailySettingsInspector` in `case .settings`
+                // — the view brings its own header + edge-to-edge
+                // Form so the inspector pane lines up with the rest
+                // of the daily set without an outer padding wrapper.
+                SessionListSheet(day: day)
+                    .navigationTitle("Therapy Sessions")
             } else {
                 EmptyView()
             }
@@ -735,3 +737,42 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+#if os(macOS)
+/// Notification → inspector-pane bridges, factored into a modifier so
+/// adding new panes (Sessions, Sleep Analysis, etc.) doesn't push the
+/// `ContentView.body` Swift expression past the type-checker's budget.
+private struct InspectorBridges: ViewModifier {
+    let library: Library
+    let toggleInspector: (ContentView.InspectorPane) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailyNotes)) { _ in
+                if case .day = library.selection {
+                    toggleInspector(.notes)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDailySettings)) { _ in
+                if case .day = library.selection {
+                    toggleInspector(.settings)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSessions)) { _ in
+                if case .day = library.selection {
+                    toggleInspector(.sessions)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenDeviceNotes)) { _ in
+                if library.card != nil {
+                    toggleInspector(.deviceNotes)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
+                if case .day = library.selection, library.intelligence.isReady {
+                    toggleInspector(.sleepAnalysis)
+                }
+            }
+    }
+}
+#endif

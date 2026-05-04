@@ -14,6 +14,7 @@ struct FloatingActionBar: View {
     enum Item: Hashable {
         case sleepAnalysis
         case sleepJournal
+        case sessions
         case therapyDetails
     }
 
@@ -51,6 +52,7 @@ extension FloatingActionBar.Item {
         switch self {
         case .sleepAnalysis:  return "Sleep Analysis"
         case .sleepJournal:   return "Sleep Journal"
+        case .sessions:       return "Therapy Sessions"
         case .therapyDetails: return "Therapy Details"
         }
     }
@@ -59,7 +61,8 @@ extension FloatingActionBar.Item {
         switch self {
         case .sleepAnalysis:  return "sparkles"
         case .sleepJournal:   return "note.text"
-        case .therapyDetails: return "gauge.with.needle"
+        case .sessions:       return "clock"
+        case .therapyDetails: return "fan"
         }
     }
 }

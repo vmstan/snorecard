@@ -19,12 +19,45 @@ public enum DailyStatsCache {
     /// we intentionally don't include modification dates because
     /// those drift by seconds between devices and would cause
     /// spurious cache misses on iOS after a Mac import.
+    ///
+    /// `schemaVersion` is bumped whenever the aggregate's output
+    /// semantics change (e.g. the < 2 min auto-exclude rule, the
+    /// switch to using the kept-session count for `maskEvents`).
+    /// Old caches decode with a default `schemaVersion = 1` and
+    /// fail the equality check against the build's current value,
+    /// triggering a fresh aggregate that overwrites the sidecar.
     public struct Fingerprint: Codable, Equatable, Sendable {
         public let files: [FileEntry]
+        public let schemaVersion: Int
 
         public struct FileEntry: Codable, Equatable, Sendable {
             public let name: String
             public let size: Int
+        }
+
+        /// Bump this whenever the aggregate's per-day output changes
+        /// in a way that should invalidate previously-saved caches.
+        public static let currentSchemaVersion: Int = 6
+
+        public init(files: [FileEntry], schemaVersion: Int = Fingerprint.currentSchemaVersion) {
+            self.files = files
+            self.schemaVersion = schemaVersion
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case files
+            case schemaVersion
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.files = try container.decode([FileEntry].self, forKey: .files)
+            // Sidecars written before the schemaVersion field
+            // existed implicitly belong to schema 1.
+            self.schemaVersion = try container.decodeIfPresent(
+                Int.self,
+                forKey: .schemaVersion
+            ) ?? 1
         }
 
         /// Build a fingerprint from the day's `ResMedDataFile` list by

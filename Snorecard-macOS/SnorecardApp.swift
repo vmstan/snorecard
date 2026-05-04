@@ -194,9 +194,17 @@ struct SnorecardApp: App {
         .disabled(!hasCard)
 
         Button {
+            NotificationCenter.default.post(name: .snorecardOpenSessions, object: nil)
+        } label: {
+            Label("Therapy Sessions", systemImage: "clock")
+        }
+        .keyboardShortcut("l", modifiers: [.command, .shift])
+        .disabled(!hasCard || !isViewingDay)
+
+        Button {
             NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
         } label: {
-            Label("Therapy Details", systemImage: "gauge.with.needle")
+            Label("Therapy Details", systemImage: "fan")
         }
         .keyboardShortcut("t", modifiers: [.command, .shift])
         .disabled(!hasCard || !isViewingDay)

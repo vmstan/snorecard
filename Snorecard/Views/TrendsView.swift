@@ -269,7 +269,7 @@ struct TrendsView: View {
             NotificationCenter.default.post(name: .snorecardOpenTrendsAnalysis, object: nil)
         case .sleepJournal:
             NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
-        case .therapyDetails:
+        case .sessions, .therapyDetails:
             break
         }
     }
@@ -1141,10 +1141,13 @@ struct TrendsView: View {
     /// the daily detail view.
     private func averageSessionsPerNight() -> Double? {
         let start = rangeStart, end = rangeEnd
+        // `stats.maskEvents` is the kept-session count after the
+        // aggregate's manual-exclusion + brief-session filters, so
+        // averaging it agrees with the daily Usage subtitle.
         let counts = card.days
-            .filter { $0.stats?.hasUsage == true }
             .filter { $0.date >= start && $0.date <= end }
-            .map { $0.files(of: .breath).count }
+            .compactMap { $0.stats?.maskEvents }
+            .filter { $0 > 0 }
         guard !counts.isEmpty else { return nil }
         return Double(counts.reduce(0, +)) / Double(counts.count)
     }

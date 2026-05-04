@@ -37,6 +37,118 @@ struct WaveformBundle: Sendable {
 
     var isEmpty: Bool { sessions.isEmpty }
 
+    /// Return a copy with every session in `inactiveSessionIDs` (and
+    /// the events / flat-point arrays attributable to them) removed,
+    /// then re-anchor `dayStart` and `totalDuration` to the active
+    /// sessions' window so the chart X-axis recalibrates to the
+    /// first kept session instead of leaving an empty stretch at
+    /// the start of the night.
+    ///
+    /// `signalSummary` is not recomputed (its percentiles come from
+    /// raw PLD, not the flat arrays) — the table that consumes it is
+    /// gated to the unfiltered "Detailed Statistics" window. The
+    /// inner per-session `TimePoint` arrays inside `SessionSegment`
+    /// keep their original offsets too: they're not read post-
+    /// construction (only the flat arrays are), so re-translating
+    /// them would be wasted work.
+    func filteringInactiveSessions(_ inactiveSessionIDs: Set<UUID>) -> WaveformBundle {
+        guard !inactiveSessionIDs.isEmpty else { return self }
+        let activeSessions = sessions.filter { !inactiveSessionIDs.contains($0.id) }
+        guard !activeSessions.isEmpty else {
+            // Every session was filtered out — return an empty bundle
+            // the daily charts already gate on with `if !bundle.events.isEmpty`.
+            return WaveformBundle(
+                dayStart: dayStart,
+                totalDuration: 0,
+                sessions: [],
+                events: [],
+                flatFlow: [],
+                flatFlowMid: [],
+                flatFlowDetail: [],
+                flatPressure: [],
+                flatLeak: [],
+                flatRespRate: [],
+                flatTidalVolume: [],
+                flatMinuteVentilation: [],
+                flatSnore: [],
+                flatFlowLimitation: [],
+                flatIPAP: [],
+                flatEPAP: [],
+                signalSummary: signalSummary
+            )
+        }
+        // Δ is how much later the new "day start" is vs. the
+        // original. New offsets = (original offset - Δ).
+        let delta = activeSessions.map(\.startOffset).min() ?? 0
+        let lastEnd = activeSessions
+            .map { $0.startOffset + $0.duration }
+            .max() ?? 0
+        let newTotalDuration = max(0, lastEnd - delta)
+        let newDayStart = dayStart.addingTimeInterval(delta)
+
+        let shiftedSessions: [SessionSegment] = activeSessions.map { s in
+            SessionSegment(
+                id: s.id,
+                startOffset: s.startOffset - delta,
+                duration: s.duration,
+                flowLabel: s.flowLabel,
+                flowUnit: s.flowUnit,
+                pressureLabel: s.pressureLabel,
+                pressureUnit: s.pressureUnit,
+                flow: s.flow,
+                flowMid: s.flowMid,
+                flowDetail: s.flowDetail,
+                pressure: s.pressure,
+                leak: s.leak,
+                respirationRate: s.respirationRate,
+                tidalVolume: s.tidalVolume,
+                minuteVentilation: s.minuteVentilation,
+                snore: s.snore,
+                flowLimitation: s.flowLimitation,
+                ipap: s.ipap,
+                epap: s.epap,
+                sourceFilename: s.sourceFilename
+            )
+        }
+
+        let activeRanges: [(start: TimeInterval, end: TimeInterval)] = activeSessions.map {
+            ($0.startOffset, $0.startOffset + $0.duration)
+        }
+        func isInActiveSession(_ offset: TimeInterval) -> Bool {
+            activeRanges.contains { offset >= $0.start && offset < $0.end }
+        }
+        func shiftFlat(_ p: FlatPoint) -> FlatPoint? {
+            guard !inactiveSessionIDs.contains(p.sessionID) else { return nil }
+            let off = p.offset - delta
+            guard off >= 0, off <= newTotalDuration else { return nil }
+            return FlatPoint(offset: off, value: p.value, sessionID: p.sessionID)
+        }
+        func shiftEvent(_ e: TimedEvent) -> TimedEvent? {
+            guard isInActiveSession(e.offset) else { return nil }
+            return TimedEvent(offset: e.offset - delta, duration: e.duration, text: e.text)
+        }
+
+        return WaveformBundle(
+            dayStart: newDayStart,
+            totalDuration: newTotalDuration,
+            sessions: shiftedSessions,
+            events: events.compactMap(shiftEvent),
+            flatFlow: flatFlow.compactMap(shiftFlat),
+            flatFlowMid: flatFlowMid.compactMap(shiftFlat),
+            flatFlowDetail: flatFlowDetail.compactMap(shiftFlat),
+            flatPressure: flatPressure.compactMap(shiftFlat),
+            flatLeak: flatLeak.compactMap(shiftFlat),
+            flatRespRate: flatRespRate.compactMap(shiftFlat),
+            flatTidalVolume: flatTidalVolume.compactMap(shiftFlat),
+            flatMinuteVentilation: flatMinuteVentilation.compactMap(shiftFlat),
+            flatSnore: flatSnore.compactMap(shiftFlat),
+            flatFlowLimitation: flatFlowLimitation.compactMap(shiftFlat),
+            flatIPAP: flatIPAP.compactMap(shiftFlat),
+            flatEPAP: flatEPAP.compactMap(shiftFlat),
+            signalSummary: signalSummary
+        )
+    }
+
     /// One row of the per-night signal-summary table — min /
     /// median / 95% / 99.5% percentiles for a single PLD signal.
     /// `format` returns the value already converted to the user-

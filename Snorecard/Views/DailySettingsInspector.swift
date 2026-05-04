@@ -71,7 +71,7 @@ struct DailySettingsInspector: View {
                 settingsForm(for: settings)
             } else {
                 ContentUnavailableView {
-                    Label("Therapy Details Unavailable", systemImage: "gauge.with.needle")
+                    Label("Therapy Details Unavailable", systemImage: "fan")
                 } description: {
                     Text("Your \(friendlyDeviceName) only keeps therapy settings for a rolling window of recent nights. This night sits outside that window.")
                 }

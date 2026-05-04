@@ -232,16 +232,12 @@ struct DayListView: View {
             guard let p = stats.pressure95 else { return nil }
             return String(format: "%.1f", p)
         case .sessions:
-            // `stats.maskEvents` is STR.edf's `MaskEvents` scalar —
-            // a count of mask-on/off transitions, not sessions, so
-            // it tends to read ~2× the actual session count on
-            // AirSense 10 firmware. The daily detail header and
-            // Trends average both count BRP files instead, which
-            // matches OSCAR / SleepHQ. Mirror that here. STR-only
-            // days (AirSense 11 with no BRP files) fall back to
-            // the device counter.
-            let brpCount = day.files(of: .breath).count
-            if brpCount > 0 { return "\(brpCount)" }
+            // `stats.maskEvents` is the count of BRP sessions that
+            // survived the aggregate's filters — manual exclusions
+            // plus the < 2 min brief-session rule — so it agrees
+            // with the daily Usage subtitle. STR-only days
+            // (AirSense 11 with no BRP files) get the device's
+            // mask-events scalar via the same field as a fallback.
             return "\(stats.maskEvents)"
         }
     }
