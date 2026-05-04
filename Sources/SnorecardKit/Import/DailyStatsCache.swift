@@ -37,7 +37,7 @@ public enum DailyStatsCache {
 
         /// Bump this whenever the aggregate's per-day output changes
         /// in a way that should invalidate previously-saved caches.
-        public static let currentSchemaVersion: Int = 6
+        public static let currentSchemaVersion: Int = 7
 
         public init(files: [FileEntry], schemaVersion: Int = Fingerprint.currentSchemaVersion) {
             self.files = files

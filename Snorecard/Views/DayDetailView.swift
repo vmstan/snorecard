@@ -324,7 +324,7 @@ struct DayDetailView: View {
                         tint: usageColor(stats.usageHours),
                         onTap: explainTap(.usage)
                     )
-                    if let apneaSeconds = stats.timeInApneaSeconds {
+                    if let apneaSeconds = library.displayedTimeInApneaSeconds(stats) {
                         let percent = apneaSeconds / (stats.usageMinutes * 60) * 100
                         StatCard(
                             label: "Time in Apnea",
@@ -671,7 +671,8 @@ struct DayDetailView: View {
         case .usage:
             return formatHours(stats.usageHours)
         case .timeInApnea:
-            guard let seconds = stats.timeInApneaSeconds, stats.usageMinutes > 0
+            guard let seconds = library.displayedTimeInApneaSeconds(stats),
+                  stats.usageMinutes > 0
             else { return "—" }
             let pct = seconds / (stats.usageMinutes * 60) * 100
             return String(format: "%.2f%% of usage", pct)

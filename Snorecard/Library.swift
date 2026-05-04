@@ -2357,6 +2357,15 @@ extension Library {
         stats.displayedCentralApneaIndex(visible: includesCentralEvents)
     }
 
+    /// Time-in-apnea seconds threaded through the user's CA-display
+    /// preference, so the daily Time-in-Apnea card and the Trends
+    /// chart subtract central-apnea durations whenever
+    /// `showsCentralEvents` is off. Returns `nil` when no EVE files
+    /// were readable.
+    func displayedTimeInApneaSeconds(_ stats: DailyStatistics) -> Double? {
+        stats.displayedTimeInApneaSeconds(includingCentral: includesCentralEvents)
+    }
+
     /// Whether a single CPAP session has been excluded from its day's
     /// aggregate. `sessionKey` is the `YYYYMMDD_HHMMSS` filename prefix
     /// shared by the session's BRP / EVE / PLD trio (see

@@ -24,6 +24,13 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     /// Total seconds spent in apnea/hypopnea events — sum of every EVE
     /// annotation's duration. `nil` when we couldn't read any EVE files.
     public internal(set) var timeInApneaSeconds: Double? = nil
+    /// Subset of `timeInApneaSeconds` attributable to central-apnea
+    /// annotations alone, so callers can subtract it from the total
+    /// when the user has hidden CA events. `nil` when no EVE files
+    /// were readable. Older sidecars predate this field and decode
+    /// to nil — `displayedTimeInApneaSeconds(includingCentral:)`
+    /// degrades gracefully in that case.
+    public internal(set) var centralApneaTimeSeconds: Double? = nil
     /// Total seconds where mask leak exceeded the 24 L/min large-leak
     /// threshold, summed across all PLD samples on therapy.
     public internal(set) var largeLeakSeconds: Double? = nil
@@ -491,6 +498,7 @@ extension DailyStatistics {
         var unspecified = 0
         var hypopnea = 0
         var timeInApnea: Double = 0
+        var centralTimeInApnea: Double = 0
         var sawAnyEVE = false
         for file in day.files(of: .events) {
             guard let edf = try? EDFFile(contentsOf: file.url),
@@ -502,12 +510,17 @@ extension DailyStatistics {
                 guard isInKeptWindow(absTime) else { continue }
                 let text = annotation.text.lowercased()
                 let isEvent: Bool
-                if text.contains("obstructive") { obstructive += 1; isEvent = true }
-                else if text.contains("central") { central += 1; isEvent = true }
-                else if text.contains("hypopnea") { hypopnea += 1; isEvent = true }
-                else if text.contains("apnea") { unspecified += 1; isEvent = true }
-                else { isEvent = false }
-                if isEvent { timeInApnea += annotation.duration ?? 0 }
+                let isCentral: Bool
+                if text.contains("obstructive") { obstructive += 1; isEvent = true; isCentral = false }
+                else if text.contains("central") { central += 1; isEvent = true; isCentral = true }
+                else if text.contains("hypopnea") { hypopnea += 1; isEvent = true; isCentral = false }
+                else if text.contains("apnea") { unspecified += 1; isEvent = true; isCentral = false }
+                else { isEvent = false; isCentral = false }
+                if isEvent {
+                    let duration = annotation.duration ?? 0
+                    timeInApnea += duration
+                    if isCentral { centralTimeInApnea += duration }
+                }
             }
         }
         let apneas = obstructive + central + unspecified
@@ -613,6 +626,7 @@ extension DailyStatistics {
         stats.snoreModerateSeconds = snoreBands.moderate
         stats.snoreLoudSeconds = snoreBands.loud
         stats.glasgowBreakdown = glasgowBreakdown
+        stats.centralApneaTimeSeconds = sawAnyEVE ? centralTimeInApnea : nil
         return stats
     }
 
@@ -776,5 +790,19 @@ public extension DailyStatistics {
     /// to special-case the preference at every site.
     func displayedCentralApneaIndex(visible: Bool) -> Double {
         visible ? centralApneaIndex : 0
+    }
+
+    /// `timeInApneaSeconds` projected through the user's CA-display
+    /// preference. Returns the original total when central events
+    /// are visible; otherwise subtracts the central-apnea time so
+    /// the daily Time-in-Apnea card and matching Trends chart agree
+    /// with the displayed AHI. Falls back to the unprojected total
+    /// for sidecars saved before `centralApneaTimeSeconds` existed.
+    func displayedTimeInApneaSeconds(includingCentral: Bool) -> Double? {
+        guard let total = timeInApneaSeconds else { return nil }
+        guard !includingCentral, let central = centralApneaTimeSeconds else {
+            return total
+        }
+        return max(0, total - central)
     }
 }

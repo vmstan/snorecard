@@ -463,6 +463,7 @@ public enum SDCardImporter {
             // seconds (nil defaults on the synthesized init).
             merged.snore95 = aggregate.snore95
             merged.snoreModerateSeconds = aggregate.snoreModerateSeconds
+            merged.centralApneaTimeSeconds = aggregate.centralApneaTimeSeconds
             merged.snoreLoudSeconds = aggregate.snoreLoudSeconds
             merged.glasgowBreakdown = aggregate.glasgowBreakdown
         }
