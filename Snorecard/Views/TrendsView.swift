@@ -325,12 +325,13 @@ struct TrendsView: View {
         let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
         let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
         let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
+        let avgUAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.unspecifiedApneaIndex } / Double(days)
         let displayedAvgAHI = library.includesCentralEvents
             ? avgAHI
             : max(0, avgAHI - avgCAI)
         let explainCtx = TrendsExplainContext(
             metric: .ahi,
-            displayValue: String(format: "%.1f events/hr", displayedAvgAHI),
+            displayValue: String(format: "%.2f events/hr", displayedAvgAHI),
             averageValue: displayedAvgAHI
         )
         return EventDonutView(
@@ -338,6 +339,7 @@ struct TrendsView: View {
             obstructiveApneaIndex: avgOAI,
             centralApneaIndex: avgCAI,
             hypopneaIndex: avgHI,
+            unspecifiedApneaIndex: avgUAI,
             headline: "AVG APNEA HYPOPNEA INDEX",
             onTap: explainTap(explainCtx)
         )
