@@ -8,12 +8,13 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 
 **Each night**
 
-- Your AHI for the night, broken down into obstructive apnea, hypopnea, and clear airway / central apnea (label preference selectable in Settings)
+- Your AHI for the night, broken down into obstructive apnea, hypopnea, clear airway / central apnea, and any unclassified apneas your machine couldn't categorize. CA events have their own label and visibility toggle in Settings — hide them from the AHI calculation, charts, and totals if your clinician has told you they're arousal artefacts unrelated to therapy
 - Quick-glance cards for usage hours, time spent in apnea, EPAP, IPAP, leak, flow limitation, snore, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
 - A bar chart showing when events happened hour by hour
 - Hourly charts for leak, flow limitation, and pressure
 - Detailed percentile statistics for every signal your machine recorded, including breath timing and a per-event breakdown
 - An Advanced Charting window with the full waveform of breathing, mask pressure, leak, snore, and tidal volume — with a draggable scrubber that focuses any window of the night
+- A Therapy Sessions list with an include / exclude switch on every session, so a stray mask test or daytime fitting can be dropped from the day's AHI, usage, and pressure totals. Sessions under two minutes are excluded automatically — they're almost always fittings rather than therapy
 - Your machine's exact therapy settings for that specific night — pressure, mode, EPR, ramp, humidifier, mask type, and more
 - A Sleep Journal entry for writing your own notes about the night
 
