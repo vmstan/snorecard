@@ -77,6 +77,22 @@ extension EventColorPalette {
         }
     }
 
+    /// Colour for unclassified-apnea markers in this palette. ResMed
+    /// AirSense devices sometimes emit a generic "Apnea" annotation
+    /// when the algorithm can't decide between obstructive and
+    /// central — we surface those as a fourth segment so the donut
+    /// totals match the displayed AHI. Tints sit between the
+    /// obstructive and central hues so the segment reads as
+    /// "neither, but counted" without competing with the primary
+    /// three.
+    var unclassified: Color {
+        switch self {
+        case .topher: return Color(red: 0.620, green: 0.388, blue: 0.584)
+        case .nick:   return Color(red: 0.745, green: 0.745, blue: 0.745)
+        case .oscar:  return Color(red: 0.522, green: 0.000, blue: 0.522)
+        }
+    }
+
     // MARK: - Trend / hourly chart slots
     //
     // These extend the three event colours into a full themed palette

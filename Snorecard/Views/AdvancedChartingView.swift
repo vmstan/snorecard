@@ -111,8 +111,11 @@ struct AdvancedChartingView: View {
     private var content: some View {
         if let bundle {
             ScrollView {
-                WaveformSection(bundle: bundle, sleepSummary: sleepSummary)
-                    .padding(20)
+                WaveformSection(
+                    bundle: bundle.filteringInactiveSessions(inactiveSessionIDs(in: bundle)),
+                    sleepSummary: sleepSummary
+                )
+                .padding(20)
             }
         } else if let loadError {
             ContentUnavailableView {
@@ -144,6 +147,30 @@ struct AdvancedChartingView: View {
             return "\(device) · \(date)"
         }
         return date
+    }
+
+    /// Same `briefSession + excludedSessionKeys` mapping the daily
+    /// view does, applied here so the standalone waveform window
+    /// drops auto-excluded and manually-excluded sessions and
+    /// recalibrates its X-axis to the kept range.
+    private func inactiveSessionIDs(in bundle: WaveformBundle) -> Set<UUID> {
+        let excludedKeys = library.excludedSessionKeys
+        var ids: Set<UUID> = []
+        for session in bundle.sessions {
+            if session.duration < 120 {
+                ids.insert(session.id)
+                continue
+            }
+            let parts = session.sourceFilename.split(separator: "_")
+            guard parts.count >= 2,
+                  parts[0].count == 8,
+                  parts[1].count == 6 else { continue }
+            let key = "\(parts[0])_\(parts[1])"
+            if excludedKeys.contains(key) {
+                ids.insert(session.id)
+            }
+        }
+        return ids
     }
 
     private func loadBundle() async {

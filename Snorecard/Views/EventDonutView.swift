@@ -15,6 +15,11 @@ struct EventDonutView: View {
     let obstructiveApneaIndex: Double
     let centralApneaIndex: Double
     let hypopneaIndex: Double
+    /// "Apnea" annotations from ResMed where the device couldn't
+    /// classify the event as obstructive or central. Counted in
+    /// the AHI total, so the donut surfaces them as their own
+    /// segment to keep the bar in sync with the headline number.
+    let unspecifiedApneaIndex: Double
     let headline: String
     let onTap: (() -> Void)?
 
@@ -23,6 +28,7 @@ struct EventDonutView: View {
         obstructiveApneaIndex: Double,
         centralApneaIndex: Double,
         hypopneaIndex: Double,
+        unspecifiedApneaIndex: Double = 0,
         headline: String = "APNEA HYPOPNEA INDEX",
         onTap: (() -> Void)? = nil
     ) {
@@ -30,6 +36,7 @@ struct EventDonutView: View {
         self.obstructiveApneaIndex = obstructiveApneaIndex
         self.centralApneaIndex = centralApneaIndex
         self.hypopneaIndex = hypopneaIndex
+        self.unspecifiedApneaIndex = unspecifiedApneaIndex
         self.headline = headline
         self.onTap = onTap
     }
@@ -40,6 +47,7 @@ struct EventDonutView: View {
             obstructiveApneaIndex: stats.obstructiveApneaIndex,
             centralApneaIndex: stats.centralApneaIndex,
             hypopneaIndex: stats.hypopneaIndex,
+            unspecifiedApneaIndex: stats.unspecifiedApneaIndex,
             onTap: onTap
         )
     }
@@ -59,7 +67,7 @@ struct EventDonutView: View {
     }
 
     private var hasData: Bool {
-        obstructiveApneaIndex + displayedCAI + hypopneaIndex > 0
+        obstructiveApneaIndex + displayedCAI + hypopneaIndex + unspecifiedApneaIndex > 0
     }
 
     var body: some View {
@@ -131,6 +139,21 @@ struct EventDonutView: View {
                             availableWidth: geo.size.width
                         )
                     }
+                    // ResMed's generic "Apnea" annotation — the
+                    // device couldn't classify it as OA or CA but
+                    // it's still in the AHI total. Surface it as
+                    // its own segment so the bar sums to the
+                    // headline number.
+                    segment(
+                        "UA",
+                        value: unspecifiedApneaIndex,
+                        color: palette.unclassified,
+                        tooltip: tooltip(
+                            for: "Unclassified Apnea",
+                            value: unspecifiedApneaIndex
+                        ),
+                        availableWidth: geo.size.width
+                    )
                 } else {
                     Rectangle()
                         .fill(Color.secondary.opacity(0.18))
@@ -151,7 +174,7 @@ struct EventDonutView: View {
     /// `.help()` on macOS surfaces this as a hover tooltip; on iOS
     /// it becomes the segment's accessibility hint.
     private func tooltip(for name: String, value: Double) -> String {
-        String(format: "%@: %.1f events / hour", name, value)
+        String(format: "%@: %.2f events / hour", name, value)
     }
 
     /// One coloured segment of the stacked bar. Width is computed
@@ -175,6 +198,7 @@ struct EventDonutView: View {
         let total = obstructiveApneaIndex
             + displayedCAI
             + hypopneaIndex
+            + unspecifiedApneaIndex
         let share = total > 0 ? value / total : 0
         let width = max(0, availableWidth * CGFloat(share))
         Color.clear
@@ -182,7 +206,7 @@ struct EventDonutView: View {
             .glassEffect(.regular.tint(color), in: Rectangle())
             .overlay {
                 if shouldLabel(value) {
-                    Text(String(format: "%@ %.1f", shortName, value))
+                    Text(String(format: "%@ %.2f", shortName, value))
                         .font(.caption2.weight(.medium).monospacedDigit())
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -199,6 +223,7 @@ struct EventDonutView: View {
         let total = obstructiveApneaIndex
             + displayedCAI
             + hypopneaIndex
+            + unspecifiedApneaIndex
         guard total > 0 else { return false }
         return value / total > 0.08
     }

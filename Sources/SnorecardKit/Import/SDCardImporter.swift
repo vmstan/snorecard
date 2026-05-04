@@ -17,6 +17,20 @@ public struct ResMedDataFile: Sendable, Equatable, Identifiable, Codable {
         self.timestamp = timestamp
         self.byteSize = byteSize
     }
+
+    /// Stable identifier for the session this file belongs to. BRP/EVE/PLD
+    /// siblings recorded together share the `YYYYMMDD_HHMMSS` filename
+    /// prefix, so this key lets a per-session exclusion follow all three
+    /// kinds without us having to track URLs that may rotate as the device
+    /// rolls files. `nil` for any file whose name doesn't match the
+    /// device-stamped convention.
+    public var sessionKey: String? {
+        let parts = url.lastPathComponent.split(separator: "_")
+        guard parts.count >= 2,
+              parts[0].count == 8,
+              parts[1].count == 6 else { return nil }
+        return "\(parts[0])_\(parts[1])"
+    }
 }
 
 /// All files recorded on a single calendar day (`DATALOG/YYYYMMDD`).
@@ -403,10 +417,13 @@ public enum SDCardImporter {
     }
 
     /// STR.edf provides a few fields we can't derive from raw files
-    /// (mode code, mask-on event counts, the full `S.*` settings
-    /// block). Keep those, but let the aggregate pass override
-    /// everything else since its PLD-derived values match OSCAR /
-    /// SleepHQ.
+    /// (mode code, the full `S.*` settings block). Keep those, but
+    /// let the aggregate pass override everything else since its
+    /// PLD-derived values match OSCAR / SleepHQ. `maskEvents` used
+    /// to be borrowed from STR too — but ResMed's `MaskEvents`
+    /// scalar counts mask-on/off transitions (~2× sessions on
+    /// AirSense 10), so we now use the aggregate's kept-session
+    /// count, which is what the daily UI labels as "sessions".
     private static func mergeSTRWithAggregate(
         str: DailyStatistics,
         aggregate: DailyStatistics
@@ -416,7 +433,7 @@ public enum SDCardImporter {
             merged = DailyStatistics(
                 date: merged.date,
                 usageMinutes: merged.usageMinutes,
-                maskEvents: str.maskEvents,
+                maskEvents: aggregate.maskEvents,
                 ahi: merged.ahi,
                 hypopneaIndex: merged.hypopneaIndex,
                 apneaIndex: merged.apneaIndex,
@@ -446,6 +463,7 @@ public enum SDCardImporter {
             // seconds (nil defaults on the synthesized init).
             merged.snore95 = aggregate.snore95
             merged.snoreModerateSeconds = aggregate.snoreModerateSeconds
+            merged.centralApneaTimeSeconds = aggregate.centralApneaTimeSeconds
             merged.snoreLoudSeconds = aggregate.snoreLoudSeconds
             merged.glasgowBreakdown = aggregate.glasgowBreakdown
         }

@@ -16,6 +16,44 @@ struct DayDetailView: View {
     @State private var isShowingSettings = false
     @State private var isShowingNotes = false
     @State private var isShowingSleepAnalysis = false
+    @State private var isShowingSessions = false
+
+    /// Mirror of `DailyStatistics.aggregate(minSessionSeconds:)` so
+    /// the daily charts drop the same brief sessions the aggregate
+    /// does. Centralised here (as well as in `SessionListSheet`) so
+    /// the rule is in one place per platform layer.
+    private static let briefSessionSeconds: Double = 120
+
+    /// Map the user's `excludedSessionKeys` and the auto-exclude
+    /// rule onto the loaded bundle's per-session UUIDs. Empty when
+    /// no bundle is loaded yet.
+    private var inactiveSessionIDs: Set<UUID> {
+        guard let bundle = loadedWaveform else { return [] }
+        let excludedKeys = library.excludedSessionKeys
+        var ids: Set<UUID> = []
+        for session in bundle.sessions {
+            if session.duration < Self.briefSessionSeconds {
+                ids.insert(session.id)
+                continue
+            }
+            let parts = session.sourceFilename.split(separator: "_")
+            guard parts.count >= 2,
+                  parts[0].count == 8,
+                  parts[1].count == 6 else { continue }
+            let key = "\(parts[0])_\(parts[1])"
+            if excludedKeys.contains(key) {
+                ids.insert(session.id)
+            }
+        }
+        return ids
+    }
+
+    /// `loadedWaveform` with brief and excluded sessions stripped —
+    /// used by the daily charts so the visualisation matches the
+    /// stat cards' filtered totals.
+    private var displayedBundle: WaveformBundle? {
+        loadedWaveform?.filteringInactiveSessions(inactiveSessionIDs)
+    }
 
     var body: some View {
         ScrollView {
@@ -86,11 +124,22 @@ struct DayDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(
+                        name: .snorecardOpenSessions,
+                        object: nil
+                    )
+                } label: {
+                    Label("Therapy Sessions", systemImage: "clock")
+                }
+                .help("Show every therapy session recorded for this night")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    NotificationCenter.default.post(
                         name: .snorecardOpenDailySettings,
                         object: nil
                     )
                 } label: {
-                    Label("Therapy Details", systemImage: "gauge.with.needle")
+                    Label("Therapy Details", systemImage: "fan")
                 }
                 .help("Show therapy details for this night")
             }
@@ -121,20 +170,18 @@ struct DayDetailView: View {
         }
         #endif
         #if os(iOS)
+        // All four day-level sheets follow the same pattern: each
+        // view supplies its own NavigationStack + padded
+        // `InspectorPaneHeader` on iOS, so the sheet wrappers here
+        // only need the detents and drag indicator — no external
+        // chrome that would push their headers to different
+        // vertical positions.
         .sheet(isPresented: $isShowingNotes) {
-            NavigationStack {
-                NotesCard(day: day)
-                    .padding(20)
-                    .padding(.top, 12)
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+            NotesCard(day: day)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingSettings) {
-            // iOS `.inspector` collapses into the parent navigation
-            // stack and bleeds its title/toolbar into the day header,
-            // so settings also presents as a sheet on iPhone.
             DailySettingsInspector(
                 settings: day.stats?.settings,
                 date: day.date,
@@ -143,19 +190,18 @@ struct DayDetailView: View {
                 serialNumber: library.card?.identification?.serialNumber,
                 deviceAlias: deviceAliasForInspector
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isShowingSleepAnalysis) {
+            NightSummaryCard(day: day)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $isShowingSleepAnalysis) {
-            NavigationStack {
-                NightSummaryCard(day: day)
-                    .padding(20)
-                    .padding(.top, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $isShowingSessions) {
+            SessionListSheet(day: day)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         // Bridges from the shared Options menu's daily entries —
         // ContentView posts these whenever the user picks Notes,
@@ -169,6 +215,9 @@ struct DayDetailView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSleepAnalysis)) { _ in
             isShowingSleepAnalysis = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .snorecardOpenSessions)) { _ in
+            isShowingSessions = true
         }
         #endif
         .task(id: day.id) {
@@ -206,6 +255,7 @@ struct DayDetailView: View {
             items.append(.sleepAnalysis)
         }
         items.append(.sleepJournal)
+        items.append(.sessions)
         items.append(.therapyDetails)
         return items
     }
@@ -216,6 +266,8 @@ struct DayDetailView: View {
             NotificationCenter.default.post(name: .snorecardOpenSleepAnalysis, object: nil)
         case .sleepJournal:
             NotificationCenter.default.post(name: .snorecardOpenDailyNotes, object: nil)
+        case .sessions:
+            NotificationCenter.default.post(name: .snorecardOpenSessions, object: nil)
         case .therapyDetails:
             NotificationCenter.default.post(name: .snorecardOpenDailySettings, object: nil)
         }
@@ -272,7 +324,7 @@ struct DayDetailView: View {
                         tint: usageColor(stats.usageHours),
                         onTap: explainTap(.usage)
                     )
-                    if let apneaSeconds = stats.timeInApneaSeconds {
+                    if let apneaSeconds = library.displayedTimeInApneaSeconds(stats) {
                         let percent = apneaSeconds / (stats.usageMinutes * 60) * 100
                         StatCard(
                             label: "Time in Apnea",
@@ -430,7 +482,7 @@ struct DayDetailView: View {
                 // the most-diagnostic metric (events) to the
                 // trajectory one (pressure) so a scan down the
                 // column reads most-important-first.
-                if let bundle = loadedWaveform, !bundle.events.isEmpty {
+                if let bundle = displayedBundle, !bundle.events.isEmpty {
                     AHIHourlyChart(
                         events: bundle.events,
                         dayStart: bundle.dayStart,
@@ -444,7 +496,7 @@ struct DayDetailView: View {
                 // the summary's raw samples to bucket the stages.
                 // Renders on both platforms — the underlying data
                 // comes from sidecars synced via iCloud Drive.
-                if let bundle = loadedWaveform,
+                if let bundle = displayedBundle,
                    let sleep = library.healthSleep.summaryByDate[day.date] {
                     SleepByHourChart(
                         summary: sleep,
@@ -453,28 +505,28 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                if let bundle = loadedWaveform, !bundle.flatLeak.isEmpty {
+                if let bundle = displayedBundle, !bundle.flatLeak.isEmpty {
                     LeakHourlyChart(
                         leak: bundle.flatLeak,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
                 }
-                if let bundle = loadedWaveform, !bundle.flatFlowLimitation.isEmpty {
+                if let bundle = displayedBundle, !bundle.flatFlowLimitation.isEmpty {
                     FlowLimitHourlyChart(
                         flowLimit: bundle.flatFlowLimitation,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
                 }
-                if let bundle = loadedWaveform, !bundle.flatPressure.isEmpty {
+                if let bundle = displayedBundle, !bundle.flatPressure.isEmpty {
                     PressureHourlyChart(
                         pressure: bundle.flatPressure,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
                 }
-                if let bundle = loadedWaveform, !bundle.flatTidalVolume.isEmpty {
+                if let bundle = displayedBundle, !bundle.flatTidalVolume.isEmpty {
                     TidalVolumeHourlyChart(
                         tidalVolume: bundle.flatTidalVolume,
                         dayStart: bundle.dayStart,
@@ -596,7 +648,7 @@ struct DayDetailView: View {
     private func displayValue(for metric: ExplainableMetric) -> String {
         guard let stats = day.stats else { return "—" }
         switch metric {
-        case .ahi:          return String(format: "%.1f", library.displayedAHI(stats))
+        case .ahi:          return String(format: "%.2f", library.displayedAHI(stats))
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .epap95:
@@ -619,7 +671,8 @@ struct DayDetailView: View {
         case .usage:
             return formatHours(stats.usageHours)
         case .timeInApnea:
-            guard let seconds = stats.timeInApneaSeconds, stats.usageMinutes > 0
+            guard let seconds = library.displayedTimeInApneaSeconds(stats),
+                  stats.usageMinutes > 0
             else { return "—" }
             let pct = seconds / (stats.usageMinutes * 60) * 100
             return String(format: "%.2f%% of usage", pct)
@@ -694,7 +747,12 @@ struct DayDetailView: View {
     }
 
     private var sessionCountLabel: String {
-        let count = day.files(of: .breath).count
+        // `stats.maskEvents` reflects the BRP files that survived
+        // the aggregate's filters (manual exclusions + the < 2 min
+        // brief-session rule), so this subtitle agrees with the
+        // Usage value above. Falls back to raw file count only
+        // when the day has no stats yet (mid-load placeholder).
+        let count = day.stats?.maskEvents ?? day.files(of: .breath).count
         return "\(count) session\(count == 1 ? "" : "s")"
     }
 

@@ -10,6 +10,7 @@
 		01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */; };
 		02BBE2E9B36662C907CCFB42 /* JournalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004A5EF5107705F409DC3089 /* JournalEditor.swift */; };
+		03BA59E5DBCBCBA287C44A24 /* SessionListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */; };
 		0E244EDF4E0543DA8B838869 /* TrendNarrativeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA139BDBDFF7D621A0CAFE0 /* TrendNarrativeCard.swift */; };
 		14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		15F314042E6CECBE694C5032 /* InspectorPaneHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */; };
@@ -42,6 +43,7 @@
 		5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
 		5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
 		65A69A0F2BB53AF7C4974E66 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0619F56E4FE534FDD964689 /* SettingsSheet.swift */; };
+		671072A095BAFF64A05780D0 /* SessionListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */; };
 		689EA6C18BFCE2D56EF9B7D4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A07D7D5ACB6B80C10E0145F /* Assets.xcassets */; };
 		68D1B12B986E4258C47F46A8 /* AdvancedChartingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49BE9F94F371D67AB0D01F05 /* AdvancedChartingView.swift */; };
 		6BE2F7C24C6199A50A408A71 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3936E5AE9456EE22D83787A3 /* Library.swift */; };
@@ -106,6 +108,7 @@
 		0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
 		0F85425A6C4E977C75813A1E /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		156B080C6367D8E6B83EE050 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListSheet.swift; sourceTree = "<group>"; };
 		29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPaneHeader.swift; sourceTree = "<group>"; };
 		2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformColor.swift; sourceTree = "<group>"; };
 		2C36BFDF4519D6F8073A9156 /* AppIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconController.swift; sourceTree = "<group>"; };
@@ -277,6 +280,7 @@
 				60A45553900FBA215B415695 /* NightSummaryCard.swift */,
 				314A642CE58D016D8A5B1919 /* NotesCard.swift */,
 				853DAE44E326A5049CC51EDC /* ProfileTab.swift */,
+				23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */,
 				E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */,
 				D0619F56E4FE534FDD964689 /* SettingsSheet.swift */,
 				AC0CBF1A56107126CE3DD195 /* SleepByHourChart.swift */,
@@ -440,6 +444,7 @@
 				DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */,
 				C810AFE08ECC2BE7C5F2CCCB /* PlatformColor.swift in Sources */,
 				3B14A5E12E08AA92457E696F /* ProfileTab.swift in Sources */,
+				03BA59E5DBCBCBA287C44A24 /* SessionListSheet.swift in Sources */,
 				94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */,
 				A5A7CD9B6E6FDD34C386FF48 /* SettingsSheet.swift in Sources */,
 				37B5C5061BDA8B0F7836FA22 /* SleepByHourChart.swift in Sources */,
@@ -482,6 +487,7 @@
 				DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */,
 				D74609F82E3268E414246D58 /* PlatformColor.swift in Sources */,
 				2D622A4D0F0E6C95EB0CDD42 /* ProfileTab.swift in Sources */,
+				671072A095BAFF64A05780D0 /* SessionListSheet.swift in Sources */,
 				18CF72984BFE0EB49DA214A2 /* SessionTimelineView.swift in Sources */,
 				65A69A0F2BB53AF7C4974E66 /* SettingsSheet.swift in Sources */,
 				8558EF2226C4FBAF6F93F763 /* SleepByHourChart.swift in Sources */,

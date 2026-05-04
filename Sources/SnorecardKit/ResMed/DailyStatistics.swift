@@ -24,6 +24,13 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     /// Total seconds spent in apnea/hypopnea events — sum of every EVE
     /// annotation's duration. `nil` when we couldn't read any EVE files.
     public internal(set) var timeInApneaSeconds: Double? = nil
+    /// Subset of `timeInApneaSeconds` attributable to central-apnea
+    /// annotations alone, so callers can subtract it from the total
+    /// when the user has hidden CA events. `nil` when no EVE files
+    /// were readable. Older sidecars predate this field and decode
+    /// to nil — `displayedTimeInApneaSeconds(includingCentral:)`
+    /// degrades gracefully in that case.
+    public internal(set) var centralApneaTimeSeconds: Double? = nil
     /// Total seconds where mask leak exceeded the 24 L/min large-leak
     /// threshold, summed across all PLD samples on therapy.
     public internal(set) var largeLeakSeconds: Double? = nil
@@ -341,23 +348,81 @@ extension DailyStatistics {
     /// `DailyStatistics`. Replaces the combination of `compute` +
     /// `supplementaryMetrics` + `GlasgowIndex.computeDay` that the
     /// importer previously ran, cutting ~50 % of I/O per day.
+    ///
+    /// `excluding` is a set of `sessionKey` values (the `YYYYMMDD_HHMMSS`
+    /// filename prefix shared by a session's BRP / EVE / PLD trio).
+    /// Files whose key is in the set are skipped on every pass, so the
+    /// resulting AHI / usage / pressure stats reflect only the kept
+    /// sessions. An empty set is the original behaviour.
+    ///
+    /// Sessions whose recorded duration is below `minSessionSeconds`
+    /// (default: 120 s) are auto-excluded on top of the explicit set.
+    /// These are virtually always mask tests / fittings / brief
+    /// daytime checks rather than therapy and would otherwise drag
+    /// the day's percentiles toward whatever mid-fitting pressure was
+    /// momentarily applied.
     public static func aggregate(
         for day: ResMedDay,
-        productName: String? = nil
+        productName: String? = nil,
+        excluding: Set<String> = [],
+        minSessionSeconds: Double = 120
     ) -> DailyStatistics? {
-        let brpFiles = day.files(of: .breath)
-        guard !brpFiles.isEmpty else { return nil }
+        // BRP filenames carry the session's canonical `YYYYMMDD_HHMMSS`
+        // timestamp, so manual exclusions match BRP files by exact
+        // key. EVE / PLD siblings frequently sit a second or two off
+        // their BRP, so they're paired below via "nearest BRP wins"
+        // matching — same idea `WaveformBundle.load` uses to align
+        // BRP with PLD.
+        func isKeptBRP(_ file: ResMedDataFile) -> Bool {
+            guard !excluding.isEmpty, let key = file.sessionKey else { return true }
+            return !excluding.contains(key)
+        }
 
-        // BRP pass: session duration + Glasgow Index per file.
+        // Per-BRP record used to pair EVE / PLD against. The kept
+        // flag bakes in both the manual exclusion set and the
+        // brief-session auto-rule, so a sibling whose nearest BRP
+        // is excluded for either reason gets dropped from the
+        // aggregate uniformly.
+        struct BRPRecord {
+            let file: ResMedDataFile
+            let edf: EDFFile
+            let timestamp: Date
+            let durationSeconds: Double
+            let isKept: Bool
+        }
+        var brpRecords: [BRPRecord] = []
+        for file in day.files(of: .breath) {
+            guard let edf = try? EDFFile(contentsOf: file.url),
+                  edf.header.recordCount > 0 else { continue }
+            let durationSeconds = Double(edf.header.recordCount) * edf.header.recordDuration
+            // Prefer the filename-parsed timestamp (matches what
+            // `parseFileTimestamp` derives elsewhere) and fall back
+            // to the EDF header's start date for safety.
+            let ts = file.timestamp ?? edf.header.startDate
+            let kept = isKeptBRP(file) && durationSeconds >= minSessionSeconds
+            brpRecords.append(
+                BRPRecord(
+                    file: file,
+                    edf: edf,
+                    timestamp: ts,
+                    durationSeconds: durationSeconds,
+                    isKept: kept
+                )
+            )
+        }
+        guard !brpRecords.isEmpty else { return nil }
+
+        // BRP pass: usage + Glasgow Index, kept records only.
         var usageSeconds: Double = 0
         var totalGlasgowScore: Double = 0
         var weightedBreakdown = GlasgowIndex.BreakdownAccumulator()
         var totalInspirations = 0
-        for file in brpFiles {
-            guard let edf = try? EDFFile(contentsOf: file.url),
-                  edf.header.recordCount > 0 else { continue }
-            usageSeconds += Double(edf.header.recordCount) * edf.header.recordDuration
+        var keptBRPCount = 0
+        for record in brpRecords where record.isKept {
+            keptBRPCount += 1
+            usageSeconds += record.durationSeconds
 
+            let edf = record.edf
             guard let flowIdx = edf.signals.firstIndex(where: { $0.label.hasPrefix("Flow") }),
                   let flowSamples = try? edf.physicalSamples(ofSignal: flowIdx)
             else { continue }
@@ -372,6 +437,47 @@ extension DailyStatistics {
                 totalInspirations += result.inspirationCount
             }
         }
+        // Every BRP was below the threshold or excluded — there's
+        // nothing left to aggregate for the day.
+        guard usageSeconds > 0 else { return nil }
+
+        // Build absolute time windows for the kept BRP sessions.
+        // EVE annotations get filtered against these windows below
+        // (per-annotation, since one EVE file can carry events from
+        // multiple sessions on AirSense firmwares — observed in
+        // real-world data: a folder with 3 BRPs but only 2 EVE
+        // files, with each EVE spanning across session boundaries).
+        let keptWindows: [(start: Date, end: Date)] = brpRecords
+            .filter { $0.isKept }
+            .map { record in
+                let start = record.timestamp
+                let end = start.addingTimeInterval(record.durationSeconds)
+                return (start, end)
+            }
+        func isInKeptWindow(_ time: Date) -> Bool {
+            keptWindows.contains { time >= $0.start && time <= $0.end }
+        }
+
+        // PLD files are written one-per-session, so per-file pairing
+        // is enough. Direct sessionKey check first (catches the
+        // common BRP/PLD-share-prefix case), then nearest-BRP
+        // fallback for firmwares that drift the PLD timestamp a
+        // second or two off the BRP. Manual exclusions only —
+        // brief BRPs are filtered out of usage, but their PLD
+        // samples (typically ~zero on-therapy samples anyway)
+        // wouldn't move the day's percentiles meaningfully.
+        func nearestBRPIsKept(_ file: ResMedDataFile) -> Bool {
+            guard !excluding.isEmpty else { return true }
+            if let ownKey = file.sessionKey, excluding.contains(ownKey) {
+                return false
+            }
+            guard let ts = file.timestamp else { return true }
+            guard let nearest = brpRecords.min(by: {
+                abs($0.timestamp.timeIntervalSince(ts)) < abs($1.timestamp.timeIntervalSince(ts))
+            }) else { return true }
+            guard let nearestKey = nearest.file.sessionKey else { return true }
+            return !excluding.contains(nearestKey)
+        }
         let usageMinutes = usageSeconds / 60
         let usageHours = usageMinutes / 60
         let glasgowIndex: Double? = totalInspirations > 0
@@ -382,25 +488,39 @@ extension DailyStatistics {
             : nil
 
         // EVE pass: apnea/hypopnea counts + total time in events.
+        // Each annotation's absolute time is compared against the
+        // kept session windows, not against the EVE file's own
+        // timestamp — ResMed sometimes packs events from multiple
+        // sessions into a single EVE file, so per-file pairing
+        // would either over- or under-count.
         var obstructive = 0
         var central = 0
         var unspecified = 0
         var hypopnea = 0
         var timeInApnea: Double = 0
+        var centralTimeInApnea: Double = 0
         var sawAnyEVE = false
         for file in day.files(of: .events) {
             guard let edf = try? EDFFile(contentsOf: file.url),
                   let annotations = try? edf.annotations() else { continue }
             sawAnyEVE = true
+            let eveStart = edf.header.startDate
             for annotation in annotations {
+                let absTime = eveStart.addingTimeInterval(annotation.onset)
+                guard isInKeptWindow(absTime) else { continue }
                 let text = annotation.text.lowercased()
                 let isEvent: Bool
-                if text.contains("obstructive") { obstructive += 1; isEvent = true }
-                else if text.contains("central") { central += 1; isEvent = true }
-                else if text.contains("hypopnea") { hypopnea += 1; isEvent = true }
-                else if text.contains("apnea") { unspecified += 1; isEvent = true }
-                else { isEvent = false }
-                if isEvent { timeInApnea += annotation.duration ?? 0 }
+                let isCentral: Bool
+                if text.contains("obstructive") { obstructive += 1; isEvent = true; isCentral = false }
+                else if text.contains("central") { central += 1; isEvent = true; isCentral = true }
+                else if text.contains("hypopnea") { hypopnea += 1; isEvent = true; isCentral = false }
+                else if text.contains("apnea") { unspecified += 1; isEvent = true; isCentral = false }
+                else { isEvent = false; isCentral = false }
+                if isEvent {
+                    let duration = annotation.duration ?? 0
+                    timeInApnea += duration
+                    if isCentral { centralTimeInApnea += duration }
+                }
             }
         }
         let apneas = obstructive + central + unspecified
@@ -423,7 +543,7 @@ extension DailyStatistics {
         var sawAnyPLD = false
         let leakThreshold: Double = 24.0 / 60.0 // 24 L/min in L/s
 
-        for file in day.files(of: .physiological) {
+        for file in day.files(of: .physiological) where nearestBRPIsKept(file) {
             guard let edf = try? EDFFile(contentsOf: file.url),
                   edf.header.recordCount > 0 else { continue }
 
@@ -477,7 +597,7 @@ extension DailyStatistics {
         var stats = DailyStatistics(
             date: day.date,
             usageMinutes: usageMinutes,
-            maskEvents: brpFiles.count,
+            maskEvents: keptBRPCount,
             ahi: rate(apneas + hypopnea),
             hypopneaIndex: rate(hypopnea),
             apneaIndex: rate(apneas),
@@ -506,6 +626,7 @@ extension DailyStatistics {
         stats.snoreModerateSeconds = snoreBands.moderate
         stats.snoreLoudSeconds = snoreBands.loud
         stats.glasgowBreakdown = glasgowBreakdown
+        stats.centralApneaTimeSeconds = sawAnyEVE ? centralTimeInApnea : nil
         return stats
     }
 
@@ -669,5 +790,19 @@ public extension DailyStatistics {
     /// to special-case the preference at every site.
     func displayedCentralApneaIndex(visible: Bool) -> Double {
         visible ? centralApneaIndex : 0
+    }
+
+    /// `timeInApneaSeconds` projected through the user's CA-display
+    /// preference. Returns the original total when central events
+    /// are visible; otherwise subtracts the central-apnea time so
+    /// the daily Time-in-Apnea card and matching Trends chart agree
+    /// with the displayed AHI. Falls back to the unprojected total
+    /// for sidecars saved before `centralApneaTimeSeconds` existed.
+    func displayedTimeInApneaSeconds(includingCentral: Bool) -> Double? {
+        guard let total = timeInApneaSeconds else { return nil }
+        guard !includingCentral, let central = centralApneaTimeSeconds else {
+            return total
+        }
+        return max(0, total - central)
     }
 }

@@ -92,7 +92,7 @@ extension CorrelationNarrativeInput {
 
     private static func formatValue(_ value: Double, metric: CorrelatedMetric) -> String {
         switch metric {
-        case .ahi:              return String(format: "%.1f", value)
+        case .ahi:              return String(format: "%.2f", value)
         case .usageHours:       return String(format: "%.1f", value)
         case .leak95LPerMin:    return String(format: "%.0f", value)
         case .glasgowIndex:     return String(format: "%.2f", value)

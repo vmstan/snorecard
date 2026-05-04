@@ -52,7 +52,12 @@ public enum IntelligenceInputBuilder {
             return PromptRounding.round1(raw)
         }()
         let apneaPercent: Double? = {
-            guard let seconds = stats.timeInApneaSeconds,
+            // Project through the same CA-display preference the
+            // headline AHI uses so the narrative's percentage and
+            // the daily card stay in lockstep when CA is hidden.
+            guard let seconds = stats.displayedTimeInApneaSeconds(
+                    includingCentral: !excludeCentralFromAHI
+                  ),
                   stats.usageMinutes > 0 else { return nil }
             return PromptRounding.round1(seconds / (stats.usageMinutes * 60) * 100)
         }()
@@ -536,7 +541,9 @@ public enum IntelligenceInputBuilder {
         case .snore95:          return stats.snore95
         case .usage:            return stats.usageHours
         case .timeInApnea:
-            guard let seconds = stats.timeInApneaSeconds,
+            guard let seconds = stats.displayedTimeInApneaSeconds(
+                    includingCentral: !excludeCentralFromAHI
+                  ),
                   stats.usageMinutes > 0 else { return nil }
             return seconds / (stats.usageMinutes * 60) * 100
         case .flowLimit:        return stats.flowLimit95

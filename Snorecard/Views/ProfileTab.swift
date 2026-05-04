@@ -254,7 +254,7 @@ struct ProfileTab: View {
                 TextField(
                     "",
                     value: untreatedAHIBinding,
-                    format: .number.precision(.fractionLength(0...1)),
+                    format: .number.precision(.fractionLength(0...2)),
                     prompt: Text("events / hour")
                 )
                 .multilineTextAlignment(.trailing)

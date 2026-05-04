@@ -125,7 +125,7 @@ extension NightSummaryInput {
         var lines: [String] = []
         lines.append("Night: \(Self.nightFormatter.string(from: date))")
         lines.append("Usage: \(formatOneDp(usageHours)) hours")
-        lines.append("AHI: \(formatOneDp(ahi)) events per hour")
+        lines.append("AHI: \(formatTwoDp(ahi)) events per hour")
         if let gi = glasgowIndex {
             lines.append("Glasgow Index: \(formatTwoDp(gi))")
         }
@@ -165,7 +165,7 @@ extension NightSummaryInput {
 
         if let diff = baselineDiff {
             var diffLines: [String] = []
-            diffLines.append("AHI change: \(formatSignedOneDp(diff.ahiDelta)) events/hr")
+            diffLines.append("AHI change: \(formatSignedTwoDp(diff.ahiDelta)) events/hr")
             diffLines.append("Usage change: \(formatSignedOneDp(diff.usageHoursDelta)) hours")
             if let leakDelta = diff.leakDelta {
                 diffLines.append("Leak change: \(formatSignedOneDp(leakDelta)) L/min")

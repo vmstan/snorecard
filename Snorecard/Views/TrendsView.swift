@@ -269,7 +269,7 @@ struct TrendsView: View {
             NotificationCenter.default.post(name: .snorecardOpenTrendsAnalysis, object: nil)
         case .sleepJournal:
             NotificationCenter.default.post(name: .snorecardOpenDeviceNotes, object: nil)
-        case .therapyDetails:
+        case .sessions, .therapyDetails:
             break
         }
     }
@@ -325,12 +325,13 @@ struct TrendsView: View {
         let avgOAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.obstructiveApneaIndex } / Double(days)
         let avgHI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.hypopneaIndex } / Double(days)
         let avgCAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.centralApneaIndex } / Double(days)
+        let avgUAI = days == 0 ? 0 : stats.reduce(0) { $0 + $1.unspecifiedApneaIndex } / Double(days)
         let displayedAvgAHI = library.includesCentralEvents
             ? avgAHI
             : max(0, avgAHI - avgCAI)
         let explainCtx = TrendsExplainContext(
             metric: .ahi,
-            displayValue: String(format: "%.1f events/hr", displayedAvgAHI),
+            displayValue: String(format: "%.2f events/hr", displayedAvgAHI),
             averageValue: displayedAvgAHI
         )
         return EventDonutView(
@@ -338,6 +339,7 @@ struct TrendsView: View {
             obstructiveApneaIndex: avgOAI,
             centralApneaIndex: avgCAI,
             hypopneaIndex: avgHI,
+            unspecifiedApneaIndex: avgUAI,
             headline: "AVG APNEA HYPOPNEA INDEX",
             onTap: explainTap(explainCtx)
         )
@@ -352,7 +354,11 @@ struct TrendsView: View {
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
-        let avgApnea = averaging(\.timeInApneaSeconds)
+        let avgApnea: Double? = {
+            let values = stats.compactMap { library.displayedTimeInApneaSeconds($0) }
+            guard !values.isEmpty else { return nil }
+            return values.reduce(0, +) / Double(values.count)
+        }()
         // Source from `epap95` (target EPAP) so the Trends card
         // aligns with the EPAP card on the Daily view. The raw
         // `pressure95` field (measured mask pressure) still backs
@@ -761,11 +767,11 @@ struct TrendsView: View {
     }
 
     private var timeInApneaChart: some View {
-        let has = stats.contains { $0.timeInApneaSeconds != nil }
+        let has = stats.contains { library.displayedTimeInApneaSeconds($0) != nil }
         return chartSection(title: "Time in Apnea", subtitle: "minutes per night") {
             if has {
                 Chart(stats, id: \.date) { stat in
-                    if let s = stat.timeInApneaSeconds {
+                    if let s = library.displayedTimeInApneaSeconds(stat) {
                         BarMark(
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Minutes", s / 60)
@@ -1141,10 +1147,13 @@ struct TrendsView: View {
     /// the daily detail view.
     private func averageSessionsPerNight() -> Double? {
         let start = rangeStart, end = rangeEnd
+        // `stats.maskEvents` is the kept-session count after the
+        // aggregate's manual-exclusion + brief-session filters, so
+        // averaging it agrees with the daily Usage subtitle.
         let counts = card.days
-            .filter { $0.stats?.hasUsage == true }
             .filter { $0.date >= start && $0.date <= end }
-            .map { $0.files(of: .breath).count }
+            .compactMap { $0.stats?.maskEvents }
+            .filter { $0 > 0 }
         guard !counts.isEmpty else { return nil }
         return Double(counts.reduce(0, +)) / Double(counts.count)
     }
@@ -1361,9 +1370,12 @@ struct TrendsView: View {
 
     /// Average per-night percent of usage spent in apnea, computed
     /// across days that recorded both usage and an apnea-seconds value.
+    /// Routes through `library.displayedTimeInApneaSeconds(_:)` so
+    /// hiding CA events also drops the central-apnea durations from
+    /// the percentage.
     private func avgApneaPercent() -> Double? {
         let values = stats.compactMap { stat -> Double? in
-            guard let seconds = stat.timeInApneaSeconds,
+            guard let seconds = library.displayedTimeInApneaSeconds(stat),
                   stat.usageMinutes > 0 else { return nil }
             return seconds / (stat.usageMinutes * 60) * 100
         }

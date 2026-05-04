@@ -112,19 +112,52 @@ struct SessionTimelineView: View {
                 }
 
                 ForEach(bundle.sessions) { session in
+                    let brief = isBrief(session)
+                    let manuallyExcluded = isExcluded(session)
+                    let dimmed = brief || manuallyExcluded
                     RectangleMark(
                         xStart: .value("Start", session.startOffset),
                         xEnd: .value("End", session.startOffset + session.duration),
                         yStart: .value("Bottom", 0),
                         yEnd: .value("Top", 1)
                     )
-                    .foregroundStyle(Color.timelineSessionFill)
+                    .foregroundStyle(
+                        Color.timelineSessionFill
+                            .opacity(dimmed ? 0.25 : 1.0)
+                    )
                     .cornerRadius(3)
                     .annotation(position: .overlay, alignment: .leading, spacing: 0) {
                         // Invisible accessibility / tooltip anchor per bar.
+                        // Right-click (macOS) / long-press (iOS) opens a
+                        // context menu so the user can drop a stray
+                        // session — daytime mask test, brief fitting —
+                        // out of the day's totals without affecting the
+                        // canonical disk cache. Brief sessions skip the
+                        // menu because the auto-exclude rule already
+                        // drops them and a manual toggle wouldn't move
+                        // the totals.
                         Color.clear
                             .contentShape(Rectangle())
                             .help(tooltip(for: session))
+                            .contextMenu {
+                                if !brief, let key = sessionKey(for: session) {
+                                    Button {
+                                        library.toggleSessionExclusion(
+                                            key,
+                                            forDate: dayDate
+                                        )
+                                    } label: {
+                                        Label(
+                                            manuallyExcluded
+                                                ? "Include in Totals"
+                                                : "Exclude from Totals",
+                                            systemImage: manuallyExcluded
+                                                ? "checkmark.circle"
+                                                : "minus.circle"
+                                        )
+                                    }
+                                }
+                            }
                     }
                 }
 
@@ -279,7 +312,46 @@ struct SessionTimelineView: View {
         let start = bundle.dayStart.addingTimeInterval(session.startOffset)
         let end = start.addingTimeInterval(session.duration)
         let times = "\(start.formatted(date: .omitted, time: .shortened)) – \(end.formatted(date: .omitted, time: .shortened))"
-        return "\(times)  •  \(formatDuration(session.duration))  •  \(session.sourceFilename)"
+        var summary = "\(times)  •  \(formatDuration(session.duration))  •  \(session.sourceFilename)"
+        if isBrief(session) {
+            summary += "  •  auto-excluded (under 2 min)"
+        } else if isExcluded(session) {
+            summary += "  •  excluded"
+        }
+        return summary
+    }
+
+    /// Sessions shorter than the aggregate's auto-exclude threshold
+    /// (mirrored here so the timeline can dim them without re-reading
+    /// the BRP header). Kept in sync with
+    /// `DailyStatistics.aggregate(minSessionSeconds:)`.
+    private func isBrief(_ session: SessionSegment) -> Bool {
+        session.duration < 120
+    }
+
+    /// Calendar-day midnight for this timeline, used as the lookup key
+    /// when toggling a session's exclusion. Matches the `ResMedDay.date`
+    /// the importer assigns from the device's day-folder name.
+    private var dayDate: Date {
+        Calendar.current.startOfDay(for: bundle.dayStart)
+    }
+
+    /// Resolve the session's stable key (`YYYYMMDD_HHMMSS`) from its
+    /// source BRP filename. `nil` for files that don't follow the
+    /// device-stamped naming convention — those sessions can't be
+    /// reliably re-identified on the next launch, so the exclusion
+    /// affordance simply doesn't appear for them.
+    private func sessionKey(for session: SessionSegment) -> String? {
+        let parts = session.sourceFilename.split(separator: "_")
+        guard parts.count >= 2,
+              parts[0].count == 8,
+              parts[1].count == 6 else { return nil }
+        return "\(parts[0])_\(parts[1])"
+    }
+
+    private func isExcluded(_ session: SessionSegment) -> Bool {
+        guard let key = sessionKey(for: session) else { return false }
+        return library.isSessionExcluded(key)
     }
 
     private func clockLabel(for offset: TimeInterval) -> String {

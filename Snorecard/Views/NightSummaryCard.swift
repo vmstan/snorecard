@@ -16,11 +16,34 @@ struct NightSummaryCard: View {
     @State private var failed = false
 
     var body: some View {
+        #if os(iOS)
+        // Match `DailySettingsInspector` / `SessionListSheet`: fresh
+        // NavigationStack with `.padding(.top, 12)` so every iOS
+        // day-level inspector header lands at the same vertical
+        // position. macOS falls through to bare content because
+        // `ContentView` wraps it with the shared inspector chrome.
+        NavigationStack {
+            content
+                .padding(.top, 12)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        #else
+        content
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             InspectorPaneHeader(
                 title: "Sleep Analysis",
                 caption: day.date.formatted(.dateTime.weekday(.wide).day().month(.wide))
             )
+            #if os(iOS)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            #endif
+
             Group {
                 if let summary {
                     loadedContent(summary)
@@ -31,11 +54,20 @@ struct NightSummaryCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            #if os(iOS)
+            .padding(.horizontal, 16)
+            #endif
+
             Spacer(minLength: 8)
+
             Text("Summary only — not medical advice. Generated using on-device intelligence.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                #if os(iOS)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                #endif
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: day.id) {

@@ -40,18 +40,22 @@ struct AHIHourlyChart: View {
         let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
         guard lastHour >= 0 else { return [] }
 
-        var grouped: [Int: (ob: Int, ce: Int, hy: Int)] = [:]
+        var grouped: [Int: (ob: Int, ce: Int, hy: Int, ua: Int)] = [:]
         let countsCentral = library.includesCentralEvents
         for event in events {
             let bucket = Int(((event.offset + anchorOffset) / 3600).rounded(.down))
             guard bucket >= 0, bucket <= lastHour else { continue }
             let text = event.text.lowercased()
-            var current = grouped[bucket] ?? (0, 0, 0)
+            var current = grouped[bucket] ?? (0, 0, 0, 0)
             if text.contains("obstructive") { current.ob += 1 }
             else if text.contains("central") {
                 if countsCentral { current.ce += 1 }
             }
             else if text.contains("hypopnea") { current.hy += 1 }
+            // Bare "Apnea" — ResMed's generic, unclassified apnea
+            // annotation. Counted in AHI, so we surface it as its
+            // own bar segment to match the donut.
+            else if text.contains("apnea") { current.ua += 1 }
             grouped[bucket] = current
         }
 
@@ -59,14 +63,15 @@ struct AHIHourlyChart: View {
         out.reserveCapacity(lastHour + 1)
         for hour in 0...lastHour {
             let bucketStart = anchor.addingTimeInterval(TimeInterval(hour) * 3600)
-            let counts = grouped[hour] ?? (0, 0, 0)
+            let counts = grouped[hour] ?? (0, 0, 0, 0)
             out.append(
                 HourBucket(
                     startHour: hour,
                     clockLabel: Self.shortClockLabel(for: bucketStart),
                     obstructive: counts.ob,
                     central: counts.ce,
-                    hypopnea: counts.hy
+                    hypopnea: counts.hy,
+                    unclassified: counts.ua
                 )
             )
         }
@@ -74,7 +79,9 @@ struct AHIHourlyChart: View {
     }
 
     private var peakEventCount: Int {
-        buckets.map { $0.obstructive + $0.central + $0.hypopnea }.max() ?? 0
+        buckets.map {
+            $0.obstructive + $0.central + $0.hypopnea + $0.unclassified
+        }.max() ?? 0
     }
 
     var body: some View {
@@ -100,12 +107,19 @@ struct AHIHourlyChart: View {
                         )
                         .foregroundStyle(by: .value("Type", "Central"))
                     }
+
+                    BarMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Count", bucket.unclassified)
+                    )
+                    .foregroundStyle(by: .value("Type", "Unclassified"))
                 }
             }
             .chartForegroundStyleScale([
                 "Obstructive": library.eventColorPalette.obstructive,
                 "Central": library.eventColorPalette.central,
-                "Hypopnea": library.eventColorPalette.hypopnea
+                "Hypopnea": library.eventColorPalette.hypopnea,
+                "Unclassified": library.eventColorPalette.unclassified
             ])
             .chartLegend(.hidden)
             .chartXScale(domain: buckets.map(\.clockLabel))
@@ -159,6 +173,15 @@ struct AHIHourlyChart: View {
                     color: library.eventColorPalette.central
                 )
             }
+            // Only show the Unclassified Apnea legend entry when the
+            // night actually has one — most days don't, so a fourth
+            // chip would be visual noise on the common case.
+            if buckets.contains(where: { $0.unclassified > 0 }) {
+                legendItem(
+                    "Unclassified Apnea",
+                    color: library.eventColorPalette.unclassified
+                )
+            }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -188,5 +211,6 @@ struct AHIHourlyChart: View {
         let obstructive: Int
         let central: Int
         let hypopnea: Int
+        let unclassified: Int
     }
 }

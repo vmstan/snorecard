@@ -270,6 +270,7 @@ final class Library {
     private static let eventColorPaletteKey = "eventColorPalette"
     private static let centralEventLabelKey = "centralEventLabel"
     private static let showsCentralEventsKey = "showsCentralEvents"
+    private static let excludedSessionKeysKey = "excludedSessionKeys"
     private static let defaultJournalTagsKey = "defaultJournalTags"
     private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
     private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
@@ -386,6 +387,22 @@ final class Library {
         }
     }
 
+    /// Per-session opt-outs keyed by `ResMedDataFile.sessionKey` (the
+    /// `YYYYMMDD_HHMMSS` filename prefix). Excluded sessions are
+    /// dropped from the day's aggregate so a brief mask test or
+    /// daytime fitting doesn't contaminate AHI / usage / pressure
+    /// stats. Local-only — the canonical disk cache stays unfiltered,
+    /// and re-aggregation runs on top of it whenever the set changes.
+    var excludedSessionKeys: Set<String> {
+        didSet {
+            guard oldValue != excludedSessionKeys else { return }
+            UserDefaults.standard.set(
+                Array(excludedSessionKeys).sorted(),
+                forKey: Self.excludedSessionKeysKey
+            )
+        }
+    }
+
     /// Tags the user wants auto-attached to every imported night.
     /// Applied in `load()` as each day's stats are backfilled, but
     /// only when the day has no existing journal sidecar — so manual
@@ -495,6 +512,14 @@ final class Library {
             self.showsCentralEvents = UserDefaults.standard.object(
                 forKey: Self.showsCentralEventsKey
             ) as? Bool ?? true
+        }
+
+        if let stored = UserDefaults.standard.array(
+            forKey: Self.excludedSessionKeysKey
+        ) as? [String] {
+            self.excludedSessionKeys = Set(stored)
+        } else {
+            self.excludedSessionKeys = []
         }
 
         let kvs = NSUbiquitousKeyValueStore.default
@@ -1761,6 +1786,36 @@ final class Library {
 
                 // Publish the structure so the sidebar renders now,
                 // before the aggregate backfill starts chewing EDFs.
+                // Also apply the user's per-session exclusions to any
+                // sidecar-cached days that came back from the
+                // structure scan with stats already populated, so the
+                // sidebar's first paint reflects the same totals as
+                // the day view.
+                let productName = currentCard.identification?.productName
+                let baseCard = currentCard
+                let exclusionsForSeed: Set<String> = await MainActor.run {
+                    self?.excludedSessionKeys ?? []
+                }
+                if !exclusionsForSeed.isEmpty {
+                    let filteredDays: [ResMedDay] = baseCard.days.map { day in
+                        let dayKeys = day.files.compactMap(\.sessionKey)
+                        guard exclusionsForSeed.contains(where: dayKeys.contains) else {
+                            return day
+                        }
+                        let recomputed = DailyStatistics.aggregate(
+                            for: day,
+                            productName: productName,
+                            excluding: exclusionsForSeed
+                        )
+                        return ResMedDay(date: day.date, files: day.files, stats: recomputed)
+                    }
+                    currentCard = ResMedSDCard(
+                        rootURL: baseCard.rootURL,
+                        identification: baseCard.identification,
+                        summaryFileURL: baseCard.summaryFileURL,
+                        days: filteredDays
+                    )
+                }
                 let seededCard = currentCard
                 let persistedPath = currentURL.path
                 let loadedSerial = seededCard.identification?.serialNumber
@@ -1774,13 +1829,16 @@ final class Library {
                 // replaces one day's stats in place; the accumulated
                 // card is the new canonical value until the final
                 // `.loaded` transition below.
-                let productName = seededCard.identification?.productName
                 nonisolated(unsafe) var accumulated = seededCard
                 await SDCardImporter.backfillStats(
                     for: seededCard,
                     productName: productName
                 ) { @MainActor [weak self] updatedDay in
-                    accumulated = accumulated.replacing(day: updatedDay)
+                    let dayToStore = self?.applyingExclusions(
+                        to: updatedDay,
+                        productName: productName
+                    ) ?? updatedDay
+                    accumulated = accumulated.replacing(day: dayToStore)
                     self?.applyDefaultJournalTagsIfNeeded(for: updatedDay)
                     // Keep publishing as `.hydrating` — the final
                     // `.loaded` transition runs once the group finishes.
@@ -2297,5 +2355,113 @@ extension Library {
     /// hidden so the segment drops cleanly without a separate guard.
     func displayedCentralApneaIndex(_ stats: DailyStatistics) -> Double {
         stats.displayedCentralApneaIndex(visible: includesCentralEvents)
+    }
+
+    /// Time-in-apnea seconds threaded through the user's CA-display
+    /// preference, so the daily Time-in-Apnea card and the Trends
+    /// chart subtract central-apnea durations whenever
+    /// `showsCentralEvents` is off. Returns `nil` when no EVE files
+    /// were readable.
+    func displayedTimeInApneaSeconds(_ stats: DailyStatistics) -> Double? {
+        stats.displayedTimeInApneaSeconds(includingCentral: includesCentralEvents)
+    }
+
+    /// Whether a single CPAP session has been excluded from its day's
+    /// aggregate. `sessionKey` is the `YYYYMMDD_HHMMSS` filename prefix
+    /// shared by the session's BRP / EVE / PLD trio (see
+    /// `ResMedDataFile.sessionKey`).
+    func isSessionExcluded(_ sessionKey: String) -> Bool {
+        excludedSessionKeys.contains(sessionKey)
+    }
+
+    /// Toggle a single session's exclusion and immediately re-aggregate
+    /// the affected day so the sidebar / day view / trends reflect the
+    /// new totals without waiting for a reload. The disk cache stays
+    /// untouched — exclusions are a display-time projection layered
+    /// over the canonical aggregate. `forDate` is the day the session
+    /// belongs to; pass `bundle.dayStart`-derived midnight when calling
+    /// from a timeline view that doesn't have a `ResMedDay` in hand.
+    func toggleSessionExclusion(_ sessionKey: String, forDate date: Date) {
+        if excludedSessionKeys.contains(sessionKey) {
+            excludedSessionKeys.remove(sessionKey)
+        } else {
+            excludedSessionKeys.insert(sessionKey)
+        }
+        refreshDayStats(forDate: date)
+    }
+
+    /// Re-run the aggregate pass for one date with the current
+    /// exclusion set applied, then publish the updated card so views
+    /// observing `state` re-render. No-op when no card is loaded or
+    /// the date isn't known to the current card.
+    func refreshDayStats(forDate date: Date) {
+        guard let card = card,
+              let dayIdx = card.days.firstIndex(where: { $0.date == date }) else {
+            return
+        }
+        let day = card.days[dayIdx]
+        let exclusions = excludedSessionKeys
+        let productName = card.identification?.productName
+        let recomputed: DailyStatistics?
+        if exclusions.isEmpty {
+            // Fall back to the unfiltered cache so the user sees the
+            // canonical numbers immediately on the way back to "include
+            // everything."
+            let dir = day.files.first?.url.deletingLastPathComponent()
+            if let dir,
+               let cached = DailyStatsCache.loadAnyStats(for: dir) {
+                recomputed = cached
+            } else {
+                recomputed = DailyStatistics.aggregate(
+                    for: day,
+                    productName: productName
+                )
+            }
+        } else {
+            recomputed = DailyStatistics.aggregate(
+                for: day,
+                productName: productName,
+                excluding: exclusions
+            )
+        }
+        let updatedDay = ResMedDay(date: day.date, files: day.files, stats: recomputed)
+        publish(card: card.replacing(day: updatedDay))
+    }
+
+    /// Republish the in-memory card after a per-day mutation. Mirrors
+    /// the load-path's `state = .loaded(...)` so the same observers
+    /// fire whether the change came from a fresh import or from a
+    /// per-session exclusion toggle.
+    fileprivate func publish(card: ResMedSDCard) {
+        switch state {
+        case .loading, .empty, .failed:
+            return
+        case .hydrating:
+            state = .hydrating(card)
+        case .loaded:
+            state = .loaded(card)
+        }
+    }
+
+    /// Re-aggregate `day` with the current exclusion set if any of its
+    /// sessions are excluded; otherwise return it unchanged. The
+    /// caller doesn't need to know whether a recompute was necessary,
+    /// so the load path can pipe every day through this and pay the
+    /// cost only on the days that need it.
+    func applyingExclusions(
+        to day: ResMedDay,
+        productName: String?
+    ) -> ResMedDay {
+        guard !excludedSessionKeys.isEmpty else { return day }
+        let dayKeys = day.files.compactMap(\.sessionKey)
+        guard excludedSessionKeys.contains(where: dayKeys.contains) else {
+            return day
+        }
+        let recomputed = DailyStatistics.aggregate(
+            for: day,
+            productName: productName,
+            excluding: excludedSessionKeys
+        )
+        return ResMedDay(date: day.date, files: day.files, stats: recomputed)
     }
 }
