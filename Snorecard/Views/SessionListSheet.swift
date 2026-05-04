@@ -40,6 +40,25 @@ struct SessionListSheet: View {
     }
 
     var body: some View {
+        #if os(iOS)
+        // Fresh NavigationStack so this sheet's own toolbar / dismiss
+        // don't bleed up into the day-detail header. The
+        // `InspectorPaneHeader` at the top of `content` already
+        // shows the pane label and date, so we skip
+        // `.navigationTitle` on iOS. Matches `DailySettingsInspector`
+        // exactly so all the day-level inspectors line up.
+        NavigationStack {
+            content
+                .padding(.top, 12)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        #else
+        content
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             InspectorPaneHeader(
                 title: "Therapy Sessions",

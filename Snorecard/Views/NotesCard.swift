@@ -39,6 +39,25 @@ struct NotesCard: View {
     @State private var extractedTags: [NoteTag] = []
 
     var body: some View {
+        #if os(iOS)
+        // Match `DailySettingsInspector` / `SessionListSheet`: a fresh
+        // NavigationStack with `.padding(.top, 12)` so the iOS sheet
+        // header sits at the same vertical position across all the
+        // day-level inspectors. macOS falls through to the bare
+        // content because `ContentView` already wraps it with the
+        // shared inspector chrome.
+        NavigationStack {
+            content
+                .padding(.top, 12)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        #else
+        content
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 InspectorPaneHeader(
@@ -60,14 +79,28 @@ struct NotesCard: View {
                     .help("Clear this night's rating, tags, and journal entry")
                 }
             }
+            #if os(iOS)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            #endif
 
             ratingRow
+                #if os(iOS)
+                .padding(.horizontal, 16)
+                #endif
             tagRow
+                #if os(iOS)
+                .padding(.horizontal, 16)
+                #endif
 
             JournalEditor(
                 placeholder: "How did you sleep? Add any context about this night…",
                 text: $text
             )
+            #if os(iOS)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            #endif
         }
         .task(id: day.id) {
             // When the viewed day changes, flush any pending save

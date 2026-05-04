@@ -170,20 +170,18 @@ struct DayDetailView: View {
         }
         #endif
         #if os(iOS)
+        // All four day-level sheets follow the same pattern: each
+        // view supplies its own NavigationStack + padded
+        // `InspectorPaneHeader` on iOS, so the sheet wrappers here
+        // only need the detents and drag indicator — no external
+        // chrome that would push their headers to different
+        // vertical positions.
         .sheet(isPresented: $isShowingNotes) {
-            NavigationStack {
-                NotesCard(day: day)
-                    .padding(20)
-                    .padding(.top, 12)
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+            NotesCard(day: day)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingSettings) {
-            // iOS `.inspector` collapses into the parent navigation
-            // stack and bleeds its title/toolbar into the day header,
-            // so settings also presents as a sheet on iPhone.
             DailySettingsInspector(
                 settings: day.stats?.settings,
                 date: day.date,
@@ -192,26 +190,15 @@ struct DayDetailView: View {
                 serialNumber: library.card?.identification?.serialNumber,
                 deviceAlias: deviceAliasForInspector
             )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $isShowingSleepAnalysis) {
-            NavigationStack {
-                NightSummaryCard(day: day)
-                    .padding(20)
-                    .padding(.top, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .navigationBarTitleDisplayMode(.inline)
-            }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $isShowingSleepAnalysis) {
+            NightSummaryCard(day: day)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isShowingSessions) {
-            // Matches the Therapy Details sheet — the view supplies
-            // its own InspectorPaneHeader + edge-to-edge Form, so
-            // no outer NavigationStack / horizontal padding is
-            // needed. iOS gets the medium / large detents for parity
-            // with the rest of the daily set.
             SessionListSheet(day: day)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
