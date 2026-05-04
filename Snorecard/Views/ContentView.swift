@@ -133,7 +133,7 @@ struct ContentView: View {
                 .id(inspectorPane)
                 .transition(.opacity.animation(.easeInOut(duration: 0.2)))
         }
-        .inspectorColumnWidth(min: 420, ideal: 500, max: 640)
+        .inspectorColumnWidth(min: 450, ideal: 530, max: 670)
         .onChange(of: library.selection) { _, newSelection in
             // Day-level panes are meaningless once the user leaves
             // the day they were looking at, so retract the
