@@ -148,6 +148,21 @@ struct HourlyChartCard<Content: View>: View {
 /// 28pt fits the widest label we render (Flow Limit's "0.75").
 let hourlyAxisLabelWidth: CGFloat = 28
 
+/// Single-dot legend used by every single-series hourly chart on
+/// the day view. Mirrors the multi-series legend pattern in
+/// `AHIHourlyChart` / `SleepByHourChart` so the column reads as one
+/// set: the chart subtitle carries the unit, the dot below
+/// announces which statistic the trace represents.
+@ViewBuilder
+func singleSeriesLegend(color: Color, label: String) -> some View {
+    HStack(spacing: 4) {
+        Circle().fill(color).frame(width: 8, height: 8)
+        Text(label)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+    }
+}
+
 // MARK: - Leak by Hour
 
 struct LeakHourlyChart: View {
@@ -168,7 +183,7 @@ struct LeakHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Leak by Hour",
-            subtitle: "95th percentile · L/min"
+            subtitle: "L/min"
         ) {
             Chart(buckets) { bucket in
                 BarMark(
@@ -224,6 +239,11 @@ struct LeakHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            singleSeriesLegend(
+                color: library.eventColorPalette.leak,
+                label: "95th"
+            )
         }
     }
 }
@@ -244,7 +264,7 @@ struct FlowLimitHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Flow Limit by Hour",
-            subtitle: "95th percentile · 0–1 scale"
+            subtitle: "0–1 scale"
         ) {
             Chart(buckets) { bucket in
                 BarMark(
@@ -283,6 +303,11 @@ struct FlowLimitHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            singleSeriesLegend(
+                color: library.eventColorPalette.flowLimit,
+                label: "95th"
+            )
         }
     }
 }
@@ -323,7 +348,7 @@ struct TidalVolumeHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Tidal Volume by Hour",
-            subtitle: "median · mL"
+            subtitle: "mL"
         ) {
             Chart(plottedBuckets) { bucket in
                 LineMark(
@@ -368,6 +393,11 @@ struct TidalVolumeHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            singleSeriesLegend(
+                color: library.eventColorPalette.tidalVolume,
+                label: "Median"
+            )
         }
     }
 }
@@ -381,20 +411,28 @@ struct PressureHourlyChart: View {
     let dayStart: Date
     let totalDuration: TimeInterval
 
-    private var buckets: [HourlyBucket] {
+    private var medianBuckets: [HourlyBucket] {
         hourlyBuckets(pressure, dayStart: dayStart, totalDuration: totalDuration, stat: .median)
     }
 
-    /// Line chart values — skips zero-filled empty hours so the
-    /// trace doesn't dive to the floor on hours the CPAP wasn't
-    /// recording. Those hours still appear on the x axis because
-    /// the shared domain is driven by `buckets`.
-    private var plottedBuckets: [HourlyBucket] {
-        buckets.filter { $0.value > 0 }
+    private var p95Buckets: [HourlyBucket] {
+        hourlyBuckets(pressure, dayStart: dayStart, totalDuration: totalDuration, stat: .p95)
+    }
+
+    /// Hours with no pressure samples reduce to zero on both stats —
+    /// drop them so neither trace dives to the floor on hours the
+    /// CPAP wasn't recording. The x axis still spans the full night
+    /// because `medianBuckets` (unfiltered) drives `chartXScale`.
+    private var plottedMedian: [HourlyBucket] {
+        medianBuckets.filter { $0.value > 0 }
+    }
+
+    private var plottedP95: [HourlyBucket] {
+        p95Buckets.filter { $0.value > 0 }
     }
 
     private var valueRange: ClosedRange<Double> {
-        let values = plottedBuckets.map(\.value)
+        let values = (plottedMedian + plottedP95).map(\.value)
         guard let minValue = values.min(),
               let maxValue = values.max() else {
             return 0 ... 20
@@ -408,25 +446,51 @@ struct PressureHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "Mask Pressure by Hour",
-            subtitle: "median · cmH₂O"
+            subtitle: "cmH₂O"
         ) {
-            Chart(plottedBuckets) { bucket in
-                LineMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Pressure", bucket.value)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(library.eventColorPalette.pressureMedian)
-                .lineStyle(StrokeStyle(lineWidth: 2))
+            Chart {
+                ForEach(plottedP95) { bucket in
+                    LineMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Pressure", bucket.value),
+                        series: .value("Series", "95th")
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(by: .value("Series", "95th"))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
 
-                PointMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Pressure", bucket.value)
-                )
-                .foregroundStyle(library.eventColorPalette.pressureMedian)
-                .symbolSize(28)
+                    PointMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Pressure", bucket.value)
+                    )
+                    .foregroundStyle(by: .value("Series", "95th"))
+                    .symbolSize(28)
+                }
+
+                ForEach(plottedMedian) { bucket in
+                    LineMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Pressure", bucket.value),
+                        series: .value("Series", "Median")
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(by: .value("Series", "Median"))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
+                    PointMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Pressure", bucket.value)
+                    )
+                    .foregroundStyle(by: .value("Series", "Median"))
+                    .symbolSize(28)
+                }
             }
-            .chartXScale(domain: buckets.map(\.clockLabel))
+            .chartForegroundStyleScale([
+                "95th": library.eventColorPalette.pressureP95,
+                "Median": library.eventColorPalette.pressureMedian
+            ])
+            .chartLegend(.hidden)
+            .chartXScale(domain: medianBuckets.map(\.clockLabel))
             .chartYScale(domain: valueRange)
             .chartYAxis {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
@@ -442,7 +506,7 @@ struct PressureHourlyChart: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(values: buckets.map(\.clockLabel)) { value in
+                AxisMarks(values: medianBuckets.map(\.clockLabel)) { value in
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel {
@@ -453,6 +517,27 @@ struct PressureHourlyChart: View {
                 }
             }
             .frame(minHeight: 140)
+
+            legend
+        }
+    }
+
+    /// Colour-keyed legend rendered beneath the plot — same pattern
+    /// as `AHIHourlyChart` and `SleepByHourChart` so a quick scan
+    /// down the day view's hourly column reads consistently.
+    private var legend: some View {
+        FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+            legendDot(color: library.eventColorPalette.pressureMedian, label: "Median")
+            legendDot(color: library.eventColorPalette.pressureP95, label: "95th")
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+
+    private func legendDot(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
         }
     }
 }

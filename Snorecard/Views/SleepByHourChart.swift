@@ -136,35 +136,69 @@ struct SleepByHourChart: View {
             if hasAnyData {
                 Chart {
                     ForEach(buckets) { bucket in
-                        // Stacked bars — order matters for a stable
-                        // visual stack: Deep at the bottom, Core in
-                        // the middle, REM on top, mirroring the way
-                        // Apple Health stacks its sleep ring.
-                        BarMark(
+                        // One line per asleep stage — minutes-per-
+                        // hour rendered side by side instead of as
+                        // a stacked bar so each stage's trajectory
+                        // across the night reads on its own. PointMark
+                        // anchors every hour bucket so the segments
+                        // read as per-hour readings, not a continuous
+                        // signal.
+                        LineMark(
+                            x: .value("Hour", bucket.clockLabel),
+                            y: .value("Minutes", bucket.deepMinutes),
+                            series: .value("Stage", "Deep")
+                        )
+                        .foregroundStyle(by: .value("Stage", "Deep"))
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.monotone)
+
+                        PointMark(
                             x: .value("Hour", bucket.clockLabel),
                             y: .value("Minutes", bucket.deepMinutes)
                         )
                         .foregroundStyle(by: .value("Stage", "Deep"))
+                        .symbolSize(28)
 
-                        BarMark(
+                        LineMark(
+                            x: .value("Hour", bucket.clockLabel),
+                            y: .value("Minutes", bucket.coreMinutes),
+                            series: .value("Stage", "Core")
+                        )
+                        .foregroundStyle(by: .value("Stage", "Core"))
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.monotone)
+
+                        PointMark(
                             x: .value("Hour", bucket.clockLabel),
                             y: .value("Minutes", bucket.coreMinutes)
                         )
                         .foregroundStyle(by: .value("Stage", "Core"))
+                        .symbolSize(28)
 
-                        BarMark(
+                        LineMark(
+                            x: .value("Hour", bucket.clockLabel),
+                            y: .value("Minutes", bucket.remMinutes),
+                            series: .value("Stage", "REM")
+                        )
+                        .foregroundStyle(by: .value("Stage", "REM"))
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.monotone)
+
+                        PointMark(
                             x: .value("Hour", bucket.clockLabel),
                             y: .value("Minutes", bucket.remMinutes)
                         )
                         .foregroundStyle(by: .value("Stage", "REM"))
+                        .symbolSize(28)
 
-                        // Device-usage line + marker on the secondary
-                        // axis. PointMark anchors each hour so the
-                        // line reads as a per-hour reading rather
-                        // than a continuous signal.
+                        // Device-usage line + marker — same stroke and
+                        // point size as the stage series; the muted
+                        // `.primary` tint at low opacity keeps it
+                        // present without competing.
                         LineMark(
                             x: .value("Hour", bucket.clockLabel),
-                            y: .value(deviceLabel, bucket.cpapMinutes)
+                            y: .value(deviceLabel, bucket.cpapMinutes),
+                            series: .value("Stage", deviceLabel)
                         )
                         .foregroundStyle(by: .value("Stage", deviceLabel))
                         .lineStyle(StrokeStyle(lineWidth: 2))
@@ -175,14 +209,14 @@ struct SleepByHourChart: View {
                             y: .value(deviceLabel, bucket.cpapMinutes)
                         )
                         .foregroundStyle(by: .value("Stage", deviceLabel))
-                        .symbolSize(36)
+                        .symbolSize(28)
                     }
                 }
                 .chartForegroundStyleScale([
                     "Deep": library.eventColorPalette.deepSleep,
                     "Core": library.eventColorPalette.coreSleep,
                     "REM": library.eventColorPalette.remSleep,
-                    deviceLabel: Color.timelineSessionFill
+                    deviceLabel: Color.primary.opacity(0.4)
                 ])
                 .chartLegend(.hidden)
                 .chartXScale(domain: buckets.map(\.clockLabel))
@@ -236,7 +270,7 @@ struct SleepByHourChart: View {
             legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
             legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
             legendDot(color: library.eventColorPalette.remSleep, label: "REM")
-            legendLine(color: .timelineSessionFill, label: deviceLabel)
+            legendLine(color: .primary.opacity(0.4), label: deviceLabel)
         }
         .font(.caption2)
         .foregroundStyle(.secondary)

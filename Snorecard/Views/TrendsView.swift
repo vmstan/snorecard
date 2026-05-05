@@ -811,7 +811,15 @@ struct TrendsView: View {
                 StackPoint(date: summary.nightDate, stage: "REM", minutes: summary.remSeconds / 60)
             ]
         }
-        return chartSection(title: "Sleep Stages", subtitle: "minutes per night") {
+        return chartSection(
+            title: "Sleep Stages",
+            subtitle: "minutes per night",
+            legend: [
+                LegendEntry(color: library.eventColorPalette.deepSleep, label: "Deep"),
+                LegendEntry(color: library.eventColorPalette.coreSleep, label: "Core"),
+                LegendEntry(color: library.eventColorPalette.remSleep, label: "REM")
+            ]
+        ) {
             Chart(points) { point in
                 BarMark(
                     x: .value("Night", point.date, unit: .day),
@@ -824,6 +832,7 @@ struct TrendsView: View {
                 "Core": library.eventColorPalette.coreSleep,
                 "REM": library.eventColorPalette.remSleep
             ])
+            .chartLegend(.hidden)
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()
@@ -843,7 +852,14 @@ struct TrendsView: View {
             }
             return (lo - 1) ... (hi + 1)
         }()
-        return chartSection(title: "Mask Pressure", subtitle: "median and 95th percentile (cmH₂O)") {
+        return chartSection(
+            title: "Mask Pressure",
+            subtitle: "cmH₂O",
+            legend: [
+                LegendEntry(color: library.eventColorPalette.pressureMedian, label: "Median"),
+                LegendEntry(color: library.eventColorPalette.pressureP95, label: "95th")
+            ]
+        ) {
             if hasData {
                 Chart(stats, id: \.date) { stat in
                     if let p95 = stat.pressure95 {
@@ -870,6 +886,7 @@ struct TrendsView: View {
                     "95th": library.eventColorPalette.pressureP95,
                     "Median": library.eventColorPalette.pressureMedian
                 ])
+                .chartLegend(.hidden)
                 .chartYAxis {
                     AxisMarks(position: .leading) { value in
                         AxisGridLine()
@@ -885,16 +902,21 @@ struct TrendsView: View {
 
     private var flowLimitChart: some View {
         let has = stats.contains { $0.flowLimit95 != nil }
-        return chartSection(title: "Flow Limit", subtitle: "95th percentile (0–1 scale)") {
+        return chartSection(
+            title: "Flow Limit",
+            subtitle: "0–1 scale",
+            legend: [
+                LegendEntry(color: library.eventColorPalette.flowLimit, label: "95th")
+            ]
+        ) {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let fl = stat.flowLimit95 {
-                        LineMark(
+                        BarMark(
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Flow Limit", fl)
                         )
                         .foregroundStyle(library.eventColorPalette.flowLimit)
-                        .symbol(Circle())
                     }
                 }
                 .chartYScale(domain: 0...max(0.2, (stats.compactMap(\.flowLimit95).max() ?? 0) * 1.2))
@@ -913,16 +935,21 @@ struct TrendsView: View {
 
     private var leakChart: some View {
         let hasLeak = stats.contains { $0.leak95LPerMin != nil }
-        return chartSection(title: "Leak", subtitle: "95th percentile (L/min) — 24 L/min threshold") {
+        return chartSection(
+            title: "Leak",
+            subtitle: "L/min",
+            legend: [
+                LegendEntry(color: library.eventColorPalette.leak, label: "95th")
+            ]
+        ) {
             if hasLeak {
                 Chart(stats, id: \.date) { stat in
                     if let leak = stat.leak95LPerMin {
-                        LineMark(
+                        BarMark(
                             x: .value("Day", stat.date, unit: .day),
                             y: .value("Leak", leak)
                         )
                         .foregroundStyle(library.eventColorPalette.leak)
-                        .symbol(Circle())
                     }
                     RuleMark(y: .value("Threshold", 24))
                         .foregroundStyle(Color.secondary)
@@ -976,7 +1003,13 @@ struct TrendsView: View {
             }
             return (lo - 100) ... (hi + 100)
         }()
-        return chartSection(title: "Tidal Volume", subtitle: "median (mL)") {
+        return chartSection(
+            title: "Tidal Volume",
+            subtitle: "mL",
+            legend: [
+                LegendEntry(color: library.eventColorPalette.tidalVolume, label: "Median")
+            ]
+        ) {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let tv = stat.tidalVolume50 {
@@ -1002,15 +1035,25 @@ struct TrendsView: View {
         }
     }
 
+    /// One row in the colour-key legend rendered below a Trends
+    /// chart. Mirrors the per-hour chart legends on the Daily view
+    /// so the two pages read as one visual set.
+    fileprivate struct LegendEntry: Identifiable {
+        let id = UUID()
+        let color: Color
+        let label: String
+    }
+
     /// Card chrome matching `HourlyChartCard` / `AHIHourlyChart` on
     /// the Daily view — small uppercase caption title, tertiary
-    /// subtitle, and an inset-plate background so the trend charts
-    /// read as part of the same visual set as the day view's
-    /// hourly breakdowns.
+    /// subtitle, an inset-plate background, and an optional colour-
+    /// key legend below the chart so series identities ride at the
+    /// foot rather than in the chart description.
     @ViewBuilder
     private func chartSection<C: View>(
         title: String,
         subtitle: String,
+        legend: [LegendEntry] = [],
         @ViewBuilder content: () -> C
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1040,6 +1083,21 @@ struct TrendsView: View {
                 .chartOverlay { proxy in
                     chartTapOverlay(proxy: proxy)
                 }
+
+            if !legend.isEmpty {
+                FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                    ForEach(legend) { entry in
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(entry.color)
+                                .frame(width: 8, height: 8)
+                            Text(entry.label)
+                        }
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(14)
         .glassEffect(in: RoundedRectangle(cornerRadius: 12))
