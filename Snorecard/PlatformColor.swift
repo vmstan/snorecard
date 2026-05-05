@@ -87,9 +87,9 @@ extension EventColorPalette {
     /// three.
     var unclassified: Color {
         switch self {
-        case .topher: return Color(red: 0.620, green: 0.388, blue: 0.584)
-        case .nick:   return Color(red: 0.745, green: 0.745, blue: 0.745)
-        case .oscar:  return Color(red: 0.522, green: 0.000, blue: 0.522)
+        case .topher: return Color(red: 0.686, green: 0.322, blue: 0.871)
+        case .nick:   return Color(red: 0.984, green: 0.612, blue: 0.612)
+        case .oscar:  return Color(red: 0.000, green: 0.404, blue: 0.000)
         }
     }
 
