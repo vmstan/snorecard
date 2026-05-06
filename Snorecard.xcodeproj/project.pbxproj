@@ -15,6 +15,7 @@
 		14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		15F314042E6CECBE694C5032 /* InspectorPaneHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */; };
 		18CF72984BFE0EB49DA214A2 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
+		19695897AACF076A6379925A /* MaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189EADA02589E6F39E64A455 /* MaskEditorView.swift */; };
 		1A890808947AEFF17CE27908 /* StatCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86917F47386EB72167DE2A0F /* StatCard.swift */; };
 		1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		1CEAFC1FE9986D0B8D2FDFA9 /* AHIHourlyChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */; };
@@ -41,6 +42,7 @@
 		59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
 		5AECDEB9CF5EB1CD5A459E52 /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAEEEC2B796A40CBA5FA2009 /* TrendsView.swift */; };
 		5AF189E476062DCEA6F7C3CD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
+		5E284093249C2D46535C2BCF /* Mask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCCC1C17192F1FFC40455D6 /* Mask.swift */; };
 		5F0EA2B2783AB0A6F50E0FFD /* WaveformSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */; };
 		65A69A0F2BB53AF7C4974E66 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0619F56E4FE534FDD964689 /* SettingsSheet.swift */; };
 		671072A095BAFF64A05780D0 /* SessionListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */; };
@@ -64,12 +66,15 @@
 		932D76CCD07D0C20A14E8C27 /* Snorecard-Inverted.icon in Resources */ = {isa = PBXBuildFile; fileRef = C7263BF411326B541811D4A3 /* Snorecard-Inverted.icon */; };
 		94ACDAE1D9414571F11D0D67 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
 		A117F4E7E34A6019F65EBF58 /* Snorecard-Callan.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4F2A65FAD03264CDC0BC35AD /* Snorecard-Callan.icon */; };
+		A3CACA86C3F52C4F1378768A /* MaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189EADA02589E6F39E64A455 /* MaskEditorView.swift */; };
 		A5A7CD9B6E6FDD34C386FF48 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0619F56E4FE534FDD964689 /* SettingsSheet.swift */; };
 		A6C87AA9DC3CAEE39DC124B3 /* DailySignalSummaryTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */; };
 		A778F27578F893B98FA09DB1 /* Snorecard-Charlie.icon in Resources */ = {isa = PBXBuildFile; fileRef = 3E47DD77A8B92718EA52A38D /* Snorecard-Charlie.icon */; };
 		A7972D2A579AB154AC2DB833 /* AppIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C36BFDF4519D6F8073A9156 /* AppIconController.swift */; };
 		AC510E3F49A711C07D621669 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB115042FD0555DF4AFECD0E /* ContentView.swift */; };
+		ACFA4F579A308CEF33DEF4BD /* Mask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCCC1C17192F1FFC40455D6 /* Mask.swift */; };
 		B19FA7293CD3811BB334229E /* NightSummaryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A45553900FBA215B415695 /* NightSummaryCard.swift */; };
+		B6D48B91F465C4D4ABFBBF11 /* BulkApplyMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC96C0193CB0E499477BA458 /* BulkApplyMaskView.swift */; };
 		B958BA5F93D5A0546E7C1697 /* InspectorPaneHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */; };
 		B9B927CFD7E2D8BE2F410AEC /* SnorecardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */; };
 		BA378A7C1C6A332B3E685606 /* MetricExplainSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B747A2CBB649FA04FD41E138 /* MetricExplainSheet.swift */; };
@@ -85,6 +90,7 @@
 		D62F4533A6CF0C93E719D3AE /* DayListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */; };
 		D74609F82E3268E414246D58 /* PlatformColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */; };
 		D88A174919214544AD7A4BB6 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3936E5AE9456EE22D83787A3 /* Library.swift */; };
+		D94119A0964E0ED9B5D7D906 /* BulkApplyMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC96C0193CB0E499477BA458 /* BulkApplyMaskView.swift */; };
 		DA60A103DAFC2FF97CEBCF96 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */; };
 		DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
 		DEE4196822751F027CD5DB00 /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */; };
@@ -108,6 +114,7 @@
 		0F7B61C502CD6B1A299E2FFB /* SnorecardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnorecardApp.swift; sourceTree = "<group>"; };
 		0F85425A6C4E977C75813A1E /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		156B080C6367D8E6B83EE050 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		189EADA02589E6F39E64A455 /* MaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaskEditorView.swift; sourceTree = "<group>"; };
 		23A9B57C4931B1EBC89C03F4 /* SessionListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListSheet.swift; sourceTree = "<group>"; };
 		29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPaneHeader.swift; sourceTree = "<group>"; };
 		2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformColor.swift; sourceTree = "<group>"; };
@@ -125,6 +132,7 @@
 		4F2A65FAD03264CDC0BC35AD /* Snorecard-Callan.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Callan.icon"; sourceTree = "<group>"; };
 		4FA139BDBDFF7D621A0CAFE0 /* TrendNarrativeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendNarrativeCard.swift; sourceTree = "<group>"; };
 		54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupsView.swift; sourceTree = "<group>"; };
+		5DCCC1C17192F1FFC40455D6 /* Mask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mask.swift; sourceTree = "<group>"; };
 		60A45553900FBA215B415695 /* NightSummaryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightSummaryCard.swift; sourceTree = "<group>"; };
 		66C6D04437C93A95643D4FE7 /* snorecard */ = {isa = PBXFileReference; lastKnownFileType = folder; name = snorecard; path = .; sourceTree = SOURCE_ROOT; };
 		6AAAD964BB003BB6ECF52278 /* DeviceNotesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNotesCard.swift; sourceTree = "<group>"; };
@@ -155,6 +163,7 @@
 		EAEEEC2B796A40CBA5FA2009 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
 		F9823A0674BCEAC2CC0586A2 /* DailySignalSummaryTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySignalSummaryTable.swift; sourceTree = "<group>"; };
 		FB115042FD0555DF4AFECD0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		FC96C0193CB0E499477BA458 /* BulkApplyMaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkApplyMaskView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +210,7 @@
 				2C36BFDF4519D6F8073A9156 /* AppIconController.swift */,
 				2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */,
 				3936E5AE9456EE22D83787A3 /* Library.swift */,
+				5DCCC1C17192F1FFC40455D6 /* Mask.swift */,
 				2C0B33BE1E0A8AA0A1E4E810 /* PlatformColor.swift */,
 				EA0E592B08C8DAE5450663B5 /* Snorecard.entitlements */,
 			);
@@ -261,6 +271,7 @@
 				49BE9F94F371D67AB0D01F05 /* AdvancedChartingView.swift */,
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
 				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
+				FC96C0193CB0E499477BA458 /* BulkApplyMaskView.swift */,
 				A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */,
 				FB115042FD0555DF4AFECD0E /* ContentView.swift */,
 				E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */,
@@ -276,6 +287,7 @@
 				29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */,
 				004A5EF5107705F409DC3089 /* JournalEditor.swift */,
 				0F85425A6C4E977C75813A1E /* LoadingView.swift */,
+				189EADA02589E6F39E64A455 /* MaskEditorView.swift */,
 				B747A2CBB649FA04FD41E138 /* MetricExplainSheet.swift */,
 				60A45553900FBA215B415695 /* NightSummaryCard.swift */,
 				314A642CE58D016D8A5B1919 /* NotesCard.swift */,
@@ -422,6 +434,7 @@
 				68D1B12B986E4258C47F46A8 /* AdvancedChartingView.swift in Sources */,
 				C983F69DCC51430E0AB1DA01 /* AppIconController.swift in Sources */,
 				BF5A62BCAB08A78704738D53 /* BackupsView.swift in Sources */,
+				D94119A0964E0ED9B5D7D906 /* BulkApplyMaskView.swift in Sources */,
 				DEE4196822751F027CD5DB00 /* CanvasWaveformCharts.swift in Sources */,
 				91F47D0DE45C209E62C50B08 /* CardSource.swift in Sources */,
 				AC510E3F49A711C07D621669 /* ContentView.swift in Sources */,
@@ -439,6 +452,8 @@
 				2C5C496325E41A443B73139E /* JournalEditor.swift in Sources */,
 				6BE2F7C24C6199A50A408A71 /* Library.swift in Sources */,
 				8047240FC6B1B672F0F3888E /* LoadingView.swift in Sources */,
+				5E284093249C2D46535C2BCF /* Mask.swift in Sources */,
+				A3CACA86C3F52C4F1378768A /* MaskEditorView.swift in Sources */,
 				BA378A7C1C6A332B3E685606 /* MetricExplainSheet.swift in Sources */,
 				4D9BE8677A85742874DB8EAC /* NightSummaryCard.swift in Sources */,
 				DF8034BF9321A2BD78C38B13 /* NotesCard.swift in Sources */,
@@ -465,6 +480,7 @@
 				1F2B83D1E38CCEB684446BB2 /* AdvancedChartingView.swift in Sources */,
 				A7972D2A579AB154AC2DB833 /* AppIconController.swift in Sources */,
 				E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */,
+				B6D48B91F465C4D4ABFBBF11 /* BulkApplyMaskView.swift in Sources */,
 				E925A255B55DC53835F8056F /* CanvasWaveformCharts.swift in Sources */,
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
@@ -482,6 +498,8 @@
 				02BBE2E9B36662C907CCFB42 /* JournalEditor.swift in Sources */,
 				D88A174919214544AD7A4BB6 /* Library.swift in Sources */,
 				27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */,
+				ACFA4F579A308CEF33DEF4BD /* Mask.swift in Sources */,
+				19695897AACF076A6379925A /* MaskEditorView.swift in Sources */,
 				87D9E9795AFD649C1330FB42 /* MetricExplainSheet.swift in Sources */,
 				B19FA7293CD3811BB334229E /* NightSummaryCard.swift in Sources */,
 				DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */,

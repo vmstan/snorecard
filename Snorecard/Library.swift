@@ -204,6 +204,20 @@ final class Library {
     /// infers from the product name". Synced via iCloud KVS so the
     /// pick follows the user across devices.
     private(set) var deviceTypeOverrides: [String: String] = [:]
+    /// User's curated list of physical masks. Edited from
+    /// Settings → Mask, persisted as a JSON-encoded array under one
+    /// KVS key so the catalog rides iCloud across every device.
+    /// Per-session mask assignments live in `DailyNote.sessionMasks`,
+    /// not here — this is the "your masks" rolodex, not the "which
+    /// mask did I wear last Tuesday" log.
+    private(set) var userMasks: [Mask] = []
+    /// `Mask.id` of the mask that should be stamped onto newly
+    /// imported sessions when the journal sidecar is first created.
+    /// Synced via iCloud KVS so changing the default on iPhone also
+    /// stamps imports done on macOS. `nil` when the user hasn't
+    /// chosen a default — fresh imports then carry no mask metadata
+    /// until the user assigns one.
+    private(set) var defaultMaskID: UUID?
     /// User profile (name, height, weight, untreated AHI, diagnosis
     /// date). Populated by Settings → Profile and
     /// optionally by an Apple Health import on iOS. Synced via
@@ -274,6 +288,8 @@ final class Library {
     private static let defaultJournalTagsKey = "defaultJournalTags"
     private static let appleWatchSleepEnabledKey = "appleWatchSleepEnabled"
     private static let appleWatchSleepPromptShownKey = "appleWatchSleepPromptShown"
+    private static let userMasksKey = "userMasks"
+    private static let defaultMaskIDKey = "defaultMaskID"
 
     /// Fallback target when the user hasn't set one for a device.
     /// 4 hours is the CMS/Medicare threshold and the one every
@@ -550,6 +566,15 @@ final class Library {
             self.defaultJournalTags = []
         }
 
+        self.userMasks = Self.decodeMasks(from: kvs.data(forKey: Self.userMasksKey))
+        if let raw = kvs.string(forKey: Self.defaultMaskIDKey),
+           let uuid = UUID(uuidString: raw),
+           userMasks.contains(where: { $0.id == uuid }) {
+            self.defaultMaskID = uuid
+        } else {
+            self.defaultMaskID = nil
+        }
+
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: kvs,
@@ -673,6 +698,14 @@ final class Library {
                 defaultJournalTags = resolved
             }
         }
+        userMasks = Self.decodeMasks(from: kvs.data(forKey: Self.userMasksKey))
+        if let raw = kvs.string(forKey: Self.defaultMaskIDKey),
+           let uuid = UUID(uuidString: raw),
+           userMasks.contains(where: { $0.id == uuid }) {
+            defaultMaskID = uuid
+        } else {
+            defaultMaskID = nil
+        }
     }
 
     /// Decode a `UserProfile` payload from KVS-stored bytes,
@@ -696,6 +729,24 @@ final class Library {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         return try? encoder.encode(profile)
+    }
+
+    /// Decode the user's saved mask catalog from a KVS payload,
+    /// falling back to an empty array on missing/corrupt data so a
+    /// schema bump on another device can't crash an older client.
+    private static func decodeMasks(from data: Data?) -> [Mask] {
+        guard let data else { return [] }
+        let decoder = JSONDecoder()
+        return (try? decoder.decode([Mask].self, from: data)) ?? []
+    }
+
+    /// Encode the mask catalog for KVS. `.sortedKeys` so two devices
+    /// that round-trip the same catalog produce identical bytes —
+    /// keeps KVS from churning notifications on no-op writes.
+    private static func encodeMasks(_ masks: [Mask]) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(masks)
     }
 
     // MARK: - User profile
@@ -843,6 +894,181 @@ final class Library {
         let kvs = NSUbiquitousKeyValueStore.default
         kvs.set(complianceTargets, forKey: Self.complianceTargetsKey)
         kvs.synchronize()
+    }
+
+    // MARK: - Masks
+
+    /// Look up a mask by id. `nil` for stale references (a mask the
+    /// user deleted after it was stamped onto a session) so callers
+    /// can render a graceful "Unknown" affordance without crashing.
+    func mask(id: UUID?) -> Mask? {
+        guard let id else { return nil }
+        return userMasks.first { $0.id == id }
+    }
+
+    /// Append a new mask to the user's catalog. Persists to KVS so
+    /// the addition propagates to every signed-in device, and — when
+    /// no default has been picked yet — also promotes this first
+    /// mask to the default-for-imports slot so the user doesn't have
+    /// to make two picks to start labelling sessions.
+    func addMask(_ mask: Mask) {
+        userMasks.append(mask)
+        persistMasks()
+        if defaultMaskID == nil {
+            setDefaultMaskID(mask.id)
+        }
+    }
+
+    /// Replace an existing mask in the catalog. No-op when the id
+    /// isn't present — protects against a stale UI binding writing
+    /// back after the underlying mask was deleted on another device.
+    func updateMask(_ mask: Mask) {
+        guard let idx = userMasks.firstIndex(where: { $0.id == mask.id })
+        else { return }
+        guard userMasks[idx] != mask else { return }
+        userMasks[idx] = mask
+        persistMasks()
+    }
+
+    /// Remove a mask from the catalog. Clears the
+    /// default-mask-for-imports pointer when it was pointing at the
+    /// deleted record. Per-session sidecar entries still referencing
+    /// this id are intentionally not swept — they're scattered across
+    /// hundreds of day folders on iCloud Drive, and the resolver
+    /// returns `nil` for stale ids so the UI degrades gracefully.
+    /// Picking any other mask on the affected sessions overwrites
+    /// the orphan reference in place.
+    func deleteMask(id: UUID) {
+        userMasks.removeAll { $0.id == id }
+        persistMasks()
+        if defaultMaskID == id {
+            setDefaultMaskID(nil)
+        }
+    }
+
+    /// Set or clear the mask stamped onto newly imported sessions.
+    /// Persists to KVS as the mask UUID's `uuidString` so other
+    /// devices pick up the new default on their next sync.
+    func setDefaultMaskID(_ id: UUID?) {
+        guard defaultMaskID != id else { return }
+        defaultMaskID = id
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let id {
+            kvs.set(id.uuidString, forKey: Self.defaultMaskIDKey)
+        } else {
+            kvs.removeObject(forKey: Self.defaultMaskIDKey)
+        }
+        kvs.synchronize()
+    }
+
+    /// Persist `userMasks` to KVS. JSON-encoded as a single Data
+    /// blob so the whole catalog round-trips atomically.
+    private func persistMasks() {
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let data = Self.encodeMasks(userMasks) {
+            kvs.set(data, forKey: Self.userMasksKey)
+            kvs.synchronize()
+        }
+    }
+
+    /// Resolved mask for a given session. Reads the per-session
+    /// override stamped into the day's `.snorecard-notes.json`
+    /// sidecar, falling back to `nil` when no entry has been
+    /// recorded. The default-mask is *not* applied at read time —
+    /// stamping happens once at import (see
+    /// `applyDefaultJournalTagsIfNeeded`) so changing the default
+    /// later doesn't retroactively re-label historical sessions.
+    func mask(forSessionKey sessionKey: String, on day: ResMedDay) -> Mask? {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return nil }
+        let note = DailyNotesCache.load(for: folder)
+        guard let raw = note?.sessionMasks?[sessionKey],
+              let uuid = UUID(uuidString: raw)
+        else { return nil }
+        return mask(id: uuid)
+    }
+
+    /// Persist `maskID` as the mask the user wore for `sessionKey`
+    /// on `day`. Passing `nil` removes any existing assignment for
+    /// that session (the row's mask falls back to "no mask"). Reads
+    /// the existing sidecar before writing so journal text, tags,
+    /// and rating ride through unchanged.
+    func setMask(
+        _ maskID: UUID?,
+        forSessionKey sessionKey: String,
+        on day: ResMedDay
+    ) {
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
+        else { return }
+        let prior = DailyNotesCache.load(for: folder) ?? DailyNote(text: "")
+        var masks = prior.sessionMasks ?? [:]
+        if let maskID {
+            masks[sessionKey] = maskID.uuidString
+        } else {
+            masks.removeValue(forKey: sessionKey)
+        }
+        DailyNotesCache.save(
+            DailyNote(
+                text: prior.text,
+                updatedAt: Date(),
+                extractedTags: prior.extractedTags,
+                tagsInputHash: prior.tagsInputHash,
+                taxonomyVersion: prior.taxonomyVersion,
+                userTags: prior.userTags,
+                subjectiveScore: prior.subjectiveScore,
+                sessionMasks: masks.isEmpty ? nil : masks
+            ),
+            to: folder
+        )
+    }
+
+    /// Stamp `maskID` onto every session of every day on the loaded
+    /// card whose date falls within `dateRange` (inclusive). Used by
+    /// the "Apply to existing sessions" flow in Settings → Mask so
+    /// users can backfill mask history after creating a new mask
+    /// record. Each day's sidecar is read just before being written
+    /// to narrow the window for stomping a concurrent journal edit
+    /// on another device. Returns the number of sessions stamped so
+    /// the UI can surface a "n sessions updated" confirmation.
+    @discardableResult
+    func applyMaskToSessions(
+        _ maskID: UUID,
+        in dateRange: ClosedRange<Date>?
+    ) -> Int {
+        guard let card else { return 0 }
+        let raw = maskID.uuidString
+        var updatedSessions = 0
+        for day in card.days {
+            if let dateRange, !dateRange.contains(day.date) { continue }
+            guard let folder = day.files.first?.url.deletingLastPathComponent()
+            else { continue }
+            let dayKeys = day.files.compactMap(\.sessionKey)
+            // Deduplicate — BRP/EVE/PLD share a session key.
+            let uniqueKeys = Array(Set(dayKeys))
+            guard !uniqueKeys.isEmpty else { continue }
+            let prior = DailyNotesCache.load(for: folder) ?? DailyNote(text: "")
+            var masks = prior.sessionMasks ?? [:]
+            for key in uniqueKeys {
+                if masks[key] != raw {
+                    masks[key] = raw
+                    updatedSessions += 1
+                }
+            }
+            DailyNotesCache.save(
+                DailyNote(
+                    text: prior.text,
+                    updatedAt: Date(),
+                    extractedTags: prior.extractedTags,
+                    tagsInputHash: prior.tagsInputHash,
+                    taxonomyVersion: prior.taxonomyVersion,
+                    userTags: prior.userTags,
+                    subjectiveScore: prior.subjectiveScore,
+                    sessionMasks: masks.isEmpty ? nil : masks
+                ),
+                to: folder
+            )
+        }
+        return updatedSessions
     }
 
     /// Re-run the scan on the currently loaded card's folder without
@@ -1027,9 +1253,10 @@ final class Library {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             pendingTagExtractions.removeValue(forKey: folder)?.cancel()
-            // Preserve user-asserted tags and rating — the user may
-            // have tagged a night they never wrote about. Cancels
-            // any pending extraction because the text is gone.
+            // Preserve user-asserted tags, rating, and per-session
+            // mask assignments — the user may have tagged a night
+            // they never wrote about. Cancels any pending extraction
+            // because the text is gone.
             DailyNotesCache.save(
                 DailyNote(
                     text: "",
@@ -1038,7 +1265,8 @@ final class Library {
                     tagsInputHash: nil,
                     taxonomyVersion: nil,
                     userTags: prior?.userTags,
-                    subjectiveScore: prior?.subjectiveScore
+                    subjectiveScore: prior?.subjectiveScore,
+                    sessionMasks: prior?.sessionMasks
                 ),
                 to: folder
             )
@@ -1055,7 +1283,8 @@ final class Library {
                 tagsInputHash: reuseTags ? prior?.tagsInputHash : nil,
                 taxonomyVersion: reuseTags ? prior?.taxonomyVersion : nil,
                 userTags: prior?.userTags,
-                subjectiveScore: prior?.subjectiveScore
+                subjectiveScore: prior?.subjectiveScore,
+                sessionMasks: prior?.sessionMasks
             ),
             to: folder
         )
@@ -1079,7 +1308,8 @@ final class Library {
                 tagsInputHash: prior.tagsInputHash,
                 taxonomyVersion: prior.taxonomyVersion,
                 userTags: tags,
-                subjectiveScore: prior.subjectiveScore
+                subjectiveScore: prior.subjectiveScore,
+                sessionMasks: prior.sessionMasks
             ),
             to: folder
         )
@@ -1101,26 +1331,76 @@ final class Library {
                 tagsInputHash: prior.tagsInputHash,
                 taxonomyVersion: prior.taxonomyVersion,
                 userTags: prior.userTags,
-                subjectiveScore: score
+                subjectiveScore: score,
+                sessionMasks: prior.sessionMasks
             ),
             to: folder
         )
     }
 
-    /// Seed a note sidecar with `defaultJournalTags` when the day has
-    /// no existing sidecar yet. Called from the backfill callback so
-    /// freshly-imported nights land with the user's default tags
-    /// already applied — never overwrites an existing sidecar, so
-    /// days the user has already touched (or that were default-tagged
-    /// on a prior import) are left alone.
+    /// Seed a note sidecar with the user's import-time defaults when
+    /// the day is being seen for the first time. Called from the
+    /// backfill callback so freshly-imported nights land with the
+    /// configured defaults already applied — manual edits on
+    /// previously-seen days are never overwritten.
+    ///
+    /// Two independent default streams flow through here:
+    /// - `defaultJournalTags`: written into `userTags` on a brand-new
+    ///   sidecar.
+    /// - `defaultMaskID`: stamped into `sessionMasks[sessionKey]` for
+    ///   every session of the day. Stamps both on first observation
+    ///   *and* on later observations of newly-rolled session keys
+    ///   (e.g. an early-evening import followed by a re-import after
+    ///   the second night-time session was recorded), so a fresh
+    ///   session that lands inside an already-stamped day still
+    ///   inherits the current default. Pre-existing assignments are
+    ///   never rewritten — that's the "applies to new imports only"
+    ///   guarantee.
     private func applyDefaultJournalTagsIfNeeded(for day: ResMedDay) {
-        guard !defaultJournalTags.isEmpty,
-              let folder = day.files.first?.url.deletingLastPathComponent(),
-              DailyNotesCache.load(for: folder) == nil
+        guard let folder = day.files.first?.url.deletingLastPathComponent()
         else { return }
-        let ordered = NoteTag.allCases.filter { defaultJournalTags.contains($0) }
+        let prior = DailyNotesCache.load(for: folder)
+        let isFreshSidecar = prior == nil
+        let dayKeys = Array(Set(day.files.compactMap(\.sessionKey)))
+
+        // Prepare the stamped mask map. Reuse whatever's on disk and
+        // only insert keys we don't already have an entry for, so a
+        // user picking a different mask on session N keeps it after
+        // session N+1 imports the next day's default.
+        var maskMap = prior?.sessionMasks ?? [:]
+        var maskMapChanged = false
+        if let defaultMask = defaultMaskID,
+           userMasks.contains(where: { $0.id == defaultMask }) {
+            let raw = defaultMask.uuidString
+            for key in dayKeys where maskMap[key] == nil {
+                maskMap[key] = raw
+                maskMapChanged = true
+            }
+        }
+
+        // Default tags only seed on a brand-new sidecar — touching an
+        // existing one would clobber a manual edit.
+        let shouldSeedTags = isFreshSidecar && !defaultJournalTags.isEmpty
+        guard shouldSeedTags || maskMapChanged else { return }
+
+        let userTags: [NoteTag]?
+        if shouldSeedTags {
+            userTags = NoteTag.allCases.filter { defaultJournalTags.contains($0) }
+        } else {
+            userTags = prior?.userTags
+        }
+
         DailyNotesCache.save(
-            DailyNote(text: "", updatedAt: Date(), userTags: ordered),
+            DailyNote(
+                text: prior?.text ?? "",
+                updatedAt: Date(),
+                extractedTags: prior?.extractedTags,
+                tagsInputHash: prior?.tagsInputHash,
+                taxonomyVersion: prior?.taxonomyVersion,
+                userTags: userTags,
+                subjectiveScore: prior?.subjectiveScore,
+                sessionMasks: maskMap.isEmpty ? nil : maskMap
+            ),
             to: folder
         )
     }
@@ -1163,7 +1443,10 @@ final class Library {
                         updatedAt: current.updatedAt,
                         extractedTags: result.tags,
                         tagsInputHash: hash,
-                        taxonomyVersion: NoteTagTaxonomy.version
+                        taxonomyVersion: NoteTagTaxonomy.version,
+                        userTags: current.userTags,
+                        subjectiveScore: current.subjectiveScore,
+                        sessionMasks: current.sessionMasks
                     ),
                     to: folder
                 )

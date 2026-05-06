@@ -25,6 +25,34 @@ struct SettingsSheet: View {
     @State private var presentationDetent: PresentationDetent = .large
     #endif
 
+    /// macOS-only flag for the bulk-apply sheet. iOS pushes
+    /// `BulkApplyMaskView` onto the outer settings stack via
+    /// `NavigationLink` and ignores this value.
+    @State private var showBulkApplySheet: Bool = false
+
+    /// macOS-only target for the Mask editor sheet. iOS uses a
+    /// NavigationLink push instead, so this state is only consulted
+    /// inside `#if os(macOS)` blocks.
+    private enum MaskEditorTarget: Identifiable {
+        case new
+        case edit(Mask)
+
+        var id: String {
+            switch self {
+            case .new:           return "new"
+            case .edit(let m):   return m.id.uuidString
+            }
+        }
+
+        var initialMask: Mask? {
+            switch self {
+            case .new:           return nil
+            case .edit(let m):   return m
+            }
+        }
+    }
+    @State private var maskEditorTarget: MaskEditorTarget?
+
     private var hasCard: Bool {
         library.card?.identification?.serialNumber != nil
     }
@@ -70,6 +98,13 @@ struct SettingsSheet: View {
                         .navigationBarTitleDisplayMode(.inline)
                 } label: {
                     Label("Machine", systemImage: "externaldrive")
+                }
+                NavigationLink {
+                    maskTab
+                        .navigationTitle("Mask")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Mask", systemImage: "face.smiling")
                 }
                 NavigationLink {
                     backupsTab
@@ -131,6 +166,8 @@ struct SettingsSheet: View {
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
             deviceTab
                 .tabItem { Label("Machine", systemImage: "externaldrive") }
+            maskTab
+                .tabItem { Label("Mask", systemImage: "face.smiling") }
             backupsTab
                 .tabItem { Label("Backups", systemImage: "icloud") }
             appearanceTab
@@ -409,6 +446,165 @@ struct SettingsSheet: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Mask tab — user-curated catalog of physical masks plus the
+    /// "default for new imports" pointer and a bulk-apply tool for
+    /// retroactively labelling existing sessions. iOS pushes the
+    /// editor onto the outer `NavigationStack` supplied by Settings;
+    /// macOS opens it as a sheet because pushing inside a Settings
+    /// `TabView` pane leaves no usable back affordance.
+    @ViewBuilder
+    private var maskTab: some View {
+        Form {
+            yourMasksSection
+            if !library.userMasks.isEmpty {
+                defaultMaskSection
+                if hasCard {
+                    bulkApplySection
+                }
+            }
+        }
+        .formStyle(.grouped)
+        #if os(macOS)
+        .sheet(item: $maskEditorTarget) { target in
+            MaskEditorView(initialMask: target.initialMask)
+                .environment(library)
+                .frame(minWidth: 460, minHeight: 360)
+        }
+        .sheet(isPresented: $showBulkApplySheet) {
+            BulkApplyMaskView()
+                .environment(library)
+                .frame(minWidth: 460, minHeight: 320)
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var yourMasksSection: some View {
+        Section {
+            ForEach(library.userMasks) { mask in
+                maskRowLink(for: mask)
+            }
+            addMaskRow
+        } header: {
+            Text("Your Masks")
+        } footer: {
+            if library.userMasks.isEmpty {
+                Text("Add a mask to start labelling sessions. Masks sync across your devices via iCloud.")
+            } else {
+                Text("Tap a mask to edit or delete it.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func maskRowLink(for mask: Mask) -> some View {
+        #if os(macOS)
+        Button {
+            maskEditorTarget = .edit(mask)
+        } label: {
+            HStack {
+                maskRow(mask)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        #else
+        NavigationLink {
+            MaskEditorView(initialMask: mask)
+        } label: {
+            maskRow(mask)
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var addMaskRow: some View {
+        #if os(macOS)
+        Button {
+            maskEditorTarget = .new
+        } label: {
+            Label("Add Mask", systemImage: "plus.circle")
+                .foregroundStyle(Color.accentColor)
+        }
+        .buttonStyle(.plain)
+        #else
+        NavigationLink {
+            MaskEditorView(initialMask: nil)
+        } label: {
+            Label("Add Mask", systemImage: "plus.circle")
+                .foregroundStyle(Color.accentColor)
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private func maskRow(_ mask: Mask) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(mask.displayLabel)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Text(mask.type.displayName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var defaultMaskSection: some View {
+        Section {
+            Picker(
+                "Default for New Sessions",
+                selection: Binding<UUID?>(
+                    get: { library.defaultMaskID },
+                    set: { library.setDefaultMaskID($0) }
+                )
+            ) {
+                Text("None").tag(UUID?.none)
+                ForEach(library.userMasks) { mask in
+                    Text(mask.displayLabel).tag(Optional(mask.id))
+                }
+            }
+        } header: {
+            Text("Default")
+        } footer: {
+            Text("Stamped onto newly imported sessions. Changing this only affects future imports — existing sessions keep whatever mask they were imported with.")
+        }
+    }
+
+    @ViewBuilder
+    private var bulkApplySection: some View {
+        Section {
+            #if os(macOS)
+            Button {
+                showBulkApplySheet = true
+            } label: {
+                HStack {
+                    Label("Apply to Existing Sessions", systemImage: "wand.and.stars")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            #else
+            NavigationLink {
+                BulkApplyMaskView()
+            } label: {
+                Label("Apply to Existing Sessions", systemImage: "wand.and.stars")
+            }
+            #endif
+        } footer: {
+            Text("Backfill a mask onto sessions that were imported before you set this default, or relabel a stretch of nights when you switched masks.")
+        }
     }
 
     /// Backups tab — iCloud backup + restore controls. Gated on a
