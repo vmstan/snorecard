@@ -656,8 +656,8 @@ struct GlasgowHourlyChart: View {
                 }
                 if let avg = nightAverage {
                     RuleMark(y: .value("Night Average", avg))
-                        .foregroundStyle(library.eventColorPalette.glasgowIndex.opacity(0.5))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        .foregroundStyle(library.eventColorPalette.glasgowIndex)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                 }
             }
             .chartXScale(domain: axisHours.map(\.label))
@@ -693,15 +693,15 @@ struct GlasgowHourlyChart: View {
                     color: library.eventColorPalette.glasgowIndex,
                     label: "Score"
                 )
-                if let avg = nightAverage {
+                if nightAverage != nil {
                     HStack(spacing: 4) {
                         // Tiny dashed swatch mirroring the rule
                         // style above so the legend reads as one
                         // glance with the chart.
                         DashedSwatch(
-                            color: library.eventColorPalette.glasgowIndex.opacity(0.5)
+                            color: library.eventColorPalette.glasgowIndex
                         )
-                        Text(String(format: "Night Avg %.2f", avg))
+                        Text("Night Avg")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
