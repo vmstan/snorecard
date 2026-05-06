@@ -97,10 +97,18 @@ struct SessionListSheet: View {
                     sessionRow(row)
                 }
             } footer: {
-                Text("Brief sessions under 2 minutes are excluded automatically — they're almost always mask tests or fittings rather than therapy. Flip a session off to drop it from this day's AHI, usage, and pressure totals.")
+                Text(footerText)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var footerText: String {
+        let base = "Brief sessions under 2 minutes are excluded automatically — they're almost always mask tests or fittings rather than therapy. Flip a session off to drop it from this day's AHI, usage, and pressure totals."
+        if library.userMasks.isEmpty {
+            return base + " Add masks in Settings → Mask to label which mask you wore for each session."
+        }
+        return base
     }
 
     @ViewBuilder
@@ -117,11 +125,20 @@ struct SessionListSheet: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if shouldShowMaskMenu(for: state) {
+                    maskMenu(for: row)
+                        .padding(.top, 2)
+                }
             }
             Spacer(minLength: 0)
             trailing(for: row, state: state)
         }
         .padding(.vertical, 2)
+    }
+
+    private func shouldShowMaskMenu(for state: RowState) -> Bool {
+        guard !library.userMasks.isEmpty else { return false }
+        return state != .autoExcluded
     }
 
     @ViewBuilder
@@ -149,6 +166,42 @@ struct SessionListSheet: View {
             )
             .labelsHidden()
         }
+    }
+
+    @ViewBuilder
+    private func maskMenu(for row: Row) -> some View {
+        let resolved = library.mask(forSessionKey: row.id, on: day)
+        Menu {
+            ForEach(library.userMasks) { mask in
+                Button {
+                    library.setMask(mask.id, forSessionKey: row.id, on: day)
+                } label: {
+                    if mask.id == resolved?.id {
+                        Label(mask.displayLabel, systemImage: "checkmark")
+                    } else {
+                        Text(mask.displayLabel)
+                    }
+                }
+            }
+            if resolved != nil {
+                Divider()
+                Button(role: .destructive) {
+                    library.setMask(nil, forSessionKey: row.id, on: day)
+                } label: {
+                    Label("Clear Mask", systemImage: "xmark.circle")
+                }
+            }
+        } label: {
+            Text(resolved?.displayLabel ?? "Set Mask")
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(resolved == nil ? Color.accentColor : Color.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .accessibilityLabel(
+            resolved.map { "Mask: \($0.displayLabel)" } ?? "No mask assigned"
+        )
     }
 
     private enum RowState { case included, manuallyExcluded, autoExcluded }

@@ -39,6 +39,15 @@ public struct DailyNote: Codable, Sendable, Equatable {
     /// enum so future re-scaling (1–10, 0–100) doesn't require a
     /// migration — the bounds are enforced at the UI layer.
     public var subjectiveScore: Int?
+    /// Mask the user wore for each CPAP session on this day. Keys
+    /// are session keys (the `YYYYMMDD_HHMMSS` filename prefix shared
+    /// by a session's BRP / EVE / PLD trio); values are
+    /// `Mask.id.uuidString` pointers into the user's iCloud-KVS
+    /// catalog. `nil` means "no per-session masks recorded for this
+    /// day yet" and is the steady state for legacy nights from
+    /// before the mask feature shipped. Optional + Codable so old
+    /// readers that don't know the field decode cleanly.
+    public var sessionMasks: [String: String]?
 
     public init(
         text: String,
@@ -47,7 +56,8 @@ public struct DailyNote: Codable, Sendable, Equatable {
         tagsInputHash: String? = nil,
         taxonomyVersion: Int? = nil,
         userTags: [NoteTag]? = nil,
-        subjectiveScore: Int? = nil
+        subjectiveScore: Int? = nil,
+        sessionMasks: [String: String]? = nil
     ) {
         self.text = text
         self.updatedAt = updatedAt
@@ -56,6 +66,7 @@ public struct DailyNote: Codable, Sendable, Equatable {
         self.taxonomyVersion = taxonomyVersion
         self.userTags = userTags
         self.subjectiveScore = subjectiveScore
+        self.sessionMasks = sessionMasks
     }
 
     /// Tags that downstream consumers (correlation, AI prompts)
@@ -69,15 +80,19 @@ public struct DailyNote: Codable, Sendable, Equatable {
     }
 
     /// True when the sidecar has nothing worth persisting — no
-    /// text, no user tags, no rating. The cache uses this to
-    /// decide whether to delete the file on save.
+    /// text, no user tags, no rating, no per-session mask
+    /// assignments. The cache uses this to decide whether to delete
+    /// the file on save, so a stamp-at-import write that only
+    /// populated `sessionMasks` still persists rather than
+    /// boomeranging through "save then delete."
     public var isEmpty: Bool {
         let blankText = text.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty
         let noTags = (userTags ?? []).isEmpty
         let noScore = subjectiveScore == nil
-        return blankText && noTags && noScore
+        let noMasks = (sessionMasks ?? [:]).isEmpty
+        return blankText && noTags && noScore && noMasks
     }
 }
 
