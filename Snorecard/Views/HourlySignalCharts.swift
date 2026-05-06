@@ -335,6 +335,22 @@ struct TidalVolumeHourlyChart: View {
         buckets.filter { $0.value > 0 }
     }
 
+    /// Median across the plotted per-hour medians. Mirrors the
+    /// Glasgow chart's "Night Avg" rule — the reference is
+    /// computed from the same data the line plots, so it stays
+    /// consistent with whatever the chart is showing (rather than
+    /// using a separately-computed night-wide statistic that
+    /// could disagree with the trace).
+    private var nightMedian: Double? {
+        let values = plottedBuckets.map(\.value).sorted()
+        guard !values.isEmpty else { return nil }
+        let count = values.count
+        if count.isMultiple(of: 2) {
+            return (values[count / 2 - 1] + values[count / 2]) / 2
+        }
+        return values[count / 2]
+    }
+
     private var valueRange: ClosedRange<Double> {
         let values = plottedBuckets.map(\.value)
         guard let minValue = values.min(),
@@ -350,21 +366,28 @@ struct TidalVolumeHourlyChart: View {
             title: "Tidal Volume by Hour",
             subtitle: "mL"
         ) {
-            Chart(plottedBuckets) { bucket in
-                LineMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Tidal Volume", bucket.value)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(library.eventColorPalette.tidalVolume)
-                .lineStyle(StrokeStyle(lineWidth: 2))
+            Chart {
+                ForEach(plottedBuckets) { bucket in
+                    LineMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Tidal Volume", bucket.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(library.eventColorPalette.tidalVolume)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
 
-                PointMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Tidal Volume", bucket.value)
-                )
-                .foregroundStyle(library.eventColorPalette.tidalVolume)
-                .symbolSize(28)
+                    PointMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Tidal Volume", bucket.value)
+                    )
+                    .foregroundStyle(library.eventColorPalette.tidalVolume)
+                    .symbolSize(28)
+                }
+                if let median = nightMedian {
+                    RuleMark(y: .value("Night Median", median))
+                        .foregroundStyle(library.eventColorPalette.tidalVolume)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                }
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: valueRange)
@@ -394,10 +417,20 @@ struct TidalVolumeHourlyChart: View {
             }
             .frame(minHeight: 140)
 
-            singleSeriesLegend(
-                color: library.eventColorPalette.tidalVolume,
-                label: "Median"
-            )
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.tidalVolume,
+                    label: "Median"
+                )
+                if nightMedian != nil {
+                    HStack(spacing: 4) {
+                        DashedSwatch(color: library.eventColorPalette.tidalVolume)
+                        Text("Night Avg")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }
