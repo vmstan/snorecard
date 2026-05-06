@@ -605,6 +605,21 @@ struct GlasgowHourlyChart: View {
         }
     }
 
+    /// Night-wide Glasgow score, weighted-averaged from the same
+    /// slices the per-hour line plots. Matches `computeDay`'s
+    /// aggregation, but stays consistent with whatever sessions
+    /// survived `filteringInactiveSessions` (the standalone
+    /// `computeDay` would re-include excluded ones).
+    private var nightAverage: Double? {
+        var weighted: Double = 0
+        var count: Int = 0
+        for entry in slices {
+            weighted += entry.slice.score * Double(entry.slice.inspirationCount)
+            count += entry.slice.inspirationCount
+        }
+        return count > 0 ? weighted / Double(count) : nil
+    }
+
     /// ±0.1 around min/max of the plotted scores. When only a
     /// single hour has data the range still spans 0.2 so the
     /// single point doesn't render at the chart's vertical centre
@@ -639,6 +654,11 @@ struct GlasgowHourlyChart: View {
                     .foregroundStyle(library.eventColorPalette.glasgowIndex)
                     .symbolSize(28)
                 }
+                if let avg = nightAverage {
+                    RuleMark(y: .value("Night Average", avg))
+                        .foregroundStyle(library.eventColorPalette.glasgowIndex.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
             }
             .chartXScale(domain: axisHours.map(\.label))
             .chartYScale(domain: valueRange)
@@ -668,10 +688,47 @@ struct GlasgowHourlyChart: View {
             }
             .frame(minHeight: 140)
 
-            singleSeriesLegend(
-                color: library.eventColorPalette.glasgowIndex,
-                label: "Score"
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.glasgowIndex,
+                    label: "Score"
+                )
+                if let avg = nightAverage {
+                    HStack(spacing: 4) {
+                        // Tiny dashed swatch mirroring the rule
+                        // style above so the legend reads as one
+                        // glance with the chart.
+                        DashedSwatch(
+                            color: library.eventColorPalette.glasgowIndex.opacity(0.5)
+                        )
+                        Text(String(format: "Night Avg %.2f", avg))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 12pt-wide dashed line swatch used in the Glasgow chart legend
+/// to label the night-average rule. Drawn with the same dash
+/// pattern as the `RuleMark` so the swatch and the line read as
+/// the same visual element.
+private struct DashedSwatch: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            ctx.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: 1, dash: [3, 2])
             )
         }
+        .frame(width: 12, height: 8)
     }
 }
