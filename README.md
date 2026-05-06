@@ -15,6 +15,7 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 - Detailed percentile statistics for every signal your machine recorded, including breath timing and a per-event breakdown
 - An Advanced Charting window with the full waveform of breathing, mask pressure, leak, snore, and tidal volume — with a draggable scrubber that focuses any window of the night
 - A Therapy Sessions list with an include / exclude switch on every session, so a stray mask test or daytime fitting can be dropped from the day's AHI, usage, and pressure totals. Sessions under two minutes are excluded automatically — they're almost always fittings rather than therapy
+- A per-session mask label so you can record which of your masks you wore for each session — handy when you swap mid-night or are trialing a new cushion
 - Your machine's exact therapy settings for that specific night — pressure, mode, EPR, ramp, humidifier, mask type, and more
 - A Sleep Journal entry for writing your own notes about the night
 
@@ -42,6 +43,14 @@ If you wear an Apple Watch to bed, Snorecard pulls the watch's deep / core / REM
 - Give each device a friendly name that follows you to your other Apple devices
 - Everything syncs through your iCloud account — import once on your Mac, see it on your iPhone
 - Pick from eight app-icon variants built in Icon Composer
+
+**Mask tracking**
+
+- Keep a list of the masks you actually wear, with manufacturer (ResMed, Philips Respironics, Fisher & Paykel, Bleep, or Other), model, type (full face / nasal / pillow / hybrid), and size
+- Pick one as the default — newly imported sessions are automatically labeled with whatever you were wearing the night you imported them
+- Change the mask on any individual session from the Therapy Sessions list when you swapped mid-night or are trying a new cushion
+- Bulk-apply a mask to past sessions across a date range, so switching masks last Tuesday only takes a few taps to reflect across all those nights
+- Your mask catalog and per-session labels sync across all your Apple devices through iCloud
 
 **Backup**
 
