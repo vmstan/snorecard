@@ -399,6 +399,14 @@ fileprivate struct CanvasPlotShell: View {
     let hoverOffset: TimeInterval?
     let legend: [CanvasLegendEntry]?
     let draw: (GraphicsContext, CGSize, CanvasAxesMath) -> Void
+    /// Scroll position captured at the start of a pan drag. We
+    /// can't apply `value.translation.width` deltas on top of the
+    /// already-moved `scrollBinding` — translation is cumulative
+    /// from the drag's start, so adding it on each event would
+    /// compound the motion (a 50pt drag would scroll ~275pt's
+    /// worth). Instead we anchor the drag's origin once and
+    /// compute target = origin + translation.
+    @State private var dragOriginScroll: TimeInterval?
 
     /// Y label column width — matches SwiftUI Charts' 32pt trailing
     /// axis treatment used in `SharedAxesModifier` so vertical
@@ -523,9 +531,19 @@ fileprivate struct CanvasPlotShell: View {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
                 guard axes.isZoomed, width > 0 else { return }
+                // Capture the pre-drag scroll position once at the
+                // first event so subsequent events compute target
+                // from a stable origin instead of compounding.
+                let origin: TimeInterval
+                if let captured = dragOriginScroll {
+                    origin = captured
+                } else {
+                    origin = axes.scrollBinding.wrappedValue
+                    dragOriginScroll = origin
+                }
                 let secondsPerPoint = axes.visibleDomainLength / Double(width)
                 let deltaSeconds = -Double(value.translation.width) * secondsPerPoint
-                let target = axes.scrollBinding.wrappedValue + deltaSeconds
+                let target = origin + deltaSeconds
                 let clamped = max(
                     0,
                     min(
@@ -534,6 +552,9 @@ fileprivate struct CanvasPlotShell: View {
                     )
                 )
                 axes.scrollBinding.wrappedValue = clamped
+            }
+            .onEnded { _ in
+                dragOriginScroll = nil
             }
     }
     #endif

@@ -1604,9 +1604,21 @@ extension Array {
 
 /// Axis / scroll / hover configuration passed down to each chart subview.
 /// Grouping it into one struct lets the subviews conform to `Equatable`
-/// cleanly — two `SharedAxisConfig` values are equal when the visible
-/// window and zoom state match, so SwiftUI can skip re-rendering charts
-/// whose data hasn't changed during a pure hover update.
+/// cleanly — two `SharedAxisConfig` values are equal when the window,
+/// zoom state, and scroll position all match, so SwiftUI can skip
+/// re-rendering charts whose data hasn't changed during a pure hover
+/// update (hover lives in a separate `hoverOffset` parameter on each
+/// chart, so it doesn't participate here).
+///
+/// `scrollBinding.wrappedValue` is part of the equality on purpose:
+/// during a pan drag the visibleDomain doesn't change, only the
+/// scroll position does. Without it, charts whose `points` array
+/// didn't change (everything except the Breathing trace, which
+/// re-slices its detail tier per visible window) would short-
+/// circuit and keep rendering at the pre-drag scroll position
+/// while the Breathing trace tracked the live position — they
+/// looked misaligned until the next event re-set scrollPosition
+/// in a way that forced everything to refresh.
 struct SharedAxisConfig: Equatable, Sendable {
     let totalDuration: TimeInterval
     let visibleDomainLength: TimeInterval
@@ -1624,6 +1636,7 @@ struct SharedAxisConfig: Equatable, Sendable {
             && lhs.visibleDomainLength == rhs.visibleDomainLength
             && lhs.isZoomed == rhs.isZoomed
             && lhs.dayStart == rhs.dayStart
+            && lhs.scrollBinding.wrappedValue == rhs.scrollBinding.wrappedValue
     }
 }
 
