@@ -192,9 +192,9 @@ struct SleepByHourChart: View {
                         .symbolSize(28)
 
                         // Device-usage line + marker — same stroke and
-                        // point size as the stage series; the muted
-                        // `.primary` tint at low opacity keeps it
-                        // present without competing.
+                        // point size as the stage series; a flat
+                        // system gray keeps it present without
+                        // competing with the stage colours.
                         LineMark(
                             x: .value("Hour", bucket.clockLabel),
                             y: .value(deviceLabel, bucket.cpapMinutes),
@@ -216,7 +216,7 @@ struct SleepByHourChart: View {
                     "Deep": library.eventColorPalette.deepSleep,
                     "Core": library.eventColorPalette.coreSleep,
                     "REM": library.eventColorPalette.remSleep,
-                    deviceLabel: Color.primary.opacity(0.4)
+                    deviceLabel: Color.gray
                 ])
                 .chartLegend(.hidden)
                 .chartXScale(domain: buckets.map(\.clockLabel))
@@ -270,7 +270,7 @@ struct SleepByHourChart: View {
             legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
             legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
             legendDot(color: library.eventColorPalette.remSleep, label: "REM")
-            legendLine(color: .primary.opacity(0.4), label: deviceLabel)
+            legendLine(color: .gray, label: deviceLabel)
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
