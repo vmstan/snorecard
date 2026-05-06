@@ -489,6 +489,18 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
+                // Glasgow Index by hour sits directly under the
+                // events bar chart — same dayStart anchor so the
+                // x-axis lines up. Skipped on nights where no
+                // hour scored (too few inspirations across every
+                // session).
+                if let bundle = displayedBundle, !bundle.glasgowHourSlices.isEmpty {
+                    GlasgowHourlyChart(
+                        slices: bundle.glasgowHourSlices,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
                 // Sleep-by-hour stack with CPAP usage overlay. Only
                 // renders when both a watch summary and the parsed
                 // waveform bundle are present — needs the bundle's

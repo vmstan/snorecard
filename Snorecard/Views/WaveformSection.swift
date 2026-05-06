@@ -34,8 +34,24 @@ struct WaveformBundle: Sendable {
     /// computed from raw PLD samples (not the downsampled chart
     /// arrays) so the percentiles are clinically accurate.
     let signalSummary: [SignalSummaryRow]
+    /// Per-(session, wall-clock-hour) Glasgow Index slices. Stored
+    /// at the session granularity so `filteringInactiveSessions`
+    /// can drop excluded sessions and the chart can re-aggregate
+    /// the survivors. The chart layer fans these out to one
+    /// score-per-hour by inspiration-count weighted average —
+    /// matching the night-wide aggregation `GlasgowIndex.computeDay`
+    /// uses.
+    let glasgowHourSlices: [GlasgowSessionHour]
 
     var isEmpty: Bool { sessions.isEmpty }
+
+    /// One Glasgow hour slice tagged with its owning session, so
+    /// session-exclusion filtering can drop or keep contributions
+    /// before the per-hour weighted average is computed.
+    struct GlasgowSessionHour: Sendable, Hashable {
+        let sessionID: UUID
+        let slice: GlasgowIndex.HourSlice
+    }
 
     /// Return a copy with every session in `inactiveSessionIDs` (and
     /// the events / flat-point arrays attributable to them) removed,
@@ -74,7 +90,8 @@ struct WaveformBundle: Sendable {
                 flatFlowLimitation: [],
                 flatIPAP: [],
                 flatEPAP: [],
-                signalSummary: signalSummary
+                signalSummary: signalSummary,
+                glasgowHourSlices: []
             )
         }
         // Δ is how much later the new "day start" is vs. the
@@ -145,7 +162,12 @@ struct WaveformBundle: Sendable {
             flatFlowLimitation: flatFlowLimitation.compactMap(shiftFlat),
             flatIPAP: flatIPAP.compactMap(shiftFlat),
             flatEPAP: flatEPAP.compactMap(shiftFlat),
-            signalSummary: signalSummary
+            signalSummary: signalSummary,
+            // Drop slices from excluded sessions; the chart layer
+            // re-aggregates the survivors into per-hour scores.
+            glasgowHourSlices: glasgowHourSlices.filter {
+                !inactiveSessionIDs.contains($0.sessionID)
+            }
         )
     }
 
@@ -201,7 +223,8 @@ struct WaveformBundle: Sendable {
                 flatFlowLimitation: [],
                 flatIPAP: [],
                 flatEPAP: [],
-                signalSummary: []
+                signalSummary: [],
+                glasgowHourSlices: []
             )
         }
 
@@ -233,6 +256,10 @@ struct WaveformBundle: Sendable {
         // Aggregate raw PLD samples across every session so the
         // summary table's percentiles reflect the full night.
         var rawAcrossSessions: [String: [Double]] = [:]
+        // Per-(session, hour) Glasgow scores collected during the
+        // BRP parse — flow samples are already in L/min here, so
+        // no second decode is needed.
+        var glasgowSlices: [GlasgowSessionHour] = []
 
         for p in parsed {
             let file = p.file
@@ -308,9 +335,18 @@ struct WaveformBundle: Sendable {
                 }
             }
 
+            let sessionID = UUID()
+            for slice in GlasgowIndex.computeHourly(
+                flowLPerMin: flowSamples,
+                sampleRate: flowRate,
+                sessionStart: sessionStart
+            ) {
+                glasgowSlices.append(GlasgowSessionHour(sessionID: sessionID, slice: slice))
+            }
+
             segments.append(
                 SessionSegment(
-                    id: UUID(),
+                    id: sessionID,
                     startOffset: startOffset,
                     duration: duration,
                     flowLabel: flowSig.label,
@@ -391,7 +427,8 @@ struct WaveformBundle: Sendable {
             flatFlowLimitation: flatten(\.flowLimitation),
             flatIPAP: flatten(\.ipap),
             flatEPAP: flatten(\.epap),
-            signalSummary: summary
+            signalSummary: summary,
+            glasgowHourSlices: glasgowSlices
         )
     }
 

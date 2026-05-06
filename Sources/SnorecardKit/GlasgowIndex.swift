@@ -107,6 +107,66 @@ public enum GlasgowIndex {
         return (totalScore / n, weightedSums.finalize(totalWeight: n))
     }
 
+    /// One wall-clock-hour slice of a single BRP session's flow
+    /// signal, scored independently. Multiple slices that fall in
+    /// the same hour (across overlapping or sequential sessions)
+    /// are weighted-averaged by `inspirationCount` to produce the
+    /// hour's final score — same weighting `computeDay` uses for
+    /// the night-wide aggregate.
+    public struct HourSlice: Sendable, Hashable {
+        public let hourStart: Date
+        public let score: Double
+        public let inspirationCount: Int
+
+        public init(hourStart: Date, score: Double, inspirationCount: Int) {
+            self.hourStart = hourStart
+            self.score = score
+            self.inspirationCount = inspirationCount
+        }
+    }
+
+    /// Slice a single session's flow samples into wall-clock-hour
+    /// chunks and score each chunk via `compute`. Hours with too
+    /// few inspirations to score are silently dropped (the chart
+    /// renders a gap there). Caller weighted-averages across
+    /// sessions in the same hour using `inspirationCount`.
+    public static func computeHourly(
+        flowLPerMin: [Double],
+        sampleRate: Double,
+        sessionStart: Date,
+        calendar: Calendar = .current
+    ) -> [HourSlice] {
+        guard sampleRate > 0, !flowLPerMin.isEmpty else { return [] }
+
+        var out: [HourSlice] = []
+        var i = 0
+        let count = flowLPerMin.count
+
+        while i < count {
+            let sampleTime = sessionStart.addingTimeInterval(Double(i) / sampleRate)
+            guard let hourStart = calendar.dateInterval(of: .hour, for: sampleTime)?.start else {
+                i += 1
+                continue
+            }
+            let nextHour = hourStart.addingTimeInterval(3600)
+            let endSampleD = nextHour.timeIntervalSince(sessionStart) * sampleRate
+            // Clamp to the sample range and ensure forward progress
+            // even on the rare degenerate slice (tiny last partial
+            // hour) where the rounded boundary sits at `i`.
+            let endSample = min(count, max(i + 1, Int(endSampleD.rounded(.down))))
+            let chunk = Array(flowLPerMin[i..<endSample])
+            if let r = compute(flowSamples: chunk) {
+                out.append(HourSlice(
+                    hourStart: hourStart,
+                    score: r.score,
+                    inspirationCount: r.inspirationCount
+                ))
+            }
+            i = endSample
+        }
+        return out
+    }
+
     /// Mutable accumulator for weighted-averaging breakdowns across
     /// multiple BRP files. Exposed publicly so the `DailyStatistics`
     /// aggregate pass can reuse the same weighting logic the
