@@ -335,6 +335,22 @@ struct TidalVolumeHourlyChart: View {
         buckets.filter { $0.value > 0 }
     }
 
+    /// Median across the plotted per-hour medians. Mirrors the
+    /// Glasgow chart's "Night Avg" rule — the reference is
+    /// computed from the same data the line plots, so it stays
+    /// consistent with whatever the chart is showing (rather than
+    /// using a separately-computed night-wide statistic that
+    /// could disagree with the trace).
+    private var nightMedian: Double? {
+        let values = plottedBuckets.map(\.value).sorted()
+        guard !values.isEmpty else { return nil }
+        let count = values.count
+        if count.isMultiple(of: 2) {
+            return (values[count / 2 - 1] + values[count / 2]) / 2
+        }
+        return values[count / 2]
+    }
+
     private var valueRange: ClosedRange<Double> {
         let values = plottedBuckets.map(\.value)
         guard let minValue = values.min(),
@@ -350,21 +366,28 @@ struct TidalVolumeHourlyChart: View {
             title: "Tidal Volume by Hour",
             subtitle: "mL"
         ) {
-            Chart(plottedBuckets) { bucket in
-                LineMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Tidal Volume", bucket.value)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(library.eventColorPalette.tidalVolume)
-                .lineStyle(StrokeStyle(lineWidth: 2))
+            Chart {
+                ForEach(plottedBuckets) { bucket in
+                    LineMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Tidal Volume", bucket.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(library.eventColorPalette.tidalVolume)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
 
-                PointMark(
-                    x: .value("Hour", bucket.clockLabel),
-                    y: .value("Tidal Volume", bucket.value)
-                )
-                .foregroundStyle(library.eventColorPalette.tidalVolume)
-                .symbolSize(28)
+                    PointMark(
+                        x: .value("Hour", bucket.clockLabel),
+                        y: .value("Tidal Volume", bucket.value)
+                    )
+                    .foregroundStyle(library.eventColorPalette.tidalVolume)
+                    .symbolSize(28)
+                }
+                if let median = nightMedian {
+                    RuleMark(y: .value("Night Median", median))
+                        .foregroundStyle(library.eventColorPalette.tidalVolume)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                }
             }
             .chartXScale(domain: buckets.map(\.clockLabel))
             .chartYScale(domain: valueRange)
@@ -394,10 +417,20 @@ struct TidalVolumeHourlyChart: View {
             }
             .frame(minHeight: 140)
 
-            singleSeriesLegend(
-                color: library.eventColorPalette.tidalVolume,
-                label: "Median"
-            )
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.tidalVolume,
+                    label: "Median"
+                )
+                if nightMedian != nil {
+                    HStack(spacing: 4) {
+                        DashedSwatch(color: library.eventColorPalette.tidalVolume)
+                        Text("Night Avg")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }
@@ -542,3 +575,193 @@ struct PressureHourlyChart: View {
     }
 }
 
+// MARK: - Glasgow Index by Hour (line)
+
+/// Per-hour Glasgow Index line. Slices each session's flow signal
+/// into wall-clock-hour chunks during waveform load and weighted-
+/// averages multiple sessions in the same hour by inspiration count
+/// — same aggregation `GlasgowIndex.computeDay` uses for the night-
+/// wide aggregate. The trace is anchored to the same hour-aligned
+/// x-axis as every other hourly chart on the day view, so a quick
+/// scan down the column lines up cleanly. Y-axis pads ±0.1 around
+/// the night's min and max so small per-hour deltas are visible.
+struct GlasgowHourlyChart: View {
+    @Environment(Library.self) private var library
+
+    let slices: [WaveformBundle.GlasgowSessionHour]
+    let dayStart: Date
+    let totalDuration: TimeInterval
+
+    /// Aggregate slices into one score per wall-clock hour by
+    /// weighted-averaging on `inspirationCount`. Hours with no
+    /// surviving slices are skipped — the line gaps over them.
+    private var aggregated: [Date: Double] {
+        var bucket: [Date: (weighted: Double, count: Int)] = [:]
+        for entry in slices {
+            var current = bucket[entry.slice.hourStart] ?? (0, 0)
+            current.weighted += entry.slice.score * Double(entry.slice.inspirationCount)
+            current.count += entry.slice.inspirationCount
+            bucket[entry.slice.hourStart] = current
+        }
+        var out: [Date: Double] = [:]
+        out.reserveCapacity(bucket.count)
+        for (hour, value) in bucket where value.count > 0 {
+            out[hour] = value.weighted / Double(value.count)
+        }
+        return out
+    }
+
+    /// Full hour-by-hour x-axis spanning the night. Mirrors the
+    /// bucket logic in `AHIHourlyChart` / `hourlyBuckets` so the
+    /// labels align exactly with the bar chart above.
+    private var axisHours: [(label: String, hour: Date)] {
+        let calendar = Calendar.current
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
+        guard lastHour >= 0 else { return [] }
+        return (0...lastHour).map { offset in
+            let hour = anchor.addingTimeInterval(TimeInterval(offset) * 3600)
+            return (label: shortClockLabel(for: hour), hour: hour)
+        }
+    }
+
+    /// Points on the x-axis that actually have a score. Hours
+    /// without enough inspirations to score (or with no surviving
+    /// session) drop out — the line gaps over them.
+    private var plotted: [(label: String, score: Double)] {
+        let agg = aggregated
+        return axisHours.compactMap { entry in
+            guard let score = agg[entry.hour] else { return nil }
+            return (label: entry.label, score: score)
+        }
+    }
+
+    /// Night-wide Glasgow score, weighted-averaged from the same
+    /// slices the per-hour line plots. Matches `computeDay`'s
+    /// aggregation, but stays consistent with whatever sessions
+    /// survived `filteringInactiveSessions` (the standalone
+    /// `computeDay` would re-include excluded ones).
+    private var nightAverage: Double? {
+        var weighted: Double = 0
+        var count: Int = 0
+        for entry in slices {
+            weighted += entry.slice.score * Double(entry.slice.inspirationCount)
+            count += entry.slice.inspirationCount
+        }
+        return count > 0 ? weighted / Double(count) : nil
+    }
+
+    /// ±0.1 around min/max of the plotted scores. When only a
+    /// single hour has data the range still spans 0.2 so the
+    /// single point doesn't render at the chart's vertical centre
+    /// with no scale to read it against.
+    private var valueRange: ClosedRange<Double> {
+        let scores = plotted.map(\.score)
+        guard let lo = scores.min(), let hi = scores.max() else {
+            return 0 ... 1
+        }
+        return (lo - 0.1) ... (hi + 0.1)
+    }
+
+    var body: some View {
+        HourlyChartCard(
+            title: "Glasgow Index by Hour",
+            subtitle: "lower is better"
+        ) {
+            Chart {
+                ForEach(plotted, id: \.label) { point in
+                    LineMark(
+                        x: .value("Hour", point.label),
+                        y: .value("Score", point.score)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(library.eventColorPalette.glasgowIndex)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
+                    PointMark(
+                        x: .value("Hour", point.label),
+                        y: .value("Score", point.score)
+                    )
+                    .foregroundStyle(library.eventColorPalette.glasgowIndex)
+                    .symbolSize(28)
+                }
+                if let avg = nightAverage {
+                    RuleMark(y: .value("Night Average", avg))
+                        .foregroundStyle(library.eventColorPalette.glasgowIndex)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                }
+            }
+            .chartXScale(domain: axisHours.map(\.label))
+            .chartYScale(domain: valueRange)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: axisHours.map(\.label)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.glasgowIndex,
+                    label: "Score"
+                )
+                if nightAverage != nil {
+                    HStack(spacing: 4) {
+                        // Tiny dashed swatch mirroring the rule
+                        // style above so the legend reads as one
+                        // glance with the chart.
+                        DashedSwatch(
+                            color: library.eventColorPalette.glasgowIndex
+                        )
+                        Text("Night Avg")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 12pt-wide dashed line swatch used in the Glasgow chart legend
+/// to label the night-average rule. Drawn with the same dash
+/// pattern as the `RuleMark` so the swatch and the line read as
+/// the same visual element.
+private struct DashedSwatch: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            ctx.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+            )
+        }
+        .frame(width: 12, height: 8)
+    }
+}
