@@ -1,10 +1,13 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 @main
 struct SnorecardApp: App {
     @State private var library = Library()
 
+    #if os(macOS)
     /// Disable AppKit's automatic window tabbing. SwiftUI doesn't
     /// expose `NSWindow.tabbingMode`, so without this the View menu
     /// shows Show Tab Bar / Merge All Windows / tab-cycling
@@ -16,8 +19,10 @@ struct SnorecardApp: App {
     init() {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
+    #endif
 
     var body: some Scene {
+        #if os(macOS)
         WindowGroup {
             ContentView()
                 .environment(library)
@@ -90,8 +95,19 @@ struct SnorecardApp: App {
                 .frame(width: 420, height: 620)
         }
         .windowResizability(.contentSize)
+        #else
+        WindowGroup {
+            ContentView()
+                .environment(library)
+                .task {
+                    AppIconController.applyStoredOnLaunch()
+                    await library.loadLastOpenedIfPossible()
+                }
+        }
+        #endif
     }
 
+    #if os(macOS)
     /// `CommandGroup(replacing: .appInfo)` body — routes the default
     /// Snorecard ▸ About Snorecard menu item to our SwiftUI About
     /// window via `openWindow(id:)` instead of the AppKit-supplied
@@ -260,4 +276,5 @@ struct SnorecardApp: App {
         }
         return "Machine \(folder.serial)"
     }
+    #endif
 }
