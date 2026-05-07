@@ -16,7 +16,8 @@ asking:
   SwiftUI equivalent. macOS intentionally has no picker; the
   controller's `apply` / `applyStoredOnLaunch` entry points are
   no-ops there so callers can invoke them unconditionally.
-- `Snorecard-macOS/SnorecardApp.swift` `init()` — sets
+- `Snorecard/SnorecardApp.swift` `init()` (inside the
+  `#if os(macOS)` block) — sets
   `NSWindow.allowsAutomaticWindowTabbing = false` to strip the
   no-op Show Tab Bar / Merge All Windows menu items. SwiftUI
   doesn't expose `NSWindow.tabbingMode`.
