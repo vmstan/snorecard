@@ -65,14 +65,7 @@ struct MetricExplainSheet: View {
     }
 
     private var placeholder: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating)
-            Text("Preparing an explanation…")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
+        AIWorkingRow(label: "Preparing an explanation…")
     }
 
     private func load() async {

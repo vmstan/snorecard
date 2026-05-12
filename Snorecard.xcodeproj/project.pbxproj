@@ -10,6 +10,8 @@
 		01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBFD3B8BFE37D12FFE94112 /* CardSource.swift */; };
 		02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */; };
 		02BBE2E9B36662C907CCFB42 /* JournalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004A5EF5107705F409DC3089 /* JournalEditor.swift */; };
+		7F1A2B3C4D5E6F708192A3B5 /* IssueCallout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A2B3C4D5E6F708192A3B4 /* IssueCallout.swift */; };
+		8E2B3C4D5E6F708192A3B4C6 /* AIWorkingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2B3C4D5E6F708192A3B4C5 /* AIWorkingRow.swift */; };
 		0E244EDF4E0543DA8B838869 /* TrendNarrativeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA139BDBDFF7D621A0CAFE0 /* TrendNarrativeCard.swift */; };
 		14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9860C55137A33E1A1B76FAE8 /* DayDetailView.swift */; };
 		18CF72984BFE0EB49DA214A2 /* SessionTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */; };
@@ -60,6 +62,8 @@
 
 /* Begin PBXFileReference section */
 		004A5EF5107705F409DC3089 /* JournalEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalEditor.swift; sourceTree = "<group>"; };
+		7F1A2B3C4D5E6F708192A3B4 /* IssueCallout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueCallout.swift; sourceTree = "<group>"; };
+		8E2B3C4D5E6F708192A3B4C5 /* AIWorkingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIWorkingRow.swift; sourceTree = "<group>"; };
 		0B6AAABBE89C89D502593E1D /* Snorecard-Joey.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = "Snorecard-Joey.icon"; sourceTree = "<group>"; };
 		0BB845B37738C83DE8A5B6FF /* WaveformSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformSection.swift; sourceTree = "<group>"; };
 		0F85425A6C4E977C75813A1E /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
@@ -191,6 +195,7 @@
 				A5C4CFF409225667AF721332 /* AboutView.swift */,
 				49BE9F94F371D67AB0D01F05 /* AdvancedChartingView.swift */,
 				755EFCFE1B1750A9ABE30406 /* AHIHourlyChart.swift */,
+				8E2B3C4D5E6F708192A3B4C5 /* AIWorkingRow.swift */,
 				54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */,
 				FC96C0193CB0E499477BA458 /* BulkApplyMaskView.swift */,
 				A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */,
@@ -206,6 +211,7 @@
 				ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */,
 				2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */,
 				29A1AFFB01CBC4D6E373A79A /* InspectorPaneHeader.swift */,
+				7F1A2B3C4D5E6F708192A3B4 /* IssueCallout.swift */,
 				004A5EF5107705F409DC3089 /* JournalEditor.swift */,
 				0F85425A6C4E977C75813A1E /* LoadingView.swift */,
 				189EADA02589E6F39E64A455 /* MaskEditorView.swift */,
@@ -310,6 +316,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A654618BFC0E167BFA4B8FF /* AHIHourlyChart.swift in Sources */,
+				8E2B3C4D5E6F708192A3B4C6 /* AIWorkingRow.swift in Sources */,
 				29D5F932F4496B7CE32E5EB6 /* AboutView.swift in Sources */,
 				1F2B83D1E38CCEB684446BB2 /* AdvancedChartingView.swift in Sources */,
 				A7972D2A579AB154AC2DB833 /* AppIconController.swift in Sources */,
@@ -329,6 +336,7 @@
 				1C39D56DC8F1FA32A258072F /* FlowLayout.swift in Sources */,
 				02123F1CF119C917CD9D037E /* HourlySignalCharts.swift in Sources */,
 				B958BA5F93D5A0546E7C1697 /* InspectorPaneHeader.swift in Sources */,
+				7F1A2B3C4D5E6F708192A3B5 /* IssueCallout.swift in Sources */,
 				02BBE2E9B36662C907CCFB42 /* JournalEditor.swift in Sources */,
 				D88A174919214544AD7A4BB6 /* Library.swift in Sources */,
 				27F226045AFF76FE9C27F007 /* LoadingView.swift in Sources */,

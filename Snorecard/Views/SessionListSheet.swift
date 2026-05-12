@@ -70,9 +70,20 @@ struct SessionListSheet: View {
 
             switch loadState {
             case .loading:
-                ProgressView("Reading sessions…")
-                    .controlSize(.regular)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Same `IssueCallout` chrome the day-detail loading
+                // placeholder uses, so the two reading states read
+                // as one set. `minHeight: 200` keeps it from
+                // dwarfing the inspector header on macOS where the
+                // pane is narrower than the day view.
+                IssueCallout(
+                    icon: "clock",
+                    iconTint: AnyShapeStyle(.tint),
+                    pulsing: true,
+                    title: "Reading sessions…",
+                    showsProgress: true,
+                    minHeight: 200
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .empty:
                 ContentUnavailableView(
                     "No Sessions",

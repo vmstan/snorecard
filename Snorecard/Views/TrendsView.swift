@@ -1197,10 +1197,22 @@ struct TrendsView: View {
         return dates
     }
 
+    /// Lightweight "this chart has nothing to plot" affordance —
+    /// small tertiary glyph above a caption, sized to fit inside the
+    /// chart frame. Deliberately *not* the full `IssueCallout` hero
+    /// surface: a 260-pt centered placeholder would dwarf the chart
+    /// card it lives inside.
     private func emptyPlaceholder(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 120)
+        VStack(spacing: 8) {
+            Image(systemName: "chart.dots.scatter")
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
     }
 
     // MARK: - Helpers

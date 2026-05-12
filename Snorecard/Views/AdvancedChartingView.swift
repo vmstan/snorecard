@@ -124,16 +124,16 @@ struct AdvancedChartingView: View {
                 Text(loadError)
             }
         } else {
-            // Same loading affordance as `DayDetailView`'s
-            // placeholder so the two surfaces read as one set.
-            VStack(spacing: 16) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.tint)
-                    .symbolEffect(.pulse, options: .repeating)
-                Text("Decoding sessions…")
-                    .font(.headline)
-            }
+            // Share `DayDetailView`'s loading placeholder via
+            // `IssueCallout` so the two surfaces read as one set —
+            // same glyph, headline, pulse, spinner.
+            IssueCallout(
+                icon: "waveform.path.ecg",
+                iconTint: AnyShapeStyle(.tint),
+                pulsing: true,
+                title: "Decoding sessions…",
+                showsProgress: true
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(40)
         }
