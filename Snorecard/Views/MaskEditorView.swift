@@ -114,6 +114,7 @@ struct MaskEditorView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle(isEditing ? "Edit Mask" : "Add Mask")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

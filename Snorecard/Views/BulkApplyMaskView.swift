@@ -77,9 +77,18 @@ struct BulkApplyMaskView: View {
             .padding(.vertical, 14)
         }
         .onAppear(perform: syncMaskSelection)
-        .alert(item: $confirmation) { plan in
-            confirmationAlert(for: plan)
-        }
+        .alert(
+            "Apply mask to existing sessions?",
+            isPresented: confirmationIsPresented,
+            presenting: confirmation,
+            actions: { plan in
+                Button("Apply") { runApply(plan: plan) }
+                Button("Cancel", role: .cancel) {}
+            },
+            message: { plan in
+                Text(message(for: plan))
+            }
+        )
     }
     #endif
 
@@ -88,6 +97,7 @@ struct BulkApplyMaskView: View {
     private var iosBody: some View {
         Form { detailsSection }
             .formStyle(.grouped)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Apply to Existing Sessions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,11 +107,33 @@ struct BulkApplyMaskView: View {
                 }
             }
             .onAppear(perform: syncMaskSelection)
-            .alert(item: $confirmation) { plan in
-                confirmationAlert(for: plan)
-            }
+            .alert(
+                "Apply mask to existing sessions?",
+                isPresented: confirmationIsPresented,
+                presenting: confirmation,
+                actions: { plan in
+                    Button("Apply") { runApply(plan: plan) }
+                    Button("Cancel", role: .cancel) {}
+                },
+                message: { plan in
+                    Text(message(for: plan))
+                }
+            )
     }
     #endif
+
+    /// Bridges `confirmation: BulkApplyPlan?` into a `Bool` binding
+    /// for the modern `.alert(_:isPresented:presenting:…)` API.
+    /// Dismissal clears the plan so the alert can re-present cleanly
+    /// for a follow-up apply.
+    private var confirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { confirmation != nil },
+            set: { presented in
+                if !presented { confirmation = nil }
+            }
+        )
+    }
 
     @ViewBuilder
     private var detailsSection: some View {
@@ -139,17 +171,6 @@ struct BulkApplyMaskView: View {
         } footer: {
             Text("Overwrites any existing per-session mask in the chosen scope, including sessions you've manually labelled.")
         }
-    }
-
-    private func confirmationAlert(for plan: BulkApplyPlan) -> Alert {
-        Alert(
-            title: Text("Apply mask to existing sessions?"),
-            message: Text(message(for: plan)),
-            primaryButton: .default(Text("Apply"), action: {
-                runApply(plan: plan)
-            }),
-            secondaryButton: .cancel()
-        )
     }
 
     private func message(for plan: BulkApplyPlan) -> String {

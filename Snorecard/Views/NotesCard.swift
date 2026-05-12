@@ -173,7 +173,7 @@ struct NotesCard: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 ForEach(1...5, id: \.self) { value in
                     Button {
                         // Tapping the same value a second time
@@ -186,12 +186,14 @@ struct NotesCard: View {
                         }
                     } label: {
                         Image(systemName: value <= (score ?? 0) ? "star.fill" : "star")
-                            .font(.title3)
-                            .foregroundStyle(value <= (score ?? 0) ? Color.yellow : Color.secondary)
+                            .font(.title2)
+                            .foregroundStyle(value <= (score ?? 0) ? Color.yellow : Color.secondary.opacity(0.6))
+                            .frame(minWidth: 36, minHeight: 36)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(value) of 5")
+                    .accessibilityAddTraits(value == score ? [.isSelected, .isButton] : .isButton)
                 }
             }
         }

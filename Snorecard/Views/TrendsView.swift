@@ -289,6 +289,28 @@ struct TrendsView: View {
             .pickerStyle(.segmented)
 
             if rangeKind == .custom {
+                // iOS stacks the From/To pickers vertically so the
+                // compact-style date controls don't have to share an
+                // iPhone-width row with their labels. macOS keeps the
+                // horizontal layout because the row is wider and the
+                // stepper-style date field reads naturally inline.
+                #if os(iOS)
+                VStack(alignment: .leading, spacing: 8) {
+                    DatePicker(
+                        "From",
+                        selection: $customStart,
+                        in: ...customEnd,
+                        displayedComponents: .date
+                    )
+                    DatePicker(
+                        "To",
+                        selection: $customEnd,
+                        in: customStart...Date(),
+                        displayedComponents: .date
+                    )
+                }
+                .font(.callout)
+                #else
                 HStack(spacing: 16) {
                     DatePicker(
                         "From",
@@ -304,6 +326,7 @@ struct TrendsView: View {
                     )
                 }
                 .font(.callout)
+                #endif
             }
         }
     }
