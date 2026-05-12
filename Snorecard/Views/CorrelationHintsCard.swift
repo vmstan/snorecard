@@ -90,16 +90,7 @@ struct CorrelationHintsCard: View {
     }
 
     private var placeholderContent: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating)
-            Text("Looking for patterns…")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        AIWorkingRow(label: "Looking for patterns…")
     }
 
     private func load() async {

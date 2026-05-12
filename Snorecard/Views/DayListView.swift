@@ -168,7 +168,15 @@ struct DayListView: View {
 
     @ViewBuilder
     private func row(for day: ResMedDay, isSelected: Bool) -> some View {
-        let hasData = !day.files.isEmpty || day.stats?.hasUsage == true
+        // Tie the row foreground to `hasUsage` rather than file
+        // presence so the two "nothing to show" states render
+        // identically: a day with no recorded waveforms and a day
+        // whose every session has been manually excluded both end up
+        // with `hasUsage == false`. Without this the excluded-all
+        // case left the weekday text in full `.primary` next to a
+        // dimmed `.secondary` calendar tile — a visual mismatch
+        // against the no-waveform case where both are quiet.
+        let hasUsage = day.stats?.hasUsage == true
         let calendarTint: Color = {
             guard let stats = day.stats, stats.hasUsage else { return .secondary }
             // Severity colouring is opt-out via Appearance settings —
@@ -209,7 +217,7 @@ struct DayListView: View {
             disclosureChevron
         }
         .padding(.vertical, 4)
-        .foregroundStyle(hasData ? .primary : .tertiary)
+        .foregroundStyle(hasUsage ? .primary : .tertiary)
         .compactiOSRowInsets()
     }
 

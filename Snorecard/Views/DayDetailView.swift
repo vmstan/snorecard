@@ -61,8 +61,7 @@ struct DayDetailView: View {
                 header
 
                 if let error = loadError {
-                    Text(error)
-                        .foregroundStyle(.red)
+                    waveformErrorPlaceholder(error)
                 } else if loadedWaveform == nil {
                     // Placeholder only while the bundle is still
                     // decoding — once it lands the summary cards,
@@ -274,28 +273,30 @@ struct DayDetailView: View {
     }
     #endif
 
-    /// Replaces the bare `ProgressView` placeholder with a centered
-    /// icon + headline + progress cluster that matches the sidebar
-    /// loading screen's voice.
+    /// Shown while the bundle is still decoding. Pulsing waveform
+    /// glyph + spinner makes the wait feel intentional rather than
+    /// stuck.
     private var waveformLoadingPlaceholder: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating)
-            VStack(spacing: 4) {
-                Text("Analyzing breath waveforms")
-                    .font(.headline)
-                Text(waveformLoadingSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            ProgressView()
-                .controlSize(.small)
-        }
-        .frame(maxWidth: .infinity, minHeight: 260)
-        .padding(.vertical, 20)
+        IssueCallout(
+            icon: "waveform.path.ecg",
+            iconTint: AnyShapeStyle(.tint),
+            pulsing: true,
+            title: "Analyzing breath waveforms",
+            subtitle: waveformLoadingSubtitle,
+            showsProgress: true
+        )
+    }
+
+    /// Shown when the waveform decoder failed (corrupt EDF, IO
+    /// error, etc). Shares the IssueCallout frame with the loading
+    /// state — only the symbol and tint swap.
+    private func waveformErrorPlaceholder(_ message: String) -> some View {
+        IssueCallout(
+            icon: "exclamationmark.triangle.fill",
+            iconTint: AnyShapeStyle(.red),
+            title: "Couldn't load this night",
+            subtitle: message
+        )
     }
 
     private var waveformLoadingSubtitle: String {
@@ -556,10 +557,41 @@ struct DayDetailView: View {
                 }
             }
         } else if !day.files.isEmpty {
-            Text("No summary data available for this day.")
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 12)
+            // Two paths land here: (1) the device recorded files but
+            // no usable summary (e.g. STR.edf hadn't rolled the night
+            // up yet at import time), and (2) the user has manually
+            // excluded every session, zeroing the day's usage. Same
+            // empty surface either way, but the wording owns up to
+            // the user-driven case so the screen doesn't pretend
+            // their machine misbehaved.
+            if allSessionsManuallyExcluded {
+                IssueCallout(
+                    icon: "eye.slash",
+                    iconTint: AnyShapeStyle(.secondary),
+                    title: "All sessions excluded",
+                    subtitle: "You've turned every session for this night off. Re-include one from Therapy Sessions to see this night's totals."
+                )
+            } else {
+                IssueCallout(
+                    icon: "moon.zzz",
+                    iconTint: AnyShapeStyle(.secondary),
+                    title: "No summary data",
+                    subtitle: "This device didn't record a usable summary for this night."
+                )
+            }
         }
+    }
+
+    /// True when this day's BRP session keys are all in the user's
+    /// manual-exclusion set. Distinguishes the "user hid everything"
+    /// case from a genuinely empty night so the header message can
+    /// own up to the cause. Returns false when the day has no BRP
+    /// keys at all, since we can't claim the user excluded what was
+    /// never there.
+    private var allSessionsManuallyExcluded: Bool {
+        let brpKeys = Set(day.files(of: .breath).compactMap(\.sessionKey))
+        guard !brpKeys.isEmpty else { return false }
+        return brpKeys.isSubset(of: library.excludedSessionKeys)
     }
 
     /// Detailed Statistics + Advanced Charting action row. macOS

@@ -85,16 +85,7 @@ struct NightSummaryCard: View {
     }
 
     private var placeholderContent: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating)
-            Text("Writing a summary…")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        AIWorkingRow(label: "Writing a summary…")
     }
 
     private var failedContent: some View {
