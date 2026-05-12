@@ -18,12 +18,31 @@ import SnorecardKit
 struct ProfileTab: View {
     @Environment(Library.self) private var library
 
+    /// Fields that show a numeric keyboard on iOS. Tracked so the
+    /// keyboard accessory Done button can clear focus and dismiss
+    /// the keyboard — `.decimalPad` has no Return key, so there's
+    /// otherwise no way for the user to dismiss without scrolling.
+    private enum NumericField: Hashable {
+        case height, weight, untreatedAHI
+    }
+
+    @FocusState private var focusedNumericField: NumericField?
+
     var body: some View {
         Form {
             personalSection
             diagnosisSection
         }
         .formStyle(.grouped)
+        #if os(iOS)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedNumericField = nil }
+            }
+        }
+        #endif
     }
 
     // MARK: - Personal
@@ -167,6 +186,7 @@ struct ProfileTab: View {
                 .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
+                .focused($focusedNumericField, equals: .height)
                 #endif
             }
         )
@@ -194,6 +214,7 @@ struct ProfileTab: View {
                 .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
+                .focused($focusedNumericField, equals: .weight)
                 #endif
             }
         )
@@ -261,6 +282,7 @@ struct ProfileTab: View {
                 .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
+                .focused($focusedNumericField, equals: .untreatedAHI)
                 #endif
             }
             DatePicker(

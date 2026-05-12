@@ -446,6 +446,12 @@ struct SettingsSheet: View {
             }
         }
         .formStyle(.grouped)
+        #if os(iOS)
+        // Scrolling the form dismisses the device-alias keyboard
+        // interactively — matches the iOS Settings-app convention so
+        // the user doesn't have to hunt for Done after typing.
+        .scrollDismissesKeyboard(.interactively)
+        #endif
     }
 
     /// Mask tab — user-curated catalog of physical masks plus the
