@@ -717,6 +717,18 @@ struct SettingsSheet: View {
                 }
             }
 
+            Toggle(isOn: Binding(
+                get: { library.sidebarHidesEmptyDaysEnabled },
+                set: { library.sidebarHidesEmptyDaysEnabled = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hide Days Without Sessions")
+                    Text("Removes days with no recorded therapy from the sidebar list.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Picker(
                 "Show in Sidebar",
                 selection: Binding(
