@@ -194,11 +194,22 @@ struct DayListView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(day.date, format: .dateTime.weekday(.wide))
                     .font(.body)
-                if let stats = day.stats, stats.hasUsage {
-                    Text(formatUsage(stats.usageHours))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+                    // On no-usage days match the weekday to the
+                    // calendar glyph and "0h 0m" subtitle (both
+                    // .secondary) so the whole row reads at one
+                    // quiet level instead of the .tertiary the row
+                    // would otherwise apply. Usage days inherit the
+                    // row's .primary.
+                    .foregroundStyle(hasUsage ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                // Always show the usage subtitle — a no-usage day
+                // reads "0h 0m" rather than dropping the line, so
+                // every row is the same height and the zero is
+                // explicit instead of implied by a blank. The row's
+                // .tertiary foreground already dims it on no-usage
+                // days.
+                Text(formatUsage(day.stats?.usageHours ?? 0))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             if let stats = day.stats, stats.hasUsage,
@@ -269,7 +280,10 @@ struct DayListView: View {
     /// each month's days sorted newest-first inside.
     private var daysByMonth: [(month: Date, days: [ResMedDay])] {
         let calendar = Calendar.current
-        let groups = Dictionary(grouping: card.days) { day -> Date in
+        let days = library.sidebarHidesEmptyDaysEnabled
+            ? card.days.filter { $0.stats?.hasUsage == true }
+            : card.days
+        let groups = Dictionary(grouping: days) { day -> Date in
             calendar.date(from: calendar.dateComponents([.year, .month], from: day.date))
                 ?? day.date
         }

@@ -281,6 +281,7 @@ final class Library {
     private static let backgroundReloadIntervalKey = "backgroundReloadIntervalMinutes"
     private static let sidebarSeverityColorsKey = "sidebarSeverityColorsEnabled"
     private static let sidebarRowMetricKey = "sidebarRowMetric"
+    private static let sidebarHidesEmptyDaysKey = "sidebarHidesEmptyDaysEnabled"
     private static let eventColorPaletteKey = "eventColorPalette"
     private static let centralEventLabelKey = "centralEventLabel"
     private static let showsCentralEventsKey = "showsCentralEvents"
@@ -351,6 +352,23 @@ final class Library {
             UserDefaults.standard.set(
                 sidebarRowMetric.rawValue,
                 forKey: Self.sidebarRowMetricKey
+            )
+        }
+    }
+
+    /// Whether the sidebar drops days with no recorded usage
+    /// (`stats?.hasUsage == false` — no waveforms, or every session
+    /// manually excluded) instead of listing them as dimmed
+    /// placeholder rows. Defaults off so the list still shows every
+    /// day on the card unless the user opts in. Local-only preference
+    /// — a viewing taste, not therapy data, so there's no reason to
+    /// sync it across devices.
+    var sidebarHidesEmptyDaysEnabled: Bool {
+        didSet {
+            guard oldValue != sidebarHidesEmptyDaysEnabled else { return }
+            UserDefaults.standard.set(
+                sidebarHidesEmptyDaysEnabled,
+                forKey: Self.sidebarHidesEmptyDaysKey
             )
         }
     }
@@ -493,6 +511,14 @@ final class Library {
             self.sidebarRowMetric = metric
         } else {
             self.sidebarRowMetric = .ahi
+        }
+
+        if let storedHide = UserDefaults.standard.object(
+            forKey: Self.sidebarHidesEmptyDaysKey
+        ) as? Bool {
+            self.sidebarHidesEmptyDaysEnabled = storedHide
+        } else {
+            self.sidebarHidesEmptyDaysEnabled = false
         }
 
         // Legacy raw values ("default", "christopher", "chris") fall
