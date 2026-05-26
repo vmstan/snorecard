@@ -37,7 +37,14 @@ public enum DailyStatsCache {
 
         /// Bump this whenever the aggregate's per-day output changes
         /// in a way that should invalidate previously-saved caches.
-        public static let currentSchemaVersion: Int = 7
+        /// v9 — NED Analysis added `reraIndex` and
+        /// `nedAnalysisBreakdown` to the BRP pass; v7 caches need to
+        /// re-aggregate so these populate. v8 was the first
+        /// NED-aware build, but it shipped with a merge bug that
+        /// dropped both fields back to nil before they hit the
+        /// sidecar — v9 forces another re-aggregate to repopulate
+        /// them correctly.
+        public static let currentSchemaVersion: Int = 9
 
         public init(files: [FileEntry], schemaVersion: Int = Fingerprint.currentSchemaVersion) {
             self.files = files

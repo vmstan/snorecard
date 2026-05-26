@@ -384,6 +384,12 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 3.0,
                 description: "The Glasgow Index is a breath-quality score derived from the flow-rate signal. Each inspiration is rated against nine characteristics associated with flow limitation — each scoring 0 to 1 — so the overall nightly index can in theory range from 0 to 9. This index is informational only and is not a medical diagnostic tool."
             )
+        case .reraIndex:
+            return MetricExplainInput.Norms(
+                goodMax: 5.0,
+                elevatedMax: 15.0,
+                description: "NED — Negative Effort Dependence — is a per-breath shape score derived from the inspiratory flow waveform, comparing the breath's peak flow to its mid-inspiratory flow. Snorecard scans the per-breath NED series for sequences of ≥3 progressively flow-limited breaths that close out with a recovery breath; each sequence counts as one RERA (Respiratory-Effort-Related Arousal) and the headline value is events per hour. Below 5/hr is the controlled range, 5–15/hr is mild, above 15/hr typically warrants attention — these thresholds mirror AHI banding because RERA contributes to the same RDI tradition. Informational only — not a medical diagnostic tool."
+            )
         case .epap95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
@@ -524,6 +530,7 @@ public enum IntelligenceInputBuilder {
         case .ahi:
             return stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
         case .glasgowIndex:     return stats.glasgowIndex
+        case .reraIndex:        return stats.reraIndex
         // `DayDetailView`'s EPAP card sources `epap95` (target
         // EPAP), not `pressure95` (measured mask P95). Feed the
         // explain sheet the same value so the number at the top
@@ -643,6 +650,7 @@ public enum IntelligenceInputBuilder {
         switch metric {
         case .ahi:              return "events per hour"
         case .glasgowIndex:     return "score"
+        case .reraIndex:        return "events per hour"
         case .epap95:           return "cmH2O"
         case .ipap95:           return "cmH2O"
         case .maskPressureMedian: return "cmH2O"

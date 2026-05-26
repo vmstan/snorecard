@@ -7,6 +7,7 @@ import FoundationModels
 public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable, Identifiable {
     case ahi
     case glasgowIndex
+    case reraIndex
     case epap95
     case ipap95
     case maskPressureMedian
@@ -162,6 +163,10 @@ extension MetricExplainInput {
             if v <= 2.0 { return "in the good band" }
             if v <= 3.0 { return "in the elevated band" }
             return "above the elevated band"
+        case .reraIndex:
+            if v <= 5 { return "in the controlled range" }
+            if v <= 15 { return "in the mild range" }
+            return "above the mild range"
         case .leak95:
             if v <= 5 { return "well sealed" }
             if v <= 24 { return "below the large-leak threshold" }
@@ -231,6 +236,7 @@ extension MetricExplainInput {
         switch metric {
         case .ahi:              noiseFloor = 0.5
         case .glasgowIndex:     noiseFloor = 0.15
+        case .reraIndex:        noiseFloor = 0.5
         case .usage:            noiseFloor = 0.4
         case .leak95:           noiseFloor = 3
         case .largeLeak:        noiseFloor = 0.5
@@ -285,6 +291,7 @@ extension ExplainableMetric {
         switch self {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
+        case .reraIndex:        return "NED Analysis (RERA events per hour)"
         case .epap95:           return "EPAP (95th percentile target)"
         case .ipap95:           return "IPAP (95th percentile target)"
         case .maskPressureMedian: return "Mask pressure (median during usage)"

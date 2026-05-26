@@ -744,6 +744,148 @@ struct GlasgowHourlyChart: View {
     }
 }
 
+/// Per-hour RERA event bars. Counts events bucketed by their
+/// recovery breath's wall-clock hour, divides by the hour's
+/// BRP-active seconds so partial hours at the start / end of the
+/// night don't read as artificially low, and overlays the night-
+/// wide `reraIndex` as a dashed `RuleMark` so the hourly bars are
+/// easy to compare against the headline number on the StatCard
+/// above.
+struct RERAHourlyChart: View {
+    @Environment(Library.self) private var library
+
+    let buckets: [WaveformBundle.RERAHourBucket]
+    let dayStart: Date
+    let totalDuration: TimeInterval
+
+    /// Aggregate buckets into one events-per-hour value per
+    /// wall-clock hour. Hours with no buckets aren't surfaced (the
+    /// chart leaves a gap).
+    private var aggregated: [Date: Double] {
+        var bucket: [Date: (events: Int, seconds: Double)] = [:]
+        for entry in buckets {
+            var current = bucket[entry.hourStart] ?? (0, 0)
+            current.events += entry.eventCount
+            current.seconds += entry.hourSeconds
+            bucket[entry.hourStart] = current
+        }
+        var out: [Date: Double] = [:]
+        out.reserveCapacity(bucket.count)
+        for (hour, value) in bucket where value.seconds > 0 {
+            out[hour] = Double(value.events) / (value.seconds / 3600.0)
+        }
+        return out
+    }
+
+    /// Same hour-aligned x-axis every other hourly chart uses, so a
+    /// quick scan down the day-view column lines up exactly.
+    private var axisHours: [(label: String, hour: Date)] {
+        let calendar = Calendar.current
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
+        guard lastHour >= 0 else { return [] }
+        return (0...lastHour).map { offset in
+            let hour = anchor.addingTimeInterval(TimeInterval(offset) * 3600)
+            return (label: shortClockLabel(for: hour), hour: hour)
+        }
+    }
+
+    private var plotted: [(label: String, rate: Double)] {
+        let agg = aggregated
+        return axisHours.compactMap { entry in
+            guard let rate = agg[entry.hour] else { return nil }
+            return (label: entry.label, rate: rate)
+        }
+    }
+
+    /// Night-wide events-per-hour, derived from the same buckets the
+    /// per-hour bars read. Stays consistent with whatever sessions
+    /// survived `filteringInactiveSessions`.
+    private var nightAverage: Double? {
+        let totalEvents = buckets.reduce(0) { $0 + $1.eventCount }
+        let totalSeconds = buckets.reduce(0.0) { $0 + $1.hourSeconds }
+        guard totalSeconds > 0 else { return nil }
+        return Double(totalEvents) / (totalSeconds / 3600.0)
+    }
+
+    /// 0 always anchors the bottom so the bar heights stay
+    /// comparable across nights. The top pads a touch above the
+    /// busiest hour so the tallest bar doesn't kiss the ceiling.
+    private var valueRange: ClosedRange<Double> {
+        let rates = plotted.map(\.rate)
+        guard let hi = rates.max() else { return 0 ... 1 }
+        return 0 ... max(1, hi * 1.15)
+    }
+
+    var body: some View {
+        HourlyChartCard(
+            title: "RERA Events by Hour",
+            subtitle: "events per hour"
+        ) {
+            Chart {
+                ForEach(plotted, id: \.label) { point in
+                    BarMark(
+                        x: .value("Hour", point.label),
+                        y: .value("Events/hr", point.rate)
+                    )
+                    .foregroundStyle(library.eventColorPalette.reraIndex)
+                }
+                if let avg = nightAverage {
+                    RuleMark(y: .value("Night Average", avg))
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                }
+            }
+            .chartXScale(domain: axisHours.map(\.label))
+            .chartYScale(domain: valueRange)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...1)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: axisHours.map(\.label)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.reraIndex,
+                    label: "Events/hr"
+                )
+                if nightAverage != nil {
+                    HStack(spacing: 4) {
+                        DashedSwatch(
+                            color: library.eventColorPalette.reraIndex
+                        )
+                        Text("Night Avg")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// 12pt-wide dashed line swatch used in the Glasgow chart legend
 /// to label the night-average rule. Drawn with the same dash
 /// pattern as the `RuleMark` so the swatch and the line read as

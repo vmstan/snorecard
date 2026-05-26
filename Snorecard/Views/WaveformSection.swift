@@ -42,6 +42,14 @@ struct WaveformBundle: Sendable {
     /// matching the night-wide aggregation `GlasgowIndex.computeDay`
     /// uses.
     let glasgowHourSlices: [GlasgowSessionHour]
+    /// Per-(session, wall-clock-hour) NED Analysis slices. Same
+    /// filtering / re-aggregation story as `glasgowHourSlices`.
+    let nedHourSlices: [NEDSessionHour]
+    /// Per-(session, wall-clock-hour) RERA event tallies. Carries
+    /// the hour's BRP-active seconds so the chart can normalise
+    /// partial hours (the first / last hour of a session rarely
+    /// cover a full 60 minutes).
+    let reraHourBuckets: [RERAHourBucket]
 
     var isEmpty: Bool { sessions.isEmpty }
 
@@ -51,6 +59,23 @@ struct WaveformBundle: Sendable {
     struct GlasgowSessionHour: Sendable, Hashable {
         let sessionID: UUID
         let slice: GlasgowIndex.HourSlice
+    }
+
+    /// NED Analysis counterpart of `GlasgowSessionHour`.
+    struct NEDSessionHour: Sendable, Hashable {
+        let sessionID: UUID
+        let slice: NEDAnalysis.HourSlice
+    }
+
+    /// One hour's RERA event tally for a single session. The chart
+    /// layer sums `eventCount` across sessions for the same
+    /// `hourStart` and divides by `hourSeconds / 3600` to get
+    /// events / hour.
+    struct RERAHourBucket: Sendable, Hashable {
+        let sessionID: UUID
+        let hourStart: Date
+        let eventCount: Int
+        let hourSeconds: Double
     }
 
     /// Return a copy with every session in `inactiveSessionIDs` (and
@@ -91,7 +116,9 @@ struct WaveformBundle: Sendable {
                 flatIPAP: [],
                 flatEPAP: [],
                 signalSummary: signalSummary,
-                glasgowHourSlices: []
+                glasgowHourSlices: [],
+                nedHourSlices: [],
+                reraHourBuckets: []
             )
         }
         // Δ is how much later the new "day start" is vs. the
@@ -167,6 +194,12 @@ struct WaveformBundle: Sendable {
             // re-aggregates the survivors into per-hour scores.
             glasgowHourSlices: glasgowHourSlices.filter {
                 !inactiveSessionIDs.contains($0.sessionID)
+            },
+            nedHourSlices: nedHourSlices.filter {
+                !inactiveSessionIDs.contains($0.sessionID)
+            },
+            reraHourBuckets: reraHourBuckets.filter {
+                !inactiveSessionIDs.contains($0.sessionID)
             }
         )
     }
@@ -224,7 +257,9 @@ struct WaveformBundle: Sendable {
                 flatIPAP: [],
                 flatEPAP: [],
                 signalSummary: [],
-                glasgowHourSlices: []
+                glasgowHourSlices: [],
+                nedHourSlices: [],
+                reraHourBuckets: []
             )
         }
 
@@ -260,6 +295,10 @@ struct WaveformBundle: Sendable {
         // BRP parse — flow samples are already in L/min here, so
         // no second decode is needed.
         var glasgowSlices: [GlasgowSessionHour] = []
+        // Same idea for the NED Analysis hourly slices + the RERA
+        // event buckets they imply.
+        var nedSlices: [NEDSessionHour] = []
+        var reraBuckets: [RERAHourBucket] = []
 
         for p in parsed {
             let file = p.file
@@ -342,6 +381,25 @@ struct WaveformBundle: Sendable {
                 sessionStart: sessionStart
             ) {
                 glasgowSlices.append(GlasgowSessionHour(sessionID: sessionID, slice: slice))
+            }
+            for slice in NEDAnalysis.computeHourly(
+                flowLPerMin: flowSamples,
+                sampleRate: flowRate,
+                sessionStart: sessionStart
+            ) {
+                nedSlices.append(NEDSessionHour(sessionID: sessionID, slice: slice))
+                // Only carry buckets the chart cares about. Hours with
+                // no events stay empty so the bar chart leaves a gap
+                // rather than drawing a zero bar that looks like a
+                // missing reading.
+                if slice.reraEvents > 0 {
+                    reraBuckets.append(RERAHourBucket(
+                        sessionID: sessionID,
+                        hourStart: slice.hourStart,
+                        eventCount: slice.reraEvents,
+                        hourSeconds: slice.hourSeconds
+                    ))
+                }
             }
 
             segments.append(
@@ -428,7 +486,9 @@ struct WaveformBundle: Sendable {
             flatIPAP: flatten(\.ipap),
             flatEPAP: flatten(\.epap),
             signalSummary: summary,
-            glasgowHourSlices: glasgowSlices
+            glasgowHourSlices: glasgowSlices,
+            nedHourSlices: nedSlices,
+            reraHourBuckets: reraBuckets
         )
     }
 

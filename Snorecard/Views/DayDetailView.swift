@@ -311,6 +311,9 @@ struct DayDetailView: View {
     private var header: some View {
         if let stats = day.stats, stats.hasUsage {
             VStack(alignment: .leading, spacing: 12) {
+                if let rera = stats.reraIndex {
+                    reraChip(rera)
+                }
                 EventDonutView(stats: stats, onTap: explainTap(.ahi))
 
                 LazyVGrid(
@@ -418,6 +421,19 @@ struct DayDetailView: View {
                             onTap: explainTap(.glasgowIndex)
                         )
                     }
+                    if let rera = stats.reraIndex {
+                        let contributor = stats.nedAnalysisBreakdown
+                            .flatMap(Self.nedTopContributor)
+                        StatCard(
+                            label: "NED Analysis",
+                            value: String(format: "%.1f /hr", rera),
+                            subtitle: contributor.map {
+                                String(format: "%.0f%% %@", $0.percent, $0.label)
+                            },
+                            tint: reraColor(rera),
+                            onTap: explainTap(.reraIndex)
+                        )
+                    }
                     if let tv = stats.tidalVolume50 {
                         let mL = tv * 1000
                         StatCard(
@@ -502,6 +518,18 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
+                // RERA events by hour. Sits next to the Glasgow chart
+                // so the two breath-quality views read together.
+                // Empty buckets surface no chart (rather than zero
+                // bars) — keeps quiet nights from cluttering the
+                // column.
+                if let bundle = displayedBundle, !bundle.reraHourBuckets.isEmpty {
+                    RERAHourlyChart(
+                        buckets: bundle.reraHourBuckets,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
                 // Sleep-by-hour stack with CPAP usage overlay. Only
                 // renders when both a watch summary and the parsed
                 // waveform bundle are present — needs the bundle's
@@ -552,6 +580,13 @@ struct DayDetailView: View {
                 // and hourly charts. macOS lays them out side-by-
                 // side because there's room; iOS stacks them to
                 // keep the labels readable on narrow screens.
+                // Inline "How it works" panel for NED Analysis —
+                // shown only when the night actually surfaces a
+                // RERA index, so quiet AS11-only days don't get
+                // educated about a card they never see.
+                if let stats = day.stats, stats.reraIndex != nil {
+                    NEDExplainerCard()
+                }
                 if loadedWaveform != nil {
                     summaryActionButtons
                 }
@@ -668,6 +703,7 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
+        case .reraIndex:        return "NED Analysis"
         case .epap95:           return "EPAP (95%)"
         case .ipap95:           return "IPAP (95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -695,6 +731,8 @@ struct DayDetailView: View {
         case .ahi:          return String(format: "%.2f", library.displayedAHI(stats))
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
+        case .reraIndex:
+            return stats.reraIndex.map { String(format: "%.1f /hr", $0) } ?? "—"
         case .epap95:
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .ipap95:
@@ -763,6 +801,28 @@ struct DayDetailView: View {
         guard let top = fields.max(by: { $0.1 < $1.1 }), top.1 > 0 else {
             return nil
         }
+        return (top.0, (top.1 / total) * 100)
+    }
+
+    /// Dominant NED Analysis contributor — the largest of "flat
+    /// breaths" (FI ≥ 0.85), "M-shaped" (mid-inspiratory dip), and
+    /// "high NED" (the 95th-percentile NED, clamped into 0–1 so it
+    /// compares cleanly against the two fractions). Returned as a
+    /// share-of-sum so the StatCard subtitle reads as e.g.
+    /// "62% flat breaths". `nil` when no contributor has any signal.
+    static func nedTopContributor(
+        _ breakdown: NEDAnalysis.Breakdown
+    ) -> (label: String, percent: Double)? {
+        let fields: [(String, Double)] = [
+            ("flat breaths", breakdown.flatBreathFraction),
+            ("M-shaped",     breakdown.mShapeFraction),
+            ("high NED",     min(1.0, breakdown.ned95))
+        ]
+        let total = fields.map(\.1).reduce(0, +)
+        guard total > 0,
+              let top = fields.max(by: { $0.1 < $1.1 }),
+              top.1 > 0
+        else { return nil }
         return (top.0, (top.1 / total) * 100)
     }
 
@@ -853,6 +913,58 @@ struct DayDetailView: View {
         case ..<2.0: return .severityGood
         case ..<3.0: return library.eventColorPalette.severityLow
         default:     return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// RERA events / hour palette — mirrors AHI bands because RERA
+    /// rolls into the same RDI (= AHI + RERA) scoring tradition:
+    /// ≤ 5/hr controlled, 5–15/hr mild, ≥ 15/hr elevated. The
+    /// thresholds aren't clinical RERA cutoffs — none are
+    /// standardised — but they keep this card visually consistent
+    /// with the AHI card right above it.
+    private func reraColor(_ value: Double) -> Color {
+        switch value {
+        case ..<5:  return .severityGood
+        case ..<15: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// Compact nightly-RERA chip that sits above the AHI hero. Keeps
+    /// the headline NED number in view at a glance even when the
+    /// scroll position is at the top and the StatCard hasn't entered
+    /// the viewport yet. Tap surfaces the same `MetricExplainSheet`
+    /// the StatCard does, so the affordances stay aligned.
+    @ViewBuilder
+    private func reraChip(_ value: Double) -> some View {
+        let label = Label {
+            HStack(spacing: 6) {
+                Text("NED")
+                    .font(.caption.weight(.semibold))
+                Text(String(format: "%.1f /hr", value))
+                    .font(.caption.monospacedDigit().weight(.semibold))
+            }
+        } icon: {
+            Image(systemName: "waveform.path")
+                .font(.caption.weight(.semibold))
+        }
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .foregroundStyle(reraColor(value))
+        .background(reraColor(value).opacity(0.18), in: Capsule())
+
+        if let action = explainTap(.reraIndex) {
+            Button(action: action) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    Text("NED \(String(format: "%.1f", value)) events per hour. Tap for details.")
+                )
+        } else {
+            label
+                .accessibilityLabel(
+                    Text("NED \(String(format: "%.1f", value)) events per hour")
+                )
         }
     }
 

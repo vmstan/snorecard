@@ -450,6 +450,7 @@ public enum SDCardImporter {
                 timeInApneaSeconds: merged.timeInApneaSeconds,
                 largeLeakSeconds: merged.largeLeakSeconds,
                 glasgowIndex: merged.glasgowIndex,
+                reraIndex: merged.reraIndex,
                 flowLimit95: merged.flowLimit95,
                 minuteVentilation50: merged.minuteVentilation50,
                 respirationRate50: merged.respirationRate50,
@@ -457,15 +458,18 @@ public enum SDCardImporter {
                 modeCode: str.modeCode,
                 productName: merged.productName
             )
-            // Rebuilt struct above dropped back to the `snore95`
-            // default — carry the PLD-derived value forward. Same
-            // goes for the Glasgow breakdown and the snore band
-            // seconds (nil defaults on the synthesized init).
+            // The synthesised memberwise init only sets the fields
+            // we name; any `internal(set) var = nil` field we
+            // skipped above drops back to its nil default. Carry
+            // every such field forward by hand here. Anything new
+            // added to `DailyStatistics` with a default belongs in
+            // this list too.
             merged.snore95 = aggregate.snore95
             merged.snoreModerateSeconds = aggregate.snoreModerateSeconds
             merged.centralApneaTimeSeconds = aggregate.centralApneaTimeSeconds
             merged.snoreLoudSeconds = aggregate.snoreLoudSeconds
             merged.glasgowBreakdown = aggregate.glasgowBreakdown
+            merged.nedAnalysisBreakdown = aggregate.nedAnalysisBreakdown
         }
         // Carry the STR-derived settings block through. Field-level
         // merge (rather than wholesale swap) so a newer STR record

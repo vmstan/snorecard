@@ -8,6 +8,11 @@ import Foundation
 ///
 /// Algorithm by DaveSkvn — https://github.com/DaveSkvn/GlasgowIndex
 /// Original code licensed under GPLv3.
+///
+/// The per-breath detection pass — windowed minima sweep + breath
+/// segmentation + shape metrics — lives in `BreathDetector` so
+/// other detectors (e.g. `NEDAnalysis`) can re-use it without
+/// re-decoding the BRP file.
 public enum GlasgowIndex {
 
     /// Per-sub-index fractions that sum to the overall Glasgow
@@ -58,17 +63,15 @@ public enum GlasgowIndex {
     /// Returns the score, the 9 sub-index breakdown, and the number
     /// of inspirations analysed, or `nil` when the data is too short.
     public static func compute(flowSamples: [Double]) -> (score: Double, breakdown: Breakdown, inspirationCount: Int)? {
-        guard flowSamples.count > minWindow * 4 else { return nil }
+        guard let raw = BreathDetector.inspirations(flowLPerMin: flowSamples) else { return nil }
+        guard raw.count >= ampWindowLen + 1 else { return nil }
 
-        var samples = flowSamples.enumerated().map {
-            Sample(index: $0.offset, y: $0.element)
-        }
-        markMins(&samples)
-
-        var inspirations = findInspirations(samples)
-        guard inspirations.count >= ampWindowLen + 1 else { return nil }
-
-        calcCycleBasedIndicators(samples: samples, inspirations: &inspirations)
+        // Project the shared detection result into Glasgow's
+        // internal record, which adds the cycle / amplitude scratch
+        // fields the next two passes populate.
+        var inspirations = raw.map { Inspiration(detected: $0) }
+        let minIndices = BreathDetector.expirationMinima(flowLPerMin: flowSamples)
+        calcCycleBasedIndicators(samples: flowSamples, minIndices: minIndices, inspirations: &inspirations)
         calcAmplitudeVariance(inspirations: &inspirations)
 
         let breakdown = subIndices(inspirations: inspirations)
@@ -211,191 +214,51 @@ public enum GlasgowIndex {
         }
     }
 
-    // MARK: - Constants (matching the JS reference)
+    // MARK: - Constants (Glasgow-specific)
 
-    private static let minWindow = 25            // 1 s at 25 Hz
-    private static let greyZoneLower: Double = -10
-    private static let greyZoneUpper: Double = 5
-    private static let top90Threshold: Double = 0.9
     private static let ampWindowLen = 5
     private static let extrapolationSamples = 25  // 1 s lookahead
-    private static let minPeakBump: Double = 1
 
-    // MARK: - Internal types
-
-    private struct Sample {
-        let index: Int
-        var y: Double
-        var isMin = false
-    }
+    // MARK: - Internal record (extends BreathDetector.Inspiration)
 
     private struct Inspiration {
-        var start: Int
-        var end: Int
-        var maxValue: Double
-        var midPoint: Int
+        let start: Int
+        let end: Int
+        let maxValue: Double
+        let midPoint: Int
 
-        var leftPercent: Double = 50
-        var top90Percent: Double = 32
-        var midVariance: Double = 0
-        var multiPeak = false
+        let leftPercent: Double
+        let top90Percent: Double
+        let midVariance: Double
+        let multiPeak: Bool
 
-        // Cycle-based
+        // Cycle-based (populated by calcCycleBasedIndicators)
         var noExhale = false
         var preRest: Double = 0
 
-        // Amplitude
+        // Amplitude (populated by calcAmplitudeVariance)
         var ampVariance: Double = 0
         var inspirPerMin: Double = 0
-    }
 
-    // MARK: - Step 1: Find expiration peaks (local minima)
-
-    private static func markMins(_ samples: inout [Sample]) {
-        let count = samples.count
-        for i in 0..<min(minWindow, count) {
-            samples[i].isMin = false
+        init(detected: BreathDetector.Inspiration) {
+            self.start = detected.start
+            self.end = detected.end
+            self.maxValue = detected.maxValue
+            self.midPoint = detected.midPoint
+            self.leftPercent = detected.leftPercent
+            self.top90Percent = detected.top90Percent
+            self.midVariance = detected.midVariance
+            self.multiPeak = detected.multiPeak
         }
-        for i in minWindow..<(count - minWindow) {
-            var isLocalMin = true
-            for j in (i - minWindow)..<(i + minWindow - 1) {
-                if samples[j].y < samples[i].y {
-                    isLocalMin = false
-                    break
-                }
-            }
-            samples[i].isMin = isLocalMin && samples[i].y < greyZoneLower
-        }
-        for i in max(0, count - minWindow - 1)..<count {
-            samples[i].isMin = false
-        }
-    }
-
-    // MARK: - Step 2: Detect inspirations and compute per-breath metrics
-
-    private static func findInspirations(_ samples: [Sample]) -> [Inspiration] {
-        var inspirations: [Inspiration] = []
-        var ignoreUntil = 0
-        let count = samples.count
-
-        for i in 0..<(count - 1) {
-            if i < ignoreUntil { continue }
-            if samples[i].y <= greyZoneUpper { continue }
-            if i == 0 || i == count - 1 { continue }
-            // Must be a local max (not rising on either side)
-            if samples[i - 1].y > samples[i].y || samples[i].y < samples[i + 1].y {
-                continue
-            }
-
-            // Walk backward to find start (where flow crosses grey zone)
-            var start: Int?
-            for d in stride(from: i, through: 1, by: -1) {
-                if samples[d].y > samples[i].y { break }
-                if samples[d].y <= greyZoneUpper {
-                    start = d
-                    break
-                }
-            }
-            guard let s = start else { continue }
-
-            // Walk forward to find end
-            var end: Int?
-            for u in i..<count {
-                if samples[u].y > samples[i].y { break }
-                if samples[u].y <= greyZoneUpper {
-                    end = u
-                    break
-                }
-            }
-            guard let e = end else { continue }
-
-            // Ignore very short inspirations (<0.32 s)
-            guard e - s >= 8 else { continue }
-
-            let midPoint = s + Int((Double(e - s) / 2).rounded())
-            let maxValue = samples[i].y
-            let threshold90 = maxValue * top90Threshold
-
-            // Compute skew, top-heavy, flat-top, multi-peak
-            var leftVol: Double = 0
-            var rightVol: Double = 0
-            var top90Count = 0
-
-            var firstPeakFound = false
-            var lookingForNext = false
-            var lastMax: Double = 0
-            var lowestPost: Double = 0
-            var isMultiPeak = false
-
-            for p in s..<e {
-                let val = samples[p].y
-                if p < midPoint { leftVol += val }
-                else if p > midPoint { rightVol += val }
-                if val > threshold90 { top90Count += 1 }
-
-                // Multi-peak detection
-                if !firstPeakFound {
-                    if val > lastMax { lastMax = val }
-                    else if val < lastMax { firstPeakFound = true }
-                } else if !lookingForNext && (lastMax - val) > minPeakBump {
-                    lookingForNext = true
-                    lowestPost = val
-                }
-                if lookingForNext && !isMultiPeak {
-                    if val < lowestPost { lowestPost = val }
-                    else if val > lowestPost + minPeakBump { isMultiPeak = true }
-                }
-            }
-
-            let span = Double(e - s)
-            let leftPercent: Double
-            let top90Percent: Double
-            if e - s > 12 {
-                let total = leftVol + rightVol
-                leftPercent = total > 0
-                    ? (10000 * leftVol / total).rounded() / 100
-                    : 50
-                top90Percent = (10000 * Double(top90Count) / span).rounded() / 100
-            } else {
-                leftPercent = 50
-                top90Percent = 32
-            }
-
-            // Mid-50% variance (flat-top detection)
-            let varStart = midPoint - Int((0.25 * span).rounded())
-            let varEnd = midPoint + Int((0.25 * span).rounded())
-            let halfSpan = 0.5 * span
-            var midSum: Double = 0
-            for p in varStart..<varEnd { midSum += samples[p].y }
-            let midMean = halfSpan > 0 ? midSum / halfSpan : 0
-            var midVar: Double = 0
-            for p in varStart..<varEnd {
-                midVar += (midMean - samples[p].y) * (midMean - samples[p].y)
-            }
-            let midVariance = halfSpan > 0
-                ? (100 * midVar / halfSpan).rounded() / 100
-                : 0
-
-            var insp = Inspiration(
-                start: s, end: e, maxValue: maxValue, midPoint: midPoint
-            )
-            insp.leftPercent = leftPercent
-            insp.top90Percent = top90Percent
-            insp.midVariance = midVariance
-            insp.multiPeak = isMultiPeak
-            inspirations.append(insp)
-            ignoreUntil = e
-        }
-        return inspirations
     }
 
     // MARK: - Step 3: Match expirations to inspirations (pause detection)
 
     private static func calcCycleBasedIndicators(
-        samples: [Sample],
+        samples: [Double],
+        minIndices: [Int],
         inspirations: inout [Inspiration]
     ) {
-        let minIndices = samples.enumerated().compactMap { $0.element.isMin ? $0.offset : nil }
         var nextInspIdx = 0
         let count = samples.count
 
@@ -417,8 +280,8 @@ public enum GlasgowIndex {
 
                     let lookAhead = minAt + extrapolationSamples
                     if lookAhead < count {
-                        let minValue = samples[minAt].y
-                        let valuePlus1s = samples[lookAhead].y
+                        let minValue = samples[minAt]
+                        let valuePlus1s = samples[lookAhead]
                         // Extrapolation is only meaningful when the
                         // expiration is still rising toward zero AND
                         // the two samples differ — otherwise the

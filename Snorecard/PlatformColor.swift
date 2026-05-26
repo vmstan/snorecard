@@ -148,6 +148,18 @@ extension EventColorPalette {
         }
     }
 
+    /// RERA / NED Analysis trend line + hourly bars. Picked so the
+    /// hue reads cleanly next to `glasgowIndex` (green family) and
+    /// `flowLimit` (red/orange) when all three sit in the same
+    /// hourly chart column on the day view.
+    var reraIndex: Color {
+        switch self {
+        case .topher: return Color(red: 0.000, green: 0.749, blue: 0.910)  // saturated cyan
+        case .nick:   return Color(red: 0.612, green: 0.831, blue: 0.918)  // soft cyan
+        case .oscar:  return Color(red: 0.353, green: 0.388, blue: 0.957)  // blue-violet
+        }
+    }
+
     /// Tidal Volume trend + hourly line.
     var tidalVolume: Color {
         switch self {

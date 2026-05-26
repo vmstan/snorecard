@@ -45,10 +45,13 @@ struct AboutView: View {
                 Link(destination: URL(string: "https://github.com/DaveSkvn/GlasgowIndex")!) {
                     LabeledContent("Glasgow Index", value: "DaveSkvn")
                 }
+                Link(destination: URL(string: "https://pubmed.ncbi.nlm.nih.gov/?term=Tamisier+CPAP+flow+limitation")!) {
+                    LabeledContent("NED Analysis", value: "Tamisier et al.")
+                }
             } header: {
                 Text("Acknowledgements")
             } footer: {
-                Text("Snorecard uses the open-source Glasgow Index algorithm for sleep quality scoring.")
+                Text("Snorecard uses the open-source Glasgow Index algorithm for sleep-quality scoring and the NED (Negative Effort Dependence) concept from Tamisier et al. for per-breath flow-limitation analysis. RERA detection is Snorecard's interpretation of AASM scoring criteria — informational, not a validated diagnostic.")
             }
 
             Section {

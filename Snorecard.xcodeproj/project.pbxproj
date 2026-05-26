@@ -51,6 +51,7 @@
 		D88A174919214544AD7A4BB6 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3936E5AE9456EE22D83787A3 /* Library.swift */; };
 		DC5B1C524F111CB9AD8FF2ED /* NotesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314A642CE58D016D8A5B1919 /* NotesCard.swift */; };
 		E2A340EC989C8E50E6050C24 /* CorrelationHintsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */; };
+		8B7CD0E7CA3DE7F4B6E5E412 /* NEDExplainerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2F9A1B5C8D3E40A129B7CD /* NEDExplainerCard.swift */; };
 		E925A255B55DC53835F8056F /* CanvasWaveformCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31A4B9D5782C5855E3C91FE /* CanvasWaveformCharts.swift */; };
 		E95BBB2A9CFECD26FFA84696 /* BackupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54ACEDD6E4327EC06AAE6A0C /* BackupsView.swift */; };
 		EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73ABBCAC89DC4F7860032256 /* DailySettingsInspector.swift */; };
@@ -110,6 +111,7 @@
 		D0619F56E4FE534FDD964689 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayListView.swift; sourceTree = "<group>"; };
 		E14484C9969E51F9D1993BD7 /* CorrelationHintsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrelationHintsCard.swift; sourceTree = "<group>"; };
+		7E2F9A1B5C8D3E40A129B7CD /* NEDExplainerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NEDExplainerCard.swift; sourceTree = "<group>"; };
 		E20618B2C6E05BC0BA91EA00 /* SessionTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTimelineView.swift; sourceTree = "<group>"; };
 		EA0E592B08C8DAE5450663B5 /* Snorecard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Snorecard.entitlements; sourceTree = "<group>"; };
 		EAEEEC2B796A40CBA5FA2009 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsView.swift; sourceTree = "<group>"; };
@@ -207,6 +209,7 @@
 				DC95D65DCCE2D8DCB43C1F6B /* DayListView.swift */,
 				6AAAD964BB003BB6ECF52278 /* DeviceNotesCard.swift */,
 				49B7B53E724F0E12B081B827 /* EventDonutView.swift */,
+				7E2F9A1B5C8D3E40A129B7CD /* NEDExplainerCard.swift */,
 				4D01BD9D312161180297342B /* FloatingActionBar.swift */,
 				ADA05F4E7B0BF1624722B10C /* FlowLayout.swift */,
 				2F99EE9A6F6B4F3CFECD237D /* HourlySignalCharts.swift */,
@@ -326,6 +329,7 @@
 				01724B909A11F36C4F06A1C4 /* CardSource.swift in Sources */,
 				59A5837AE78BCBF4369DF7FF /* ContentView.swift in Sources */,
 				E2A340EC989C8E50E6050C24 /* CorrelationHintsCard.swift in Sources */,
+				8B7CD0E7CA3DE7F4B6E5E412 /* NEDExplainerCard.swift in Sources */,
 				EB556C819027AE1F51218875 /* DailySettingsInspector.swift in Sources */,
 				7A9E9C118220CCFF77B186AC /* DailySignalSummaryTable.swift in Sources */,
 				14D3226EE464F1785D152EC8 /* DayDetailView.swift in Sources */,

@@ -153,6 +153,7 @@ struct TrendsView: View {
                         ahiChart
                         usageChart
                         glasgowChart
+                        reraChart
                         timeInApneaChart
                         // "Stage minutes per night" stacked bar
                         // chart sits next to Time in Apnea so the
@@ -377,6 +378,7 @@ struct TrendsView: View {
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
+        let avgRera = averaging(\.reraIndex)
         let avgApnea: Double? = {
             let values = stats.compactMap { library.displayedTimeInApneaSeconds($0) }
             guard !values.isEmpty else { return nil }
@@ -560,6 +562,22 @@ struct TrendsView: View {
                     )
                 )
             }
+            if let rera = avgRera {
+                let contributor = nedTopContributor()
+                card(
+                    "NED Analysis (AVG)",
+                    value: String(format: "%.1f /hr", rera),
+                    subtitle: contributor.map {
+                        String(format: "%.0f%% %@", $0.percent, $0.label)
+                    },
+                    tint: reraColor(rera),
+                    explain: TrendsExplainContext(
+                        metric: .reraIndex,
+                        displayValue: String(format: "%.1f /hr", rera),
+                        averageValue: rera
+                    )
+                )
+            }
             if let tidal = medianTidal {
                 let mL = tidal * 1000
                 card(
@@ -687,6 +705,7 @@ struct TrendsView: View {
         switch metric {
         case .ahi:              return "AHI (AVG)"
         case .glasgowIndex:     return "Glasgow Index (AVG)"
+        case .reraIndex:        return "NED Analysis (AVG)"
         case .epap95:           return "EPAP (AVG/95%)"
         case .ipap95:           return "IPAP (AVG/95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -785,6 +804,33 @@ struct TrendsView: View {
                 }
             } else {
                 emptyPlaceholder("No Glasgow Index recorded.")
+            }
+        }
+    }
+
+    private var reraChart: some View {
+        let has = stats.contains { $0.reraIndex != nil }
+        return chartSection(title: "NED Analysis", subtitle: "RERA events per hour") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let rera = stat.reraIndex {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("Events/hr", rera)
+                        )
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .symbol(Circle())
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
+            } else {
+                emptyPlaceholder("No NED Analysis recorded.")
             }
         }
     }
@@ -1288,6 +1334,24 @@ struct TrendsView: View {
         return DayDetailView.glasgowTopContributor(avg)
     }
 
+    /// Dominant NED Analysis contributor across the range. Same
+    /// equal-weight averaging as `glasgowTopContributor()` — the
+    /// per-inspiration weights aren't persisted on
+    /// `DailyStatistics`, so days contribute evenly.
+    private func nedTopContributor() -> (label: String, percent: Double)? {
+        let breakdowns = stats.compactMap(\.nedAnalysisBreakdown)
+        guard !breakdowns.isEmpty else { return nil }
+
+        var acc = NEDAnalysis.BreakdownAccumulator()
+        let totalBreaths = breakdowns.reduce(0) { $0 + $1.analysedBreaths }
+        for b in breakdowns { acc.add(b, weight: 1) }
+        let avg = acc.finalize(
+            totalWeight: Double(breakdowns.count),
+            analysedBreaths: totalBreaths
+        )
+        return DayDetailView.nedTopContributor(avg)
+    }
+
     private func largeLeakPercent(for stat: DailyStatistics) -> Double? {
         guard let seconds = stat.largeLeakSeconds, stat.usageMinutes > 0 else { return nil }
         return seconds / (stat.usageMinutes * 60) * 100
@@ -1360,6 +1424,16 @@ struct TrendsView: View {
         case ..<0.005: return .severityGood
         case ..<0.10:  return library.eventColorPalette.severityLow
         default:       return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// RERA / NED Analysis palette — same thresholds as the day-view
+    /// card (≤ 5/hr controlled, ≤ 15/hr mild, > 15/hr elevated).
+    private func reraColor(_ value: Double) -> Color {
+        switch value {
+        case ..<5:  return .severityGood
+        case ..<15: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 
