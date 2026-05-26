@@ -9,9 +9,9 @@ If you use a ResMed AirSense or AirCurve, your machine quietly records every bre
 **Each night**
 
 - Your AHI for the night, broken down into obstructive apnea, hypopnea, clear airway / central apnea, and any unclassified apneas your machine couldn't categorize. CA events have their own label and visibility toggle in Settings — hide them from the AHI calculation, charts, and totals if your clinician has told you they're arousal artefacts unrelated to therapy
-- Quick-glance cards for usage hours, time spent in apnea, EPAP, IPAP, leak, flow limitation, snore, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
-- A bar chart showing when events happened hour by hour
-- Hourly charts for leak, flow limitation, pressure, tidal volume, and Glasgow Index — the tidal-volume and Glasgow lines mark the night's overall median / average so each hour reads as above or below typical
+- Quick-glance cards for usage hours, time spent in apnea, EPAP, IPAP, leak, flow limitation, NED Mean, RERA Index, snore, and tidal volume — colored green / amber / red so you can see at a glance where the night sat
+- AHI events and RERA events bar charts at the top of the column, so the two event-rate streams read together
+- Hourly charts for Glasgow Index, NED Mean, leak, flow limitation, pressure, and tidal volume — the breath-quality lines (Glasgow / NED) mark the night's overall weighted average so each hour reads as above or below typical
 - Detailed percentile statistics for every signal your machine recorded, including breath timing and a per-event breakdown
 - An Advanced Charting window with the full waveform of breathing, mask pressure, leak, snore, and tidal volume — with a draggable scrubber that focuses any window of the night
 - A Therapy Sessions list with an include / exclude switch on every session, so a stray mask test or daytime fitting can be dropped from the day's AHI, usage, and pressure totals. Sessions under two minutes are excluded automatically — they're almost always fittings rather than therapy
@@ -33,6 +33,7 @@ If you wear an Apple Watch to bed, Snorecard pulls the watch's deep / core / REM
 
 - Compliance, average AHI (with obstructive / hypopnea / clear airway breakdown), average usage, average deep and REM sleep, and other long-running averages
 - A [Glasgow Index](https://www.fortaspen.com/sleep/Intro.html) score for breath quality
+- **NED Analysis** — per-breath Negative Effort Dependence (NED Mean) and sequence-level RERA Index, both tracked across the range alongside the daily card values. Algorithm aligned with the open-source [AirwayLab NED engine](https://github.com/airwaylab-app/airwaylab)
 - Trend charts you can filter to the last 7 / 14 / 30 days or a custom range
 - Tap any chart to jump straight to that day
 - A device-wide Sleep Journal for notes that span more than one night
@@ -62,7 +63,7 @@ If you wear an Apple Watch to bed, Snorecard pulls the watch's deep / core / REM
 Snorecard uses Apple Intelligence to turn your raw therapy data into plain-English narratives — entirely on-device. Nothing about your nights ever leaves your Mac or iPhone.
 
 - **Sleep Analysis** — a narrative read on how your recent nights are trending, available from Trends
-- **Explain this metric** — tap any card (AHI, usage, pressure, Glasgow Index, flow limitation, time in apnea, and more) for a contextual interpretation grounded in *your* numbers, not a generic definition
+- **Explain this metric** — tap any card (AHI, usage, pressure, Glasgow Index, NED Mean, RERA Index, flow limitation, time in apnea, and more) for a contextual interpretation grounded in *your* numbers, not a generic definition
 - **Per-night summaries** — a short recap of how a specific night went and how it compared to the ones around it
 - **Correlation hints** — patterns the app notices between your therapy data and your Sleep Journal entries
 
@@ -103,6 +104,7 @@ swift run snorecard-probe /path/to/SD
 ## Acknowledgements
 
 - Breath-quality scoring uses a Swift port of [DaveSkvn/GlasgowIndex](https://github.com/DaveSkvn/GlasgowIndex).
+- NED Analysis (Negative Effort Dependence, Flatness Index, M-shape detection, RERA detection) is aligned with the open-source [airwaylab-app/airwaylab](https://github.com/airwaylab-app/airwaylab) NED engine — re-implemented in Swift from the documented behaviour.
 - The wider CPAP open-source community — especially the OSCAR project — for years of reverse-engineering ResMed's data formats.
 
 ## License
