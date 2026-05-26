@@ -418,6 +418,23 @@ struct DayDetailView: View {
                             onTap: explainTap(.glasgowIndex)
                         )
                     }
+                    if let nedMean = stats.nedAnalysisBreakdown?.nedMean {
+                        let pct = nedMean * 100
+                        StatCard(
+                            label: "NED Mean",
+                            value: String(format: "%.1f%%", pct),
+                            tint: nedMeanColor(pct),
+                            onTap: explainTap(.nedMean)
+                        )
+                    }
+                    if let rera = stats.reraIndex {
+                        StatCard(
+                            label: "RERA Index",
+                            value: String(format: "%.1f", rera),
+                            tint: reraColor(rera),
+                            onTap: explainTap(.reraIndex)
+                        )
+                    }
                     if let tv = stats.tidalVolume50 {
                         let mL = tv * 1000
                         StatCard(
@@ -490,14 +507,35 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                // Glasgow Index by hour sits directly under the
-                // events bar chart — same dayStart anchor so the
-                // x-axis lines up. Skipped on nights where no
-                // hour scored (too few inspirations across every
-                // session).
+                // RERA events by hour sits directly under AHI Events
+                // by Hour — both are event-rate bar charts, so
+                // grouping them lets a glance compare the two
+                // event streams without scrolling between them.
+                // Empty buckets surface no chart (rather than zero
+                // bars) — keeps quiet nights from cluttering the
+                // column.
+                if let bundle = displayedBundle, !bundle.reraHourBuckets.isEmpty {
+                    RERAHourlyChart(
+                        buckets: bundle.reraHourBuckets,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                // Glasgow Index and NED Mean follow as a paired
+                // breath-quality block — same dayStart anchor as
+                // the bars above so the x-axis lines up cleanly.
+                // Skipped on nights where no hour scored (too few
+                // inspirations across every session).
                 if let bundle = displayedBundle, !bundle.glasgowHourSlices.isEmpty {
                     GlasgowHourlyChart(
                         slices: bundle.glasgowHourSlices,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                if let bundle = displayedBundle, !bundle.nedHourSlices.isEmpty {
+                    NEDHourlyChart(
+                        slices: bundle.nedHourSlices,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
@@ -668,6 +706,8 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
+        case .reraIndex:        return "RERA Index"
+        case .nedMean:          return "NED Mean"
         case .epap95:           return "EPAP (95%)"
         case .ipap95:           return "IPAP (95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -695,6 +735,10 @@ struct DayDetailView: View {
         case .ahi:          return String(format: "%.2f", library.displayedAHI(stats))
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
+        case .reraIndex:
+            return stats.reraIndex.map { String(format: "%.1f /hr", $0) } ?? "—"
+        case .nedMean:
+            return stats.nedAnalysisBreakdown.map { String(format: "%.1f%%", $0.nedMean * 100) } ?? "—"
         case .epap95:
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .ipap95:
@@ -855,6 +899,38 @@ struct DayDetailView: View {
         default:     return library.eventColorPalette.severityHigh
         }
     }
+
+    /// RERA events / hour palette — mirrors AHI bands because RERA
+    /// rolls into the same RDI (= AHI + RERA) scoring tradition:
+    /// ≤ 5/hr controlled, 5–15/hr mild, ≥ 15/hr elevated. The
+    /// thresholds aren't clinical RERA cutoffs — none are
+    /// standardised — but they keep this card visually consistent
+    /// with the AHI card right above it.
+    private func reraColor(_ value: Double) -> Color {
+        switch value {
+        case ..<5:  return .severityGood
+        case ..<15: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// NED Mean palette (percent units). The per-breath FL marker
+    /// fires at `NED > 20%`, but a *nightly average* of 20 still
+    /// sits below where the night reads as flow-limited overall —
+    /// the band thresholds here are wider than the per-breath cut
+    /// to leave headroom for breaths that spike high without
+    /// dragging the whole night red. < 15% reads as well within
+    /// normal range; 15–25% is elevated; ≥ 25% the typical breath
+    /// is itself flow-limited.
+    private func nedMeanColor(_ pct: Double) -> Color {
+        switch pct {
+        case ..<15: return .severityGood
+        case ..<25: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+
 
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).

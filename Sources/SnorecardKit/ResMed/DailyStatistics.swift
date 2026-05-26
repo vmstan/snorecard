@@ -40,6 +40,17 @@ public struct DailyStatistics: Sendable, Equatable, Codable {
     /// or when the cached payload predates this field. The 9 values
     /// sum to `glasgowIndex`.
     public internal(set) var glasgowBreakdown: GlasgowIndex.Breakdown? = nil
+    /// RERA (Respiratory-Effort-Related Arousal) events per hour,
+    /// derived from runs of progressively flow-limited inspirations
+    /// in the per-breath NED series. `nil` on nights without BRP
+    /// coverage or sidecars predating this field. The thresholds
+    /// behind the detection sit in `NEDAnalysis`; treat the value as
+    /// informational, not a clinical RERA index.
+    public internal(set) var reraIndex: Double? = nil
+    /// Population-level NED / Flatness Index / M-shape summary that
+    /// underpins `reraIndex`. `nil` under the same conditions as
+    /// `reraIndex`.
+    public internal(set) var nedAnalysisBreakdown: NEDAnalysis.Breakdown? = nil
     public internal(set) var flowLimit95: Double?
     /// 95th-percentile snore index from the PLD `Snore` signal,
     /// on-therapy samples only. ResMed reports snore on a 0–5
@@ -412,11 +423,16 @@ extension DailyStatistics {
         }
         guard !brpRecords.isEmpty else { return nil }
 
-        // BRP pass: usage + Glasgow Index, kept records only.
+        // BRP pass: usage + Glasgow Index + NED Analysis, kept records
+        // only. Both detectors run inside the same loop so a night's
+        // flow signal is decoded exactly once.
         var usageSeconds: Double = 0
         var totalGlasgowScore: Double = 0
         var weightedBreakdown = GlasgowIndex.BreakdownAccumulator()
         var totalInspirations = 0
+        var nedAccumulator = NEDAnalysis.BreakdownAccumulator()
+        var totalAnalysedBreaths = 0
+        var totalRERAEvents = 0
         var keptBRPCount = 0
         for record in brpRecords where record.isKept {
             keptBRPCount += 1
@@ -435,6 +451,19 @@ extension DailyStatistics {
                 totalGlasgowScore += result.score * weight
                 weightedBreakdown.add(result.breakdown, weight: weight)
                 totalInspirations += result.inspirationCount
+            }
+            let sampleRate = edf.header.recordDuration > 0
+                ? Double(edf.signals[flowIdx].samplesPerRecord) / edf.header.recordDuration
+                : BreathDetector.sampleRateHz
+            if let ned = NEDAnalysis.compute(
+                flowLPerMin: flowLPerMin,
+                sampleRate: sampleRate,
+                sessionStart: record.timestamp
+            ) {
+                let weight = Double(ned.breakdown.analysedBreaths)
+                nedAccumulator.add(ned.breakdown, weight: weight)
+                totalAnalysedBreaths += ned.breakdown.analysedBreaths
+                totalRERAEvents += ned.reraEvents.count
             }
         }
         // Every BRP was below the threshold or excluded — there's
@@ -485,6 +514,17 @@ extension DailyStatistics {
             : nil
         let glasgowBreakdown: GlasgowIndex.Breakdown? = totalInspirations > 0
             ? weightedBreakdown.finalize(totalWeight: Double(totalInspirations))
+            : nil
+        let nedBreakdown: NEDAnalysis.Breakdown? = totalAnalysedBreaths > 0
+            ? nedAccumulator.finalize(
+                totalWeight: Double(totalAnalysedBreaths),
+                analysedBreaths: totalAnalysedBreaths
+            )
+            : nil
+        // RERA events / hour. Denominator is kept-BRP usage so the
+        // index is comparable to AHI on the same screen.
+        let reraIndex: Double? = (usageHours > 0 && totalAnalysedBreaths > 0)
+            ? Double(totalRERAEvents) / usageHours
             : nil
 
         // EVE pass: apnea/hypopnea counts + total time in events.
@@ -614,6 +654,7 @@ extension DailyStatistics {
             timeInApneaSeconds: sawAnyEVE ? timeInApnea : nil,
             largeLeakSeconds: sawAnyPLD ? largeLeakSeconds : nil,
             glasgowIndex: glasgowIndex,
+            reraIndex: reraIndex,
             flowLimit95: percentile(flowLims, 95),
             minuteVentilation50: percentile(minVents, 50),
             respirationRate50: percentile(respRates, 50),
@@ -626,6 +667,7 @@ extension DailyStatistics {
         stats.snoreModerateSeconds = snoreBands.moderate
         stats.snoreLoudSeconds = snoreBands.loud
         stats.glasgowBreakdown = glasgowBreakdown
+        stats.nedAnalysisBreakdown = nedBreakdown
         stats.centralApneaTimeSeconds = sawAnyEVE ? centralTimeInApnea : nil
         return stats
     }

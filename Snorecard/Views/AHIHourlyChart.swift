@@ -85,7 +85,7 @@ struct AHIHourlyChart: View {
     }
 
     var body: some View {
-        HourlyChartCard(title: "Events by Hour", subtitle: nil) {
+        HourlyChartCard(title: "AHI Events by Hour", subtitle: nil) {
             Chart {
                 ForEach(buckets) { bucket in
                     BarMark(

@@ -744,6 +744,281 @@ struct GlasgowHourlyChart: View {
     }
 }
 
+/// Per-hour NED Mean line. Mirrors `GlasgowHourlyChart`: each
+/// session's flow is sliced into wall-clock-hour chunks during
+/// waveform load, the per-hour `nedMean` values are weighted-
+/// averaged by `analysedBreaths`, and the trace is drawn on the
+/// same hour-aligned x-axis every other chart on the day view
+/// uses. The night-wide weighted average sits behind the line as
+/// a dashed `RuleMark` so a quick scan tells whether any one hour
+/// drifted noticeably from the night's headline NED Mean shown on
+/// the StatCard above. Y-axis is in percent (matching the card).
+struct NEDHourlyChart: View {
+    @Environment(Library.self) private var library
+
+    let slices: [WaveformBundle.NEDSessionHour]
+    let dayStart: Date
+    let totalDuration: TimeInterval
+
+    /// Weighted-average `nedMean` per wall-clock hour by
+    /// `analysedBreaths`. Same weighting `NEDAnalysis.computeDay`
+    /// would use for the night-wide aggregate — keeps the chart
+    /// consistent with the StatCard's headline number.
+    private var aggregated: [Date: Double] {
+        var bucket: [Date: (weighted: Double, count: Int)] = [:]
+        for entry in slices {
+            var current = bucket[entry.slice.hourStart] ?? (0, 0)
+            current.weighted += entry.slice.nedMean * Double(entry.slice.analysedBreaths)
+            current.count += entry.slice.analysedBreaths
+            bucket[entry.slice.hourStart] = current
+        }
+        var out: [Date: Double] = [:]
+        out.reserveCapacity(bucket.count)
+        for (hour, value) in bucket where value.count > 0 {
+            out[hour] = value.weighted / Double(value.count)
+        }
+        return out
+    }
+
+    private var axisHours: [(label: String, hour: Date)] {
+        let calendar = Calendar.current
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
+        guard lastHour >= 0 else { return [] }
+        return (0...lastHour).map { offset in
+            let hour = anchor.addingTimeInterval(TimeInterval(offset) * 3600)
+            return (label: shortClockLabel(for: hour), hour: hour)
+        }
+    }
+
+    /// Per-hour points expressed in percent (× 100). NED is
+    /// stored as a 0..1 fraction internally; the chart axis and
+    /// every other NED surface in the app are in percent, so the
+    /// conversion happens here at the render boundary.
+    private var plotted: [(label: String, value: Double)] {
+        let agg = aggregated
+        return axisHours.compactMap { entry in
+            guard let mean = agg[entry.hour] else { return nil }
+            return (label: entry.label, value: mean * 100)
+        }
+    }
+
+    /// Night-wide weighted-average NED Mean (in percent). Matches
+    /// `NEDAnalysis.computeDay`'s aggregation, but stays consistent
+    /// with whatever sessions survived `filteringInactiveSessions`.
+    private var nightAverage: Double? {
+        var weighted: Double = 0
+        var count: Int = 0
+        for entry in slices {
+            weighted += entry.slice.nedMean * Double(entry.slice.analysedBreaths)
+            count += entry.slice.analysedBreaths
+        }
+        return count > 0 ? (weighted / Double(count)) * 100 : nil
+    }
+
+    /// ±2 percentage points around the plotted min/max — same
+    /// "breathing room around the curve" trick `GlasgowHourlyChart`
+    /// uses, scaled for percent-units NED.
+    private var valueRange: ClosedRange<Double> {
+        let values = plotted.map(\.value)
+        guard let lo = values.min(), let hi = values.max() else {
+            return 0 ... 20
+        }
+        return max(0, lo - 2) ... (hi + 2)
+    }
+
+    var body: some View {
+        HourlyChartCard(
+            title: "NED Mean by Hour",
+            subtitle: "lower is better"
+        ) {
+            Chart {
+                ForEach(plotted, id: \.label) { point in
+                    LineMark(
+                        x: .value("Hour", point.label),
+                        y: .value("NED", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(library.eventColorPalette.reraIndex)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
+                    PointMark(
+                        x: .value("Hour", point.label),
+                        y: .value("NED", point.value)
+                    )
+                    .foregroundStyle(library.eventColorPalette.reraIndex)
+                    .symbolSize(28)
+                }
+                if let avg = nightAverage {
+                    RuleMark(y: .value("Night Average", avg))
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                }
+            }
+            .chartXScale(domain: axisHours.map(\.label))
+            .chartYScale(domain: valueRange)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...1)).grouping(.never)) + "%")
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: axisHours.map(\.label)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+
+            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                singleSeriesLegend(
+                    color: library.eventColorPalette.reraIndex,
+                    label: "NED Mean"
+                )
+                if nightAverage != nil {
+                    HStack(spacing: 4) {
+                        DashedSwatch(
+                            color: library.eventColorPalette.reraIndex
+                        )
+                        Text("Night Avg")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Per-hour RERA event bars. Counts events bucketed by their
+/// recovery breath's wall-clock hour, divides by the hour's
+/// BRP-active seconds so partial hours at the start / end of the
+/// night don't read as artificially low. The night-wide RERA
+/// Index already sits on the StatCard above, so the chart focuses
+/// on the by-hour shape and skips a duplicate dashed-average rule.
+struct RERAHourlyChart: View {
+    @Environment(Library.self) private var library
+
+    let buckets: [WaveformBundle.RERAHourBucket]
+    let dayStart: Date
+    let totalDuration: TimeInterval
+
+    /// Aggregate buckets into one events-per-hour value per
+    /// wall-clock hour. Hours with no buckets aren't surfaced (the
+    /// chart leaves a gap).
+    private var aggregated: [Date: Double] {
+        var bucket: [Date: (events: Int, seconds: Double)] = [:]
+        for entry in buckets {
+            var current = bucket[entry.hourStart] ?? (0, 0)
+            current.events += entry.eventCount
+            current.seconds += entry.hourSeconds
+            bucket[entry.hourStart] = current
+        }
+        var out: [Date: Double] = [:]
+        out.reserveCapacity(bucket.count)
+        for (hour, value) in bucket where value.seconds > 0 {
+            out[hour] = Double(value.events) / (value.seconds / 3600.0)
+        }
+        return out
+    }
+
+    /// Same hour-aligned x-axis every other hourly chart uses, so a
+    /// quick scan down the day-view column lines up exactly.
+    private var axisHours: [(label: String, hour: Date)] {
+        let calendar = Calendar.current
+        let anchor = calendar.dateInterval(of: .hour, for: dayStart)?.start ?? dayStart
+        let anchorOffset = dayStart.timeIntervalSince(anchor)
+        let anchorToEnd = totalDuration + anchorOffset
+        let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
+        guard lastHour >= 0 else { return [] }
+        return (0...lastHour).map { offset in
+            let hour = anchor.addingTimeInterval(TimeInterval(offset) * 3600)
+            return (label: shortClockLabel(for: hour), hour: hour)
+        }
+    }
+
+    private var plotted: [(label: String, rate: Double)] {
+        let agg = aggregated
+        return axisHours.compactMap { entry in
+            guard let rate = agg[entry.hour] else { return nil }
+            return (label: entry.label, rate: rate)
+        }
+    }
+
+    /// 0 always anchors the bottom so the bar heights stay
+    /// comparable across nights. The top pads a touch above the
+    /// busiest hour so the tallest bar doesn't kiss the ceiling.
+    private var valueRange: ClosedRange<Double> {
+        let rates = plotted.map(\.rate)
+        guard let hi = rates.max() else { return 0 ... 1 }
+        return 0 ... max(1, hi * 1.15)
+    }
+
+    var body: some View {
+        HourlyChartCard(
+            title: "RERA Events by Hour",
+            subtitle: nil
+        ) {
+            Chart {
+                ForEach(plotted, id: \.label) { point in
+                    BarMark(
+                        x: .value("Hour", point.label),
+                        y: .value("RERA", point.rate)
+                    )
+                    .foregroundStyle(library.eventColorPalette.reraIndex)
+                }
+            }
+            .chartXScale(domain: axisHours.map(\.label))
+            .chartYScale(domain: valueRange)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formatted(.number.precision(.fractionLength(0...1)).grouping(.never)))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: hourlyAxisLabelWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: axisHours.map(\.label)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+
+            singleSeriesLegend(
+                color: library.eventColorPalette.reraIndex,
+                label: "RERA"
+            )
+        }
+    }
+}
+
 /// 12pt-wide dashed line swatch used in the Glasgow chart legend
 /// to label the night-average rule. Drawn with the same dash
 /// pattern as the `RuleMark` so the swatch and the line read as

@@ -37,7 +37,17 @@ public enum DailyStatsCache {
 
         /// Bump this whenever the aggregate's per-day output changes
         /// in a way that should invalidate previously-saved caches.
-        public static let currentSchemaVersion: Int = 7
+        /// v11 — NED Analysis now uses AirwayLab's zero-crossing
+        /// breath detection too, not just AirwayLab's per-breath
+        /// metric definitions. v10 mixed AirwayLab metrics with
+        /// Snorecard's local-max/grey-zone breath segmentation
+        /// (inherited from the Glasgow Index port), which produced
+        /// systematically lower NED Mean and zero flow-limited
+        /// breaths on real CPAP traces compared to AirwayLab's
+        /// reference impl. v11 re-aggregates so per-breath windows
+        /// (and every metric downstream) re-score against the
+        /// matching detector.
+        public static let currentSchemaVersion: Int = 11
 
         public init(files: [FileEntry], schemaVersion: Int = Fingerprint.currentSchemaVersion) {
             self.files = files

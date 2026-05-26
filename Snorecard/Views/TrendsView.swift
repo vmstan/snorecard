@@ -151,8 +151,17 @@ struct TrendsView: View {
                             )
                         }
                         ahiChart
+                        // RERA Index sits next to AHI so the two
+                        // event-rate trends read together —
+                        // matches how the daily view groups AHI
+                        // Events / RERA Events.
+                        reraChart
                         usageChart
                         glasgowChart
+                        // NED Mean follows Glasgow Index — both
+                        // are breath-quality lines, both "lower is
+                        // better". Same pairing the daily view uses.
+                        nedChart
                         timeInApneaChart
                         // "Stage minutes per night" stacked bar
                         // chart sits next to Time in Apnea so the
@@ -377,6 +386,8 @@ struct TrendsView: View {
         let compliance = days == 0 ? 0 : Double(compliantDays) / Double(days)
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
+        let avgRera = averaging(\.reraIndex)
+        let avgNEDMean = nedAvgMean()
         let avgApnea: Double? = {
             let values = stats.compactMap { library.displayedTimeInApneaSeconds($0) }
             guard !values.isEmpty else { return nil }
@@ -560,6 +571,31 @@ struct TrendsView: View {
                     )
                 )
             }
+            if let avgNED = avgNEDMean {
+                let pct = avgNED * 100
+                card(
+                    "NED Mean (AVG)",
+                    value: String(format: "%.1f%%", pct),
+                    tint: nedMeanColor(pct),
+                    explain: TrendsExplainContext(
+                        metric: .nedMean,
+                        displayValue: String(format: "%.1f%%", pct),
+                        averageValue: pct
+                    )
+                )
+            }
+            if let rera = avgRera {
+                card(
+                    "RERA Index (AVG)",
+                    value: String(format: "%.1f", rera),
+                    tint: reraColor(rera),
+                    explain: TrendsExplainContext(
+                        metric: .reraIndex,
+                        displayValue: String(format: "%.1f /hr", rera),
+                        averageValue: rera
+                    )
+                )
+            }
             if let tidal = medianTidal {
                 let mL = tidal * 1000
                 card(
@@ -687,6 +723,8 @@ struct TrendsView: View {
         switch metric {
         case .ahi:              return "AHI (AVG)"
         case .glasgowIndex:     return "Glasgow Index (AVG)"
+        case .reraIndex:        return "RERA Index (AVG)"
+        case .nedMean:          return "NED Mean (AVG)"
         case .epap95:           return "EPAP (AVG/95%)"
         case .ipap95:           return "IPAP (AVG/95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -764,7 +802,7 @@ struct TrendsView: View {
 
     private var glasgowChart: some View {
         let has = stats.contains { $0.glasgowIndex != nil }
-        return chartSection(title: "Glasgow Index", subtitle: "breath-quality score (lower is better)") {
+        return chartSection(title: "Glasgow Index", subtitle: "lower is better") {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let gi = stat.glasgowIndex {
@@ -785,6 +823,73 @@ struct TrendsView: View {
                 }
             } else {
                 emptyPlaceholder("No Glasgow Index recorded.")
+            }
+        }
+    }
+
+    private var reraChart: some View {
+        let has = stats.contains { $0.reraIndex != nil }
+        return chartSection(title: "RERA Index", subtitle: nil) {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let rera = stat.reraIndex {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("RERA", rera)
+                        )
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .symbol(Circle())
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel { trendsYAxisLabel(for: value) }
+                    }
+                }
+            } else {
+                emptyPlaceholder("No RERA Index recorded.")
+            }
+        }
+    }
+
+    /// NED Mean per night, in percent. Mirrors `glasgowChart`'s
+    /// shape (single line, `Circle` markers, palette tint) and the
+    /// daily `NEDHourlyChart`'s axis units so a glance between the
+    /// two surfaces tells the same story. Y-axis ticks carry a
+    /// `%` suffix — the underlying values are NED-fraction × 100
+    /// and dropping the unit would let the chart be mistaken for
+    /// a raw 0-30 count.
+    private var nedChart: some View {
+        let has = stats.contains { $0.nedAnalysisBreakdown != nil }
+        return chartSection(title: "NED Mean", subtitle: "lower is better") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let ned = stat.nedAnalysisBreakdown?.nedMean {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("NED", ned * 100)
+                        )
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .symbol(Circle())
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(v.formatted(.number.precision(.fractionLength(0...1)).grouping(.never)) + "%")
+                                    .font(.caption2.monospacedDigit())
+                                    .frame(width: 40, alignment: .trailing)
+                            }
+                        }
+                    }
+                }
+            } else {
+                emptyPlaceholder("No NED Mean recorded.")
             }
         }
     }
@@ -1075,7 +1180,7 @@ struct TrendsView: View {
     @ViewBuilder
     private func chartSection<C: View>(
         title: String,
-        subtitle: String,
+        subtitle: String?,
         legend: [LegendEntry] = [],
         @ViewBuilder content: () -> C
     ) -> some View {
@@ -1085,9 +1190,11 @@ struct TrendsView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
             content()
                 .frame(height: 180)
@@ -1288,6 +1395,17 @@ struct TrendsView: View {
         return DayDetailView.glasgowTopContributor(avg)
     }
 
+    /// Mean of the per-night `nedMean` across the visible range
+    /// (in fraction units — caller multiplies by 100 for display).
+    /// Days without a NED breakdown drop out of the average, same
+    /// as every other `averaging(\.something)` accessor on this
+    /// view.
+    private func nedAvgMean() -> Double? {
+        let values = stats.compactMap { $0.nedAnalysisBreakdown?.nedMean }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
     private func largeLeakPercent(for stat: DailyStatistics) -> Double? {
         guard let seconds = stat.largeLeakSeconds, stat.usageMinutes > 0 else { return nil }
         return seconds / (stat.usageMinutes * 60) * 100
@@ -1360,6 +1478,27 @@ struct TrendsView: View {
         case ..<0.005: return .severityGood
         case ..<0.10:  return library.eventColorPalette.severityLow
         default:       return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// RERA Index palette — same thresholds as the day-view card
+    /// (≤ 5/hr controlled, ≤ 15/hr mild, > 15/hr elevated).
+    private func reraColor(_ value: Double) -> Color {
+        switch value {
+        case ..<5:  return .severityGood
+        case ..<15: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// NED Mean palette — same thresholds as the day-view card
+    /// (< 15% normal, 15–25% elevated, ≥ 25% typical breath is
+    /// itself flow-limited).
+    private func nedMeanColor(_ pct: Double) -> Color {
+        switch pct {
+        case ..<15: return .severityGood
+        case ..<25: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
         }
     }
 

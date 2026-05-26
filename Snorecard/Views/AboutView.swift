@@ -45,10 +45,13 @@ struct AboutView: View {
                 Link(destination: URL(string: "https://github.com/DaveSkvn/GlasgowIndex")!) {
                     LabeledContent("Glasgow Index", value: "DaveSkvn")
                 }
+                Link(destination: URL(string: "https://github.com/airwaylab-app/airwaylab")!) {
+                    LabeledContent("NED Engine", value: "AirwayLab")
+                }
             } header: {
                 Text("Acknowledgements")
             } footer: {
-                Text("Snorecard uses the open-source Glasgow Index algorithm for sleep quality scoring.")
+                Text("Snorecard uses the open-source Glasgow Index algorithm for breath-quality scoring and tracks AirwayLab's NED engine for Negative Effort Dependence, Flatness Index, M-shape, and RERA detection. Both upstream projects are GPL-3.0. The NED engine is informational — not a validated clinical diagnostic.")
             }
 
             Section {

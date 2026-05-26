@@ -20,6 +20,8 @@ enum SidebarSelection: Hashable, Sendable {
 enum SidebarRowMetric: String, CaseIterable, Identifiable, Sendable {
     case ahi
     case glasgowIndex
+    case nedMean
+    case reraIndex
     case maskPressure
     case sessions
 
@@ -31,6 +33,8 @@ enum SidebarRowMetric: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .ahi:           return "AHI"
         case .glasgowIndex:  return "Glasgow Index"
+        case .nedMean:       return "NED Mean"
+        case .reraIndex:     return "RERA Index"
         case .maskPressure:  return "Mask Pressure"
         case .sessions:      return "Sessions"
         }
@@ -44,6 +48,8 @@ enum SidebarRowMetric: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .ahi:           return "AHI"
         case .glasgowIndex:  return "Glasgow"
+        case .nedMean:       return "NED"
+        case .reraIndex:     return "RERA"
         case .maskPressure:  return "Pressure"
         case .sessions:      return "Sessions"
         }
