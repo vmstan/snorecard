@@ -55,7 +55,10 @@ struct MetricExplainSheet: View {
                 // the definitions don't change night-to-night, and
                 // the static panel keeps the disclaimer wording
                 // verbatim. Shown whether the AI succeeded or not.
-                if request.metric == .reraIndex {
+                // Both the per-breath NED Mean card and the
+                // sequence-level RERA Index card open this sheet,
+                // so cover both.
+                if request.metric == .reraIndex || request.metric == .nedMean {
                     NEDExplainerCard()
                 }
                 Spacer(minLength: 8)

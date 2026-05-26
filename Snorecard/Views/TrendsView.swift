@@ -379,6 +379,7 @@ struct TrendsView: View {
         let avgSessions = averageSessionsPerNight()
         let avgGI = averaging(\.glasgowIndex)
         let avgRera = averaging(\.reraIndex)
+        let avgNEDMean = nedAvgMean()
         let avgApnea: Double? = {
             let values = stats.compactMap { library.displayedTimeInApneaSeconds($0) }
             guard !values.isEmpty else { return nil }
@@ -562,14 +563,23 @@ struct TrendsView: View {
                     )
                 )
             }
-            if let rera = avgRera {
-                let contributor = nedTopContributor()
+            if let avgNED = avgNEDMean {
+                let pct = avgNED * 100
                 card(
-                    "NED Analysis (AVG)",
+                    "NED Mean (AVG)",
+                    value: String(format: "%.1f%%", pct),
+                    tint: nedMeanColor(pct),
+                    explain: TrendsExplainContext(
+                        metric: .nedMean,
+                        displayValue: String(format: "%.1f%%", pct),
+                        averageValue: pct
+                    )
+                )
+            }
+            if let rera = avgRera {
+                card(
+                    "RERA Index (AVG)",
                     value: String(format: "%.1f /hr", rera),
-                    subtitle: contributor.map {
-                        String(format: "%.0f%% %@", $0.percent, $0.label)
-                    },
                     tint: reraColor(rera),
                     explain: TrendsExplainContext(
                         metric: .reraIndex,
@@ -705,7 +715,8 @@ struct TrendsView: View {
         switch metric {
         case .ahi:              return "AHI (AVG)"
         case .glasgowIndex:     return "Glasgow Index (AVG)"
-        case .reraIndex:        return "NED Analysis (AVG)"
+        case .reraIndex:        return "RERA Index (AVG)"
+        case .nedMean:          return "NED Mean (AVG)"
         case .epap95:           return "EPAP (AVG/95%)"
         case .ipap95:           return "IPAP (AVG/95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -810,7 +821,7 @@ struct TrendsView: View {
 
     private var reraChart: some View {
         let has = stats.contains { $0.reraIndex != nil }
-        return chartSection(title: "NED Analysis", subtitle: "RERA events per hour") {
+        return chartSection(title: "RERA Index", subtitle: "events per hour") {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let rera = stat.reraIndex {
@@ -830,7 +841,7 @@ struct TrendsView: View {
                     }
                 }
             } else {
-                emptyPlaceholder("No NED Analysis recorded.")
+                emptyPlaceholder("No RERA Index recorded.")
             }
         }
     }
@@ -1334,22 +1345,15 @@ struct TrendsView: View {
         return DayDetailView.glasgowTopContributor(avg)
     }
 
-    /// Dominant NED Analysis contributor across the range. Same
-    /// equal-weight averaging as `glasgowTopContributor()` — the
-    /// per-inspiration weights aren't persisted on
-    /// `DailyStatistics`, so days contribute evenly.
-    private func nedTopContributor() -> (label: String, percent: Double)? {
-        let breakdowns = stats.compactMap(\.nedAnalysisBreakdown)
-        guard !breakdowns.isEmpty else { return nil }
-
-        var acc = NEDAnalysis.BreakdownAccumulator()
-        let totalBreaths = breakdowns.reduce(0) { $0 + $1.analysedBreaths }
-        for b in breakdowns { acc.add(b, weight: 1) }
-        let avg = acc.finalize(
-            totalWeight: Double(breakdowns.count),
-            analysedBreaths: totalBreaths
-        )
-        return DayDetailView.nedTopContributor(avg)
+    /// Mean of the per-night `nedMean` across the visible range
+    /// (in fraction units — caller multiplies by 100 for display).
+    /// Days without a NED breakdown drop out of the average, same
+    /// as every other `averaging(\.something)` accessor on this
+    /// view.
+    private func nedAvgMean() -> Double? {
+        let values = stats.compactMap { $0.nedAnalysisBreakdown?.nedMean }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
     }
 
     private func largeLeakPercent(for stat: DailyStatistics) -> Double? {
@@ -1427,12 +1431,22 @@ struct TrendsView: View {
         }
     }
 
-    /// RERA / NED Analysis palette — same thresholds as the day-view
-    /// card (≤ 5/hr controlled, ≤ 15/hr mild, > 15/hr elevated).
+    /// RERA Index palette — same thresholds as the day-view card
+    /// (≤ 5/hr controlled, ≤ 15/hr mild, > 15/hr elevated).
     private func reraColor(_ value: Double) -> Color {
         switch value {
         case ..<5:  return .severityGood
         case ..<15: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// NED Mean palette — same thresholds as the day-view card
+    /// (< 10% well below FL, 10–20% approaching, ≥ 20% at/above FL).
+    private func nedMeanColor(_ pct: Double) -> Color {
+        switch pct {
+        case ..<10: return .severityGood
+        case ..<20: return library.eventColorPalette.severityLow
         default:    return library.eventColorPalette.severityHigh
         }
     }

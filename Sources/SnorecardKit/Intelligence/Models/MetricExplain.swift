@@ -8,6 +8,7 @@ public enum ExplainableMetric: String, Codable, Hashable, Sendable, CaseIterable
     case ahi
     case glasgowIndex
     case reraIndex
+    case nedMean
     case epap95
     case ipap95
     case maskPressureMedian
@@ -167,6 +168,10 @@ extension MetricExplainInput {
             if v <= 5 { return "in the controlled range" }
             if v <= 15 { return "in the mild range" }
             return "above the mild range"
+        case .nedMean:
+            if v <= 10 { return "well below the flow-limited threshold" }
+            if v <= 20 { return "approaching the flow-limited threshold" }
+            return "at or above the flow-limited threshold"
         case .leak95:
             if v <= 5 { return "well sealed" }
             if v <= 24 { return "below the large-leak threshold" }
@@ -237,6 +242,7 @@ extension MetricExplainInput {
         case .ahi:              noiseFloor = 0.5
         case .glasgowIndex:     noiseFloor = 0.15
         case .reraIndex:        noiseFloor = 0.5
+        case .nedMean:          noiseFloor = 1.0
         case .usage:            noiseFloor = 0.4
         case .leak95:           noiseFloor = 3
         case .largeLeak:        noiseFloor = 0.5
@@ -291,7 +297,8 @@ extension ExplainableMetric {
         switch self {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .reraIndex:        return "NED Analysis (RERA events per hour)"
+        case .reraIndex:        return "RERA Index (events per hour)"
+        case .nedMean:          return "NED Mean (percent of inspiratory flow lost)"
         case .epap95:           return "EPAP (95th percentile target)"
         case .ipap95:           return "IPAP (95th percentile target)"
         case .maskPressureMedian: return "Mask pressure (median during usage)"

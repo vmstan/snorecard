@@ -168,6 +168,24 @@ public enum NEDAnalysis {
         let sampleIndex: Int
     }
 
+    /// Inspiration window as detected by `detectInspirations`.
+    /// Half-open `[start, end)`. Strictly positive flow inside the
+    /// window — same shape AirwayLab's zero-crossing detector
+    /// produces.
+    struct Inspiration: Sendable {
+        let start: Int
+        let end: Int
+    }
+
+    /// Minimum inspiration length in samples. AirwayLab uses 10
+    /// samples (`minInspSamples`). At 25 Hz that's 0.4 s — below
+    /// the shortest plausible adult inspiration.
+    static let minInspirationSamples = 10
+
+    /// Minimum peak flow for a candidate to count. AirwayLab uses
+    /// 0.1 L/min (`minQPeak`); we use the same in L/min.
+    static let minQpeak: Double = 0.1
+
     // MARK: - Per-breath FL and RERA acceptance thresholds
     //
     // Each constant cross-references the AirwayLab value it mirrors
@@ -224,10 +242,13 @@ public enum NEDAnalysis {
         durationSeconds: Double
     )? {
         _ = sessionStart  // reserved; computeHourly threads it through
-        guard let inspirations = BreathDetector.inspirations(flowLPerMin: flowLPerMin),
-              inspirations.count >= reraRunMinBreaths * 2 else { return nil }
+        let inspirations = detectInspirations(flow: flowLPerMin)
+        guard inspirations.count >= reraRunMinBreaths * 2 else { return nil }
 
-        let per = inspirations.map { perBreathMetrics(samples: flowLPerMin, inspiration: $0) }
+        let per = inspirations.compactMap {
+            perBreathMetrics(samples: flowLPerMin, inspiration: $0)
+        }
+        guard !per.isEmpty else { return nil }
         let breakdown = makeBreakdown(per: per)
         let reras = detectRERAs(per: per)
         let durationSeconds = sampleRate > 0
@@ -367,44 +388,99 @@ public enum NEDAnalysis {
         }
     }
 
+    // MARK: - Breath detection (AirwayLab-style, zero-crossing)
+    //
+    // Snorecard's other per-breath analysis (Glasgow Index) uses
+    // `BreathDetector` — windowed local-minima sweep + grey-zone
+    // bracketing. That's tuned for breath-quality scoring on the
+    // CPAP flow signal. For flow-limitation analysis we want
+    // AirwayLab's interpretation instead: every positive-going
+    // zero crossing opens an inspiration, every negative-going
+    // zero crossing closes it. No grey zone, no local-max anchor.
+    // This keeps the per-breath NED / FI / M-shape numbers in
+    // line with AirwayLab's reference engine; mixing the two
+    // detectors (theirs for metrics, ours for breath segmentation)
+    // is what produced the systematically-low NED Mean / zero FL
+    // breaths we saw on real data before this change.
+
+    /// Walk the flow signal looking for positive-going zero
+    /// crossings; collect each strictly-positive window as one
+    /// inspiration. Mirrors AirwayLab's `detectBreaths`. Windows
+    /// shorter than `minInspirationSamples` (10 by default) are
+    /// dropped here so the per-breath pass doesn't have to defend
+    /// against them.
+    static func detectInspirations(flow: [Double]) -> [Inspiration] {
+        var out: [Inspiration] = []
+        var i = 0
+        let len = flow.count
+        while i < len - 1 {
+            // Positive-going zero crossing: flow[i] <= 0 and
+            // flow[i+1] > 0. AirwayLab anchors `inspStart` at the
+            // sample *after* the crossing.
+            while i < len - 1 && !(flow[i] <= 0 && flow[i + 1] > 0) { i += 1 }
+            if i >= len - 1 { break }
+            let inspStart = i + 1
+            i = inspStart
+
+            // Walk forward while flow stays positive. Stop on the
+            // first non-positive sample; that index is the end of
+            // the inspiration (half-open, samples[end] is the
+            // first non-positive).
+            while i < len - 1 && flow[i] > 0 { i += 1 }
+            if i >= len - 1 { break }
+            let inspEnd = i
+
+            if inspEnd - inspStart >= Self.minInspirationSamples {
+                out.append(Inspiration(start: inspStart, end: inspEnd))
+            }
+        }
+        return out
+    }
+
     // MARK: - Per-breath metric computation
 
+    /// Compute NED, FI, and M-shape for one inspiration window.
+    /// Returns nil when the window's peak fails the `minQpeak`
+    /// gate — same skip AirwayLab applies after `qPeak` is read.
     static func perBreathMetrics(
         samples: [Double],
-        inspiration: BreathDetector.Inspiration
-    ) -> BreathMetrics {
-        let qPeak = inspiration.maxValue
-        let qMid = samples[inspiration.midPoint]
+        inspiration: Inspiration
+    ) -> BreathMetrics? {
+        let start = inspiration.start
+        let end = inspiration.end
+        guard end > start else { return nil }
+
+        // Single pass over the window: peak, mean, and the sample
+        // at the inspiration's midpoint for NED.
+        var qPeak: Double = 0
+        var sum: Double = 0
+        let len = end - start
+        for p in start..<end {
+            let v = samples[p]
+            if v > qPeak { qPeak = v }
+            sum += v
+        }
+        guard qPeak >= Self.minQpeak else { return nil }
+
+        let midIdx = start + (len / 2)
+        let qMid = samples[midIdx]
+
         // Standard NED ratio. Clamp at 0 so a midpoint sample
-        // slightly above the recorded peak (rare numerical edge
-        // cases near zero crossings) doesn't produce a negative
-        // score.
+        // marginally above the recorded peak (numerical edge case
+        // on noisy traces) doesn't go negative.
         let ned = qPeak > 0 ? max(0, (qPeak - qMid) / qPeak) : 0
 
         // Flatness Index — time-averaged inspiratory flow divided
-        // by peak. Only positive samples contribute, matching
-        // AirwayLab's "positive zero-crossing → next zero crossing"
-        // inspiration window (our BreathDetector segments using a
-        // grey zone, so a few near-zero negative samples can sneak
-        // into the start/end and would otherwise bias `mean` low).
-        var sum: Double = 0
-        var count = 0
-        if inspiration.end > inspiration.start {
-            for p in inspiration.start..<inspiration.end {
-                let v = samples[p]
-                if v > 0 {
-                    sum += v
-                    count += 1
-                }
-            }
-        }
-        let meanFlow = count > 0 ? sum / Double(count) : 0
+        // by peak. Every sample in the window is positive by
+        // construction (zero-crossing detector), so no positive-
+        // only filter is needed here.
+        let meanFlow = sum / Double(len)
         let fi = qPeak > 0 ? meanFlow / qPeak : 0
 
         let isMShape = detectMShape(
             samples: samples,
-            start: inspiration.start,
-            end: inspiration.end,
+            start: start,
+            end: end,
             qPeak: qPeak
         )
 
@@ -413,7 +489,7 @@ public enum NEDAnalysis {
             fi: fi,
             isMShape: isMShape,
             qPeak: qPeak,
-            sampleIndex: inspiration.start
+            sampleIndex: start
         )
     }
 

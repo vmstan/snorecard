@@ -418,15 +418,27 @@ struct DayDetailView: View {
                             onTap: explainTap(.glasgowIndex)
                         )
                     }
-                    if let rera = stats.reraIndex {
-                        let contributor = stats.nedAnalysisBreakdown
-                            .flatMap(Self.nedTopContributor)
+                    if let nedMean = stats.nedAnalysisBreakdown?.nedMean {
+                        let pct = nedMean * 100
                         StatCard(
-                            label: "NED Analysis",
+                            label: "NED Mean",
+                            value: String(format: "%.1f%%", pct),
+                            subtitle: trendSubtitle(
+                                current: pct,
+                                trailing: trailingMean(\.nedAnalysisBreakdown?.nedMean).map { $0 * 100 }
+                            ),
+                            tint: nedMeanColor(pct),
+                            onTap: explainTap(.nedMean)
+                        )
+                    }
+                    if let rera = stats.reraIndex {
+                        StatCard(
+                            label: "RERA Index",
                             value: String(format: "%.1f /hr", rera),
-                            subtitle: contributor.map {
-                                String(format: "%.0f%% %@", $0.percent, $0.label)
-                            },
+                            subtitle: trendSubtitle(
+                                current: rera,
+                                trailing: trailingMean(\.reraIndex)
+                            ),
                             tint: reraColor(rera),
                             onTap: explainTap(.reraIndex)
                         )
@@ -700,7 +712,8 @@ struct DayDetailView: View {
         switch metric {
         case .ahi:              return "AHI"
         case .glasgowIndex:     return "Glasgow Index"
-        case .reraIndex:        return "NED Analysis"
+        case .reraIndex:        return "RERA Index"
+        case .nedMean:          return "NED Mean"
         case .epap95:           return "EPAP (95%)"
         case .ipap95:           return "IPAP (95%)"
         case .maskPressureMedian: return "Mask Pressure (Median)"
@@ -730,6 +743,8 @@ struct DayDetailView: View {
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .reraIndex:
             return stats.reraIndex.map { String(format: "%.1f /hr", $0) } ?? "—"
+        case .nedMean:
+            return stats.nedAnalysisBreakdown.map { String(format: "%.1f%%", $0.nedMean * 100) } ?? "—"
         case .epap95:
             return stats.epap95.map { String(format: "%.1f cmH₂O", $0) } ?? "—"
         case .ipap95:
@@ -798,28 +813,6 @@ struct DayDetailView: View {
         guard let top = fields.max(by: { $0.1 < $1.1 }), top.1 > 0 else {
             return nil
         }
-        return (top.0, (top.1 / total) * 100)
-    }
-
-    /// Dominant NED Analysis contributor — the largest of "flat
-    /// breaths" (FI ≥ 0.85), "M-shaped" (mid-inspiratory dip), and
-    /// "high NED" (the 95th-percentile NED, clamped into 0–1 so it
-    /// compares cleanly against the two fractions). Returned as a
-    /// share-of-sum so the StatCard subtitle reads as e.g.
-    /// "62% flat breaths". `nil` when no contributor has any signal.
-    static func nedTopContributor(
-        _ breakdown: NEDAnalysis.Breakdown
-    ) -> (label: String, percent: Double)? {
-        let fields: [(String, Double)] = [
-            ("flat breaths", breakdown.flatBreathFraction),
-            ("M-shaped",     breakdown.mShapeFraction),
-            ("high NED",     min(1.0, breakdown.ned95))
-        ]
-        let total = fields.map(\.1).reduce(0, +)
-        guard total > 0,
-              let top = fields.max(by: { $0.1 < $1.1 }),
-              top.1 > 0
-        else { return nil }
         return (top.0, (top.1 / total) * 100)
     }
 
@@ -925,6 +918,59 @@ struct DayDetailView: View {
         case ..<15: return library.eventColorPalette.severityLow
         default:    return library.eventColorPalette.severityHigh
         }
+    }
+
+    /// NED Mean palette (percent units). Reads alongside the
+    /// per-breath FL marker (`NED > 20%`) — the bands map ~10%
+    /// "well below FL", ~10–20% "approaching FL on average",
+    /// ≥ 20% "average breath sits at or above the FL threshold".
+    private func nedMeanColor(_ pct: Double) -> Color {
+        switch pct {
+        case ..<10: return .severityGood
+        case ..<20: return library.eventColorPalette.severityLow
+        default:    return library.eventColorPalette.severityHigh
+        }
+    }
+
+    /// Mean of a `DailyStatistics` keypath across the seven nights
+    /// strictly preceding this day. Used by the NED Mean / RERA
+    /// Index cards to render "↑ X% vs 7-night avg". Returns nil
+    /// when there's no prior data — the card then shows no trend
+    /// subtitle. Nights are pulled from the loaded card so
+    /// session-exclusion edits on previous nights flow through.
+    private func trailingMean(
+        _ keyPath: KeyPath<DailyStatistics, Double?>,
+        nights: Int = 7
+    ) -> Double? {
+        guard let allDays = library.card?.days else { return nil }
+        let priors = allDays
+            .filter { $0.date < day.date }
+            .sorted { $0.date > $1.date }
+            .prefix(nights)
+        let values = priors.compactMap { $0.stats?[keyPath: keyPath] }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// Format the "vs 7-night avg" trend chip shown beneath the
+    /// NED Mean / RERA Index value. AirwayLab's screenshot uses
+    /// "↑ X% vs 7-night avg" / "↓ X% vs 7-night avg" with no
+    /// decimals; we match that wording. Returns nil when there's
+    /// no trailing window yet (early days of a new card) so the
+    /// caller can collapse the subtitle.
+    private func trendSubtitle(current: Double, trailing: Double?) -> String? {
+        guard let trailing else { return nil }
+        guard trailing > 0 else { return nil }
+        let delta = (current - trailing) / trailing
+        // Anything inside ±0.5% reads as "in line" — the cards
+        // are noisy enough night-to-night that a smaller delta
+        // isn't a real signal.
+        if abs(delta) < 0.005 {
+            return "in line with 7-night avg"
+        }
+        let arrow = delta > 0 ? "↑" : "↓"
+        let pct = Int(abs(delta * 100).rounded())
+        return "\(arrow) \(pct)% vs 7-night avg"
     }
 
 

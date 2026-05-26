@@ -390,6 +390,12 @@ public enum IntelligenceInputBuilder {
                 elevatedMax: 15.0,
                 description: "NED — Negative Effort Dependence — is a per-breath shape score derived from the inspiratory flow waveform, comparing the breath's peak flow to its mid-inspiratory flow. The detector marks a breath as flow-limited when NED exceeds 20% or when the inspiration's mean-to-peak flow ratio reaches 0.85, then scans for runs of 3 to 15 consecutive flow-limited breaths. A run becomes a RERA (Respiratory-Effort-Related Arousal) when any of three criteria holds: rising NED slope across the run, a recovery breath paired with a sigh, or sustained NED above 34%. The headline value is events per hour. Below 5/hr is the controlled range, 5–15/hr is mild, above 15/hr typically warrants attention — these thresholds mirror AHI banding because RERA contributes to the same RDI tradition. Algorithm aligned with the open-source AirwayLab NED engine. Informational only — not a medical diagnostic tool."
             )
+        case .nedMean:
+            return MetricExplainInput.Norms(
+                goodMax: 10.0,
+                elevatedMax: 20.0,
+                description: "NED Mean is the average per-breath Negative Effort Dependence across the night, expressed as a percentage. Each breath's NED is (peak inspiratory flow − mid-inspiratory flow) ÷ peak inspiratory flow × 100; higher values mean the breath peaks early and decays through the middle, a fingerprint of inspiratory flow limitation. Under 10% sits comfortably below the flow-limited threshold (an individual breath is flagged at 20%). 10–20% means the average breath is approaching that threshold. Above 20% means the night's average breath is itself flow-limited. Algorithm aligned with the open-source AirwayLab NED engine. Informational only — not a medical diagnostic tool."
+            )
         case .epap95:
             return MetricExplainInput.Norms(
                 goodMax: nil,
@@ -531,6 +537,7 @@ public enum IntelligenceInputBuilder {
             return stats.displayedAHI(includingCentral: !excludeCentralFromAHI)
         case .glasgowIndex:     return stats.glasgowIndex
         case .reraIndex:        return stats.reraIndex
+        case .nedMean:          return stats.nedAnalysisBreakdown.map { $0.nedMean * 100 }
         // `DayDetailView`'s EPAP card sources `epap95` (target
         // EPAP), not `pressure95` (measured mask P95). Feed the
         // explain sheet the same value so the number at the top
@@ -651,6 +658,7 @@ public enum IntelligenceInputBuilder {
         case .ahi:              return "events per hour"
         case .glasgowIndex:     return "score"
         case .reraIndex:        return "events per hour"
+        case .nedMean:          return "percent"
         case .epap95:           return "cmH2O"
         case .ipap95:           return "cmH2O"
         case .maskPressureMedian: return "cmH2O"
