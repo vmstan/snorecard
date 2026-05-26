@@ -392,9 +392,9 @@ public enum IntelligenceInputBuilder {
             )
         case .nedMean:
             return MetricExplainInput.Norms(
-                goodMax: 10.0,
-                elevatedMax: 20.0,
-                description: "NED Mean is the average per-breath Negative Effort Dependence across the night, expressed as a percentage. Each breath's NED is (peak inspiratory flow − mid-inspiratory flow) ÷ peak inspiratory flow × 100; higher values mean the breath peaks early and decays through the middle, a fingerprint of inspiratory flow limitation. Under 10% sits comfortably below the flow-limited threshold (an individual breath is flagged at 20%). 10–20% means the average breath is approaching that threshold. Above 20% means the night's average breath is itself flow-limited. Algorithm aligned with the open-source AirwayLab NED engine. Informational only — not a medical diagnostic tool."
+                goodMax: 15.0,
+                elevatedMax: 25.0,
+                description: "NED Mean is the average per-breath Negative Effort Dependence across the night, expressed as a percentage. Each breath's NED is (peak inspiratory flow − mid-inspiratory flow) ÷ peak inspiratory flow × 100; higher values mean the breath peaks early and decays through the middle, a fingerprint of inspiratory flow limitation. Individual breaths are flagged flow-limited at 20%, but the per-breath threshold is tighter than the nightly average needs to be: under 15% reads as well within normal range, 15–25% is elevated, and above 25% means the typical breath that night was itself flow-limited. Algorithm aligned with the open-source AirwayLab NED engine. Informational only — not a medical diagnostic tool."
             )
         case .epap95:
             return MetricExplainInput.Norms(

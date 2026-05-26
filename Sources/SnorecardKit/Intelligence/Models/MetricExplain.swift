@@ -169,9 +169,9 @@ extension MetricExplainInput {
             if v <= 15 { return "in the mild range" }
             return "above the mild range"
         case .nedMean:
-            if v <= 10 { return "well below the flow-limited threshold" }
-            if v <= 20 { return "approaching the flow-limited threshold" }
-            return "at or above the flow-limited threshold"
+            if v <= 15 { return "well within normal range" }
+            if v <= 25 { return "in the elevated range" }
+            return "above the elevated range"
         case .leak95:
             if v <= 5 { return "well sealed" }
             if v <= 24 { return "below the large-leak threshold" }

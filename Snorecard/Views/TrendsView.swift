@@ -151,9 +151,17 @@ struct TrendsView: View {
                             )
                         }
                         ahiChart
+                        // RERA Index sits next to AHI so the two
+                        // event-rate trends read together —
+                        // matches how the daily view groups AHI
+                        // Events / RERA Events.
+                        reraChart
                         usageChart
                         glasgowChart
-                        reraChart
+                        // NED Mean follows Glasgow Index — both
+                        // are breath-quality lines, both "lower is
+                        // better". Same pairing the daily view uses.
+                        nedChart
                         timeInApneaChart
                         // "Stage minutes per night" stacked bar
                         // chart sits next to Time in Apnea so the
@@ -579,7 +587,7 @@ struct TrendsView: View {
             if let rera = avgRera {
                 card(
                     "RERA Index (AVG)",
-                    value: String(format: "%.1f /hr", rera),
+                    value: String(format: "%.1f", rera),
                     tint: reraColor(rera),
                     explain: TrendsExplainContext(
                         metric: .reraIndex,
@@ -794,7 +802,7 @@ struct TrendsView: View {
 
     private var glasgowChart: some View {
         let has = stats.contains { $0.glasgowIndex != nil }
-        return chartSection(title: "Glasgow Index", subtitle: "breath-quality score (lower is better)") {
+        return chartSection(title: "Glasgow Index", subtitle: "lower is better") {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let gi = stat.glasgowIndex {
@@ -821,13 +829,13 @@ struct TrendsView: View {
 
     private var reraChart: some View {
         let has = stats.contains { $0.reraIndex != nil }
-        return chartSection(title: "RERA Index", subtitle: "events per hour") {
+        return chartSection(title: "RERA Index", subtitle: nil) {
             if has {
                 Chart(stats, id: \.date) { stat in
                     if let rera = stat.reraIndex {
                         LineMark(
                             x: .value("Day", stat.date, unit: .day),
-                            y: .value("Events/hr", rera)
+                            y: .value("RERA", rera)
                         )
                         .foregroundStyle(library.eventColorPalette.reraIndex)
                         .symbol(Circle())
@@ -842,6 +850,46 @@ struct TrendsView: View {
                 }
             } else {
                 emptyPlaceholder("No RERA Index recorded.")
+            }
+        }
+    }
+
+    /// NED Mean per night, in percent. Mirrors `glasgowChart`'s
+    /// shape (single line, `Circle` markers, palette tint) and the
+    /// daily `NEDHourlyChart`'s axis units so a glance between the
+    /// two surfaces tells the same story. Y-axis ticks carry a
+    /// `%` suffix — the underlying values are NED-fraction × 100
+    /// and dropping the unit would let the chart be mistaken for
+    /// a raw 0-30 count.
+    private var nedChart: some View {
+        let has = stats.contains { $0.nedAnalysisBreakdown != nil }
+        return chartSection(title: "NED Mean", subtitle: "lower is better") {
+            if has {
+                Chart(stats, id: \.date) { stat in
+                    if let ned = stat.nedAnalysisBreakdown?.nedMean {
+                        LineMark(
+                            x: .value("Day", stat.date, unit: .day),
+                            y: .value("NED", ned * 100)
+                        )
+                        .foregroundStyle(library.eventColorPalette.reraIndex)
+                        .symbol(Circle())
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(v.formatted(.number.precision(.fractionLength(0...1)).grouping(.never)) + "%")
+                                    .font(.caption2.monospacedDigit())
+                                    .frame(width: 40, alignment: .trailing)
+                            }
+                        }
+                    }
+                }
+            } else {
+                emptyPlaceholder("No NED Mean recorded.")
             }
         }
     }
@@ -1132,7 +1180,7 @@ struct TrendsView: View {
     @ViewBuilder
     private func chartSection<C: View>(
         title: String,
-        subtitle: String,
+        subtitle: String?,
         legend: [LegendEntry] = [],
         @ViewBuilder content: () -> C
     ) -> some View {
@@ -1142,9 +1190,11 @@ struct TrendsView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
             content()
                 .frame(height: 180)
@@ -1442,11 +1492,12 @@ struct TrendsView: View {
     }
 
     /// NED Mean palette — same thresholds as the day-view card
-    /// (< 10% well below FL, 10–20% approaching, ≥ 20% at/above FL).
+    /// (< 15% normal, 15–25% elevated, ≥ 25% typical breath is
+    /// itself flow-limited).
     private func nedMeanColor(_ pct: Double) -> Color {
         switch pct {
-        case ..<10: return .severityGood
-        case ..<20: return library.eventColorPalette.severityLow
+        case ..<15: return .severityGood
+        case ..<25: return library.eventColorPalette.severityLow
         default:    return library.eventColorPalette.severityHigh
         }
     }

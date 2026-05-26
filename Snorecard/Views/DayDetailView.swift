@@ -431,7 +431,6 @@ struct DayDetailView: View {
                         StatCard(
                             label: "RERA Index",
                             value: String(format: "%.1f", rera),
-                            subtitle: "per hour",
                             tint: reraColor(rera),
                             onTap: explainTap(.reraIndex)
                         )
@@ -508,11 +507,25 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                // Glasgow Index by hour sits directly under the
-                // events bar chart — same dayStart anchor so the
-                // x-axis lines up. Skipped on nights where no
-                // hour scored (too few inspirations across every
-                // session).
+                // RERA events by hour sits directly under AHI Events
+                // by Hour — both are event-rate bar charts, so
+                // grouping them lets a glance compare the two
+                // event streams without scrolling between them.
+                // Empty buckets surface no chart (rather than zero
+                // bars) — keeps quiet nights from cluttering the
+                // column.
+                if let bundle = displayedBundle, !bundle.reraHourBuckets.isEmpty {
+                    RERAHourlyChart(
+                        buckets: bundle.reraHourBuckets,
+                        dayStart: bundle.dayStart,
+                        totalDuration: bundle.totalDuration
+                    )
+                }
+                // Glasgow Index and NED Mean follow as a paired
+                // breath-quality block — same dayStart anchor as
+                // the bars above so the x-axis lines up cleanly.
+                // Skipped on nights where no hour scored (too few
+                // inspirations across every session).
                 if let bundle = displayedBundle, !bundle.glasgowHourSlices.isEmpty {
                     GlasgowHourlyChart(
                         slices: bundle.glasgowHourSlices,
@@ -520,14 +533,9 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                // RERA events by hour. Sits next to the Glasgow chart
-                // so the two breath-quality views read together.
-                // Empty buckets surface no chart (rather than zero
-                // bars) — keeps quiet nights from cluttering the
-                // column.
-                if let bundle = displayedBundle, !bundle.reraHourBuckets.isEmpty {
-                    RERAHourlyChart(
-                        buckets: bundle.reraHourBuckets,
+                if let bundle = displayedBundle, !bundle.nedHourSlices.isEmpty {
+                    NEDHourlyChart(
+                        slices: bundle.nedHourSlices,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
@@ -906,14 +914,18 @@ struct DayDetailView: View {
         }
     }
 
-    /// NED Mean palette (percent units). Reads alongside the
-    /// per-breath FL marker (`NED > 20%`) — the bands map ~10%
-    /// "well below FL", ~10–20% "approaching FL on average",
-    /// ≥ 20% "average breath sits at or above the FL threshold".
+    /// NED Mean palette (percent units). The per-breath FL marker
+    /// fires at `NED > 20%`, but a *nightly average* of 20 still
+    /// sits below where the night reads as flow-limited overall —
+    /// the band thresholds here are wider than the per-breath cut
+    /// to leave headroom for breaths that spike high without
+    /// dragging the whole night red. < 15% reads as well within
+    /// normal range; 15–25% is elevated; ≥ 25% the typical breath
+    /// is itself flow-limited.
     private func nedMeanColor(_ pct: Double) -> Color {
         switch pct {
-        case ..<10: return .severityGood
-        case ..<20: return library.eventColorPalette.severityLow
+        case ..<15: return .severityGood
+        case ..<25: return library.eventColorPalette.severityLow
         default:    return library.eventColorPalette.severityHigh
         }
     }

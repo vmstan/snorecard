@@ -247,6 +247,15 @@ struct DayListView: View {
         case .glasgowIndex:
             guard let g = stats.glasgowIndex else { return nil }
             return String(format: "%.1f", g)
+        case .nedMean:
+            // NED is stored as a 0..1 fraction; the sidebar reads
+            // in percent like the StatCard does so the two
+            // surfaces agree at a glance.
+            guard let ned = stats.nedAnalysisBreakdown?.nedMean else { return nil }
+            return String(format: "%.1f", ned * 100)
+        case .reraIndex:
+            guard let r = stats.reraIndex else { return nil }
+            return String(format: "%.1f", r)
         case .maskPressure:
             guard let p = stats.pressure95 else { return nil }
             return String(format: "%.1f", p)
