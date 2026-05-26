@@ -747,10 +747,9 @@ struct GlasgowHourlyChart: View {
 /// Per-hour RERA event bars. Counts events bucketed by their
 /// recovery breath's wall-clock hour, divides by the hour's
 /// BRP-active seconds so partial hours at the start / end of the
-/// night don't read as artificially low, and overlays the night-
-/// wide `reraIndex` as a dashed `RuleMark` so the hourly bars are
-/// easy to compare against the headline number on the StatCard
-/// above.
+/// night don't read as artificially low. The night-wide RERA
+/// Index already sits on the StatCard above, so the chart focuses
+/// on the by-hour shape and skips a duplicate dashed-average rule.
 struct RERAHourlyChart: View {
     @Environment(Library.self) private var library
 
@@ -800,16 +799,6 @@ struct RERAHourlyChart: View {
         }
     }
 
-    /// Night-wide events-per-hour, derived from the same buckets the
-    /// per-hour bars read. Stays consistent with whatever sessions
-    /// survived `filteringInactiveSessions`.
-    private var nightAverage: Double? {
-        let totalEvents = buckets.reduce(0) { $0 + $1.eventCount }
-        let totalSeconds = buckets.reduce(0.0) { $0 + $1.hourSeconds }
-        guard totalSeconds > 0 else { return nil }
-        return Double(totalEvents) / (totalSeconds / 3600.0)
-    }
-
     /// 0 always anchors the bottom so the bar heights stay
     /// comparable across nights. The top pads a touch above the
     /// busiest hour so the tallest bar doesn't kiss the ceiling.
@@ -822,20 +811,15 @@ struct RERAHourlyChart: View {
     var body: some View {
         HourlyChartCard(
             title: "RERA Events by Hour",
-            subtitle: "events per hour"
+            subtitle: nil
         ) {
             Chart {
                 ForEach(plotted, id: \.label) { point in
                     BarMark(
                         x: .value("Hour", point.label),
-                        y: .value("Events/hr", point.rate)
+                        y: .value("RERA", point.rate)
                     )
                     .foregroundStyle(library.eventColorPalette.reraIndex)
-                }
-                if let avg = nightAverage {
-                    RuleMark(y: .value("Night Average", avg))
-                        .foregroundStyle(library.eventColorPalette.reraIndex)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                 }
             }
             .chartXScale(domain: axisHours.map(\.label))
@@ -866,22 +850,10 @@ struct RERAHourlyChart: View {
             }
             .frame(minHeight: 140)
 
-            FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
-                singleSeriesLegend(
-                    color: library.eventColorPalette.reraIndex,
-                    label: "Events/hr"
-                )
-                if nightAverage != nil {
-                    HStack(spacing: 4) {
-                        DashedSwatch(
-                            color: library.eventColorPalette.reraIndex
-                        )
-                        Text("Night Avg")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            singleSeriesLegend(
+                color: library.eventColorPalette.reraIndex,
+                label: "RERA"
+            )
         }
     }
 }

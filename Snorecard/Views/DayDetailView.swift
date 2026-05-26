@@ -423,10 +423,6 @@ struct DayDetailView: View {
                         StatCard(
                             label: "NED Mean",
                             value: String(format: "%.1f%%", pct),
-                            subtitle: trendSubtitle(
-                                current: pct,
-                                trailing: trailingMean(\.nedAnalysisBreakdown?.nedMean).map { $0 * 100 }
-                            ),
                             tint: nedMeanColor(pct),
                             onTap: explainTap(.nedMean)
                         )
@@ -434,11 +430,8 @@ struct DayDetailView: View {
                     if let rera = stats.reraIndex {
                         StatCard(
                             label: "RERA Index",
-                            value: String(format: "%.1f /hr", rera),
-                            subtitle: trendSubtitle(
-                                current: rera,
-                                trailing: trailingMean(\.reraIndex)
-                            ),
+                            value: String(format: "%.1f", rera),
+                            subtitle: "per hour",
                             tint: reraColor(rera),
                             onTap: explainTap(.reraIndex)
                         )
@@ -589,13 +582,6 @@ struct DayDetailView: View {
                 // and hourly charts. macOS lays them out side-by-
                 // side because there's room; iOS stacks them to
                 // keep the labels readable on narrow screens.
-                // Inline "How it works" panel for NED Analysis —
-                // shown only when the night actually surfaces a
-                // RERA index, so quiet AS11-only days don't get
-                // educated about a card they never see.
-                if let stats = day.stats, stats.reraIndex != nil {
-                    NEDExplainerCard()
-                }
                 if loadedWaveform != nil {
                     summaryActionButtons
                 }
@@ -932,46 +918,6 @@ struct DayDetailView: View {
         }
     }
 
-    /// Mean of a `DailyStatistics` keypath across the seven nights
-    /// strictly preceding this day. Used by the NED Mean / RERA
-    /// Index cards to render "↑ X% vs 7-night avg". Returns nil
-    /// when there's no prior data — the card then shows no trend
-    /// subtitle. Nights are pulled from the loaded card so
-    /// session-exclusion edits on previous nights flow through.
-    private func trailingMean(
-        _ keyPath: KeyPath<DailyStatistics, Double?>,
-        nights: Int = 7
-    ) -> Double? {
-        guard let allDays = library.card?.days else { return nil }
-        let priors = allDays
-            .filter { $0.date < day.date }
-            .sorted { $0.date > $1.date }
-            .prefix(nights)
-        let values = priors.compactMap { $0.stats?[keyPath: keyPath] }
-        guard !values.isEmpty else { return nil }
-        return values.reduce(0, +) / Double(values.count)
-    }
-
-    /// Format the "vs 7-night avg" trend chip shown beneath the
-    /// NED Mean / RERA Index value. AirwayLab's screenshot uses
-    /// "↑ X% vs 7-night avg" / "↓ X% vs 7-night avg" with no
-    /// decimals; we match that wording. Returns nil when there's
-    /// no trailing window yet (early days of a new card) so the
-    /// caller can collapse the subtitle.
-    private func trendSubtitle(current: Double, trailing: Double?) -> String? {
-        guard let trailing else { return nil }
-        guard trailing > 0 else { return nil }
-        let delta = (current - trailing) / trailing
-        // Anything inside ±0.5% reads as "in line" — the cards
-        // are noisy enough night-to-night that a smaller delta
-        // isn't a real signal.
-        if abs(delta) < 0.005 {
-            return "in line with 7-night avg"
-        }
-        let arrow = delta > 0 ? "↑" : "↓"
-        let pct = Int(abs(delta * 100).rounded())
-        return "\(arrow) \(pct)% vs 7-night avg"
-    }
 
 
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
