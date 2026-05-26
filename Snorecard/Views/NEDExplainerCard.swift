@@ -34,20 +34,20 @@ struct NEDExplainerCard: View {
                 row(
                     "02",
                     title: "Flatness Index",
-                    body: "Measures how much of each inhalation sits within 10% of peak flow. ≥ 0.85 signals a clearly flow-limited breath."
+                    body: "The ratio of mean inspiratory flow to peak inspiratory flow. ≥ 0.85 signals a clearly flow-limited breath."
                 )
                 row(
                     "03",
                     title: "M-shape detection",
-                    body: "Finds breaths with a characteristic mid-inspiratory dip — a fingerprint of upper-airway oscillation."
+                    body: "Finds breaths with a mid-inspiratory valley below 80% of peak — a fingerprint of upper-airway oscillation."
                 )
                 row(
                     "04",
                     title: "RERA detection",
-                    body: "Runs of ≥3 breaths with steadily rising NED, ended by a recovery breath, count as one event. Reported as events per hour."
+                    body: "Runs of 3 to 15 flow-limited breaths qualify when NED is rising, when a clear recovery breath follows, or when severity stays high. Reported as events per hour."
                 )
             }
-            Text("NED concept from Tamisier et al. RERA detection adapted from AASM clinical scoring criteria — Snorecard's interpretation, not a validated diagnostic. Informational only.")
+            Text("Algorithm aligned with AirwayLab's NED engine (github.com/airwaylab-app/airwaylab, GPL-3.0). NED concept from Tamisier et al. Informational only — not a clinical diagnostic.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -37,14 +37,16 @@ public enum DailyStatsCache {
 
         /// Bump this whenever the aggregate's per-day output changes
         /// in a way that should invalidate previously-saved caches.
-        /// v9 — NED Analysis added `reraIndex` and
-        /// `nedAnalysisBreakdown` to the BRP pass; v7 caches need to
-        /// re-aggregate so these populate. v8 was the first
-        /// NED-aware build, but it shipped with a merge bug that
-        /// dropped both fields back to nil before they hit the
-        /// sidecar — v9 forces another re-aggregate to repopulate
-        /// them correctly.
-        public static let currentSchemaVersion: Int = 9
+        /// v10 — NED Analysis realigned with AirwayLab's NED engine:
+        /// FI is now `mean(positive insp flow) / qPeak` (was: share
+        /// of samples within 10% of peak), M-shape now requires an
+        /// explicit mid-50% valley below 80% of peak (was: any
+        /// dip-and-recover pattern), and RERA detection switched
+        /// from progressive-rise to FL-marker + 3-criteria-OR. v9
+        /// breakdowns and `reraIndex` values are stale; v10 forces
+        /// another re-aggregate so the populations re-score against
+        /// the new metrics.
+        public static let currentSchemaVersion: Int = 10
 
         public init(files: [FileEntry], schemaVersion: Int = Fingerprint.currentSchemaVersion) {
             self.files = files

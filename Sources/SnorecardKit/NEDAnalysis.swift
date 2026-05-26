@@ -3,30 +3,43 @@ import Foundation
 /// Per-breath flow-limitation analysis built on top of
 /// `BreathDetector`'s inspiration extraction.
 ///
-/// For every inspiration the detector finds in a 25 Hz flow signal,
-/// `NEDAnalysis` computes three shape indicators:
+/// The algorithm tracks AirwayLab's NED engine
+/// (https://github.com/airwaylab-app/airwaylab,
+/// `lib/analyzers/ned-engine.ts`, GPL-3.0). The detection logic and
+/// numeric thresholds are theirs — re-implemented in Swift from the
+/// documented behaviour, not translated line-by-line. Snorecard's
+/// fraction units (NED ∈ 0..1) differ from AirwayLab's percentage
+/// units (NED ∈ 0..100) by a factor of 100; thresholds below are
+/// scaled accordingly and each constant cross-references the
+/// AirwayLab value it mirrors.
+///
+/// Per-breath outputs:
 ///
 /// * **NED** (Negative Effort Dependence) — `(Qpeak − Qmid) / Qpeak`,
-///   where `Qpeak` is the inspiration's peak flow and `Qmid` is flow
-///   at 50% of inspiratory time. Higher values indicate the
-///   inspiration peaks early and decays through the breath — a
-///   fingerprint of upper-airway flow limitation. Concept from
-///   Tamisier et al.'s CPAP flow-limitation literature.
-/// * **Flatness Index (FI)** — fraction of the inspiration's samples
-///   sitting within 10% of `Qpeak`. FI ≥ 0.85 marks a clearly
-///   flow-limited breath.
-/// * **M-shape** — breaths with a characteristic mid-inspiratory dip
-///   (oscillation in the flow waveform). Reuses
-///   `BreathDetector.Inspiration.multiPeak`, which already detects
-///   the same dip-then-rise pattern.
+///   where `Qpeak` is the inspiration's peak flow and `Qmid` is the
+///   flow sample at 50% of inspiratory time. Higher values mean the
+///   breath peaked early and dragged down through the middle.
+/// * **Flatness Index (FI)** — mean inspiratory flow divided by
+///   peak inspiratory flow. FI ≥ 0.85 marks a clearly flow-limited
+///   breath (Hosselet/Tamisier formulation).
+/// * **M-shape** — true when there's a valley below 80% of `Qpeak`
+///   in the middle 50% of inspiratory time, with peaks above the
+///   same 80% threshold on either side. Targets the bimodal
+///   inspiration shape associated with upper-airway oscillation.
 ///
-/// Once the per-breath series exists, `NEDAnalysis` scans it for
-/// **RERA** events — runs of ≥3 breaths whose NED rises
-/// progressively, terminated by a recovery breath with a sudden NED
-/// drop. RERA detection is adapted from AASM clinical scoring
-/// criteria; the specific thresholds are Snorecard's own
-/// interpretation and the resulting `reraIndex` (events / hour) is
-/// informational, not a clinical diagnostic.
+/// Sequence output:
+///
+/// * **RERA** — a run of 3-15 consecutive flow-limited breaths
+///   (NED > 0.20 OR FI ≥ 0.85), accepted as one event when any of
+///   three criteria holds: linear-regression NED slope across the
+///   run > 0.005 / breath; OR the following breath is both a
+///   recovery (NED < 0.10) and a sigh (Qpeak > 1.5× sequence mean);
+///   OR the run's max NED is > 0.34. Multiple disjunctive criteria
+///   match the AASM tradition: rising effort, an obvious recovery,
+///   or sustained severity all qualify.
+///
+/// Reported as events per hour at the `DailyStatistics` level.
+/// Informational, not a clinical diagnostic.
 public enum NEDAnalysis {
 
     // MARK: - Breakdown
@@ -57,19 +70,47 @@ public enum NEDAnalysis {
         }
     }
 
-    /// One detected RERA event — emitted when a run of ≥3 breaths
-    /// of progressively rising NED is terminated by a recovery
-    /// breath. Carries the recovery breath's sample index so
-    /// callers can bucket events into wall-clock hours.
+    /// One detected RERA event — a run of consecutive flow-limited
+    /// breaths that cleared at least one acceptance criterion.
+    /// Carries enough context for the day-view chart to bucket
+    /// events into wall-clock hours plus enough for debugging /
+    /// future visualisation (slope, max NED, recovery / sigh
+    /// flags).
     public struct RERAEvent: Sendable, Hashable {
-        public let recoveryBreathSampleIndex: Int
-        public let runLength: Int      // breaths in the rising run (≥ 3)
-        public let nedSlope: Double    // mean ΔNED per breath across the run
+        /// Sample index where the FL run begins. Used for hourly
+        /// bucketing — converted to wall-clock via
+        /// `sessionStart + index / sampleRate`.
+        public let startSampleIndex: Int
+        /// Breaths in the FL run (3..15 by construction).
+        public let breathCount: Int
+        /// Linear-regression slope of NED across the run, per
+        /// breath. AirwayLab's units are NED-percentage / breath;
+        /// Snorecard's are NED-fraction / breath, so the numerical
+        /// value is 1/100th of AirwayLab's.
+        public let nedSlope: Double
+        /// Largest single-breath NED inside the run.
+        public let maxNED: Double
+        /// True when the breath after the run has NED < 0.10.
+        public let hasRecovery: Bool
+        /// True when the breath after the run has `Qpeak > 1.5×`
+        /// the run's mean `Qpeak` (a "sigh" breath, often paired
+        /// with arousal).
+        public let hasSigh: Bool
 
-        public init(recoveryBreathSampleIndex: Int, runLength: Int, nedSlope: Double) {
-            self.recoveryBreathSampleIndex = recoveryBreathSampleIndex
-            self.runLength = runLength
+        public init(
+            startSampleIndex: Int,
+            breathCount: Int,
+            nedSlope: Double,
+            maxNED: Double,
+            hasRecovery: Bool,
+            hasSigh: Bool
+        ) {
+            self.startSampleIndex = startSampleIndex
+            self.breathCount = breathCount
             self.nedSlope = nedSlope
+            self.maxNED = maxNED
+            self.hasRecovery = hasRecovery
+            self.hasSigh = hasSigh
         }
     }
 
@@ -114,44 +155,56 @@ public enum NEDAnalysis {
 
     /// Per-breath outputs. Kept internal because callers only need
     /// the `Breakdown` and `RERAEvent` summaries — exposing the raw
-    /// per-breath array would balloon sidecar size.
+    /// per-breath array would balloon sidecar size. `qPeak` is
+    /// retained on the per-breath record so the RERA pass can check
+    /// for sigh breaths (Qpeak spike vs sequence mean).
     struct BreathMetrics: Sendable {
         let ned: Double
         let fi: Double
         let isMShape: Bool
+        let qPeak: Double
         /// Start-of-inspiration sample index, carried so RERA events
-        /// know where in the session the recovery breath sits.
+        /// know where in the session each FL run begins.
         let sampleIndex: Int
     }
 
-    // MARK: - RERA detection thresholds
+    // MARK: - Per-breath FL and RERA acceptance thresholds
     //
-    // Snorecard's own interpretation of AASM-style scoring. Kept as
-    // typed constants so tests can reference the same names rather
-    // than re-spelling the numbers.
+    // Each constant cross-references the AirwayLab value it mirrors
+    // (AirwayLab works in percentage units; we work in fraction
+    // units, so most values are 1/100 of theirs).
 
-    /// Minimum breaths in a rising run before the recovery breath
-    /// can close out a RERA event.
+    /// FI cutoff for flagging a breath as flow-limited. AirwayLab:
+    /// `fi >= 0.85`. Snorecard: identical (FI is a ratio, no unit
+    /// conversion needed).
+    static let flatBreathFIThreshold: Double = 0.85
+
+    /// NED cutoff for flagging a breath as flow-limited. AirwayLab:
+    /// `ned > 20` (percent). Snorecard: > 0.20 (fraction).
+    static let flowLimitedNEDThreshold: Double = 0.20
+
+    /// Minimum / maximum breaths in a candidate FL run.
+    /// AirwayLab: 3..15. Snorecard: identical.
     static let reraRunMinBreaths = 3
+    static let reraRunMaxBreaths = 15
 
-    /// Minimum per-breath ΔNED to count two consecutive breaths as
-    /// part of a rising run.
-    static let reraRisePerBreathMin: Double = 0.04
+    /// NED-slope acceptance threshold. AirwayLab: slope > 0.5
+    /// (per breath, percentage units). Snorecard: > 0.005
+    /// (per breath, fraction units) — same numerical curve.
+    static let reraSlopeThreshold: Double = 0.005
 
-    /// Minimum drop between the last rising breath and the
-    /// recovery breath. Pairs with `reraRecoveryAbsMax` — a
-    /// recovery breath must drop substantially AND end up
-    /// non-flow-limited in absolute terms.
-    static let reraRecoveryDropMin: Double = 0.10
+    /// Recovery threshold for the breath following a run.
+    /// AirwayLab: `ned < 10` (percent). Snorecard: < 0.10 (fraction).
+    static let reraRecoveryNEDThreshold: Double = 0.10
 
-    /// Absolute NED ceiling for the recovery breath itself.
-    /// Keeps the algorithm from "closing" a run that just paused
-    /// briefly mid-event.
-    static let reraRecoveryAbsMax: Double = 0.20
+    /// Qpeak ratio for the following breath to count as a sigh.
+    /// AirwayLab: `qPeak > 1.5 × meanRunQpeak`. Snorecard: identical
+    /// (ratio, no unit conversion).
+    static let reraSighQpeakRatio: Double = 1.5
 
-    /// How many breaths to skip after firing an event before
-    /// looking for another run.
-    static let reraCooldownBreaths = 2
+    /// Sustained-NED acceptance threshold. AirwayLab: `maxNED > 34`
+    /// (percent). Snorecard: > 0.34 (fraction).
+    static let reraSustainedMaxNEDThreshold: Double = 0.34
 
     // MARK: - Per-session compute
 
@@ -170,9 +223,9 @@ public enum NEDAnalysis {
         reraEvents: [RERAEvent],
         durationSeconds: Double
     )? {
-        _ = sessionStart  // reserved; future per-hour callers feed it through computeHourly
+        _ = sessionStart  // reserved; computeHourly threads it through
         guard let inspirations = BreathDetector.inspirations(flowLPerMin: flowLPerMin),
-              inspirations.count >= 6 else { return nil }
+              inspirations.count >= reraRunMinBreaths * 2 else { return nil }
 
         let per = inspirations.map { perBreathMetrics(samples: flowLPerMin, inspiration: $0) }
         let breakdown = makeBreakdown(per: per)
@@ -322,31 +375,91 @@ public enum NEDAnalysis {
     ) -> BreathMetrics {
         let qPeak = inspiration.maxValue
         let qMid = samples[inspiration.midPoint]
-        // NED uses the standard ratio; clamp at 0 so a midpoint
-        // higher than the recorded peak (rare numerical edge cases
-        // near zero crossings) doesn't produce a negative score.
+        // Standard NED ratio. Clamp at 0 so a midpoint sample
+        // slightly above the recorded peak (rare numerical edge
+        // cases near zero crossings) doesn't produce a negative
+        // score.
         let ned = qPeak > 0 ? max(0, (qPeak - qMid) / qPeak) : 0
 
-        // FI: fraction of the inspiration that sits within 10% of
-        // qPeak. Empirically the simplest plateau measure that
-        // tracks the literature's ≥ 0.85 = flow-limited threshold.
-        let band = 0.10 * qPeak
-        var within = 0
+        // Flatness Index — time-averaged inspiratory flow divided
+        // by peak. Only positive samples contribute, matching
+        // AirwayLab's "positive zero-crossing → next zero crossing"
+        // inspiration window (our BreathDetector segments using a
+        // grey zone, so a few near-zero negative samples can sneak
+        // into the start/end and would otherwise bias `mean` low).
+        var sum: Double = 0
+        var count = 0
         if inspiration.end > inspiration.start {
             for p in inspiration.start..<inspiration.end {
-                if abs(samples[p] - qPeak) <= band { within += 1 }
+                let v = samples[p]
+                if v > 0 {
+                    sum += v
+                    count += 1
+                }
             }
         }
-        let fi = inspiration.end > inspiration.start
-            ? Double(within) / Double(inspiration.end - inspiration.start)
-            : 0
+        let meanFlow = count > 0 ? sum / Double(count) : 0
+        let fi = qPeak > 0 ? meanFlow / qPeak : 0
+
+        let isMShape = detectMShape(
+            samples: samples,
+            start: inspiration.start,
+            end: inspiration.end,
+            qPeak: qPeak
+        )
 
         return BreathMetrics(
             ned: ned,
             fi: fi,
-            isMShape: inspiration.multiPeak,
+            isMShape: isMShape,
+            qPeak: qPeak,
             sampleIndex: inspiration.start
         )
+    }
+
+    /// Explicit M-shape detector: the bi-modal inspiration shape
+    /// where flow dips below 80% of `qPeak` somewhere in the
+    /// middle 50% of inspiratory time, *and* both halves of the
+    /// inspiration touch back above that 80% threshold so the
+    /// shape genuinely reads as two humps and not a single late
+    /// peak.
+    ///
+    /// Matches AirwayLab's `detectMShape` shape rather than the
+    /// looser `BreathDetector.multiPeak` flag (which fires on any
+    /// dip-and-recover pattern anywhere in the breath).
+    private static func detectMShape(
+        samples: [Double],
+        start: Int,
+        end: Int,
+        qPeak: Double
+    ) -> Bool {
+        let len = end - start
+        guard len >= 12, qPeak > 0 else { return false }
+
+        let threshold = qPeak * 0.8
+        let middleStart = start + Int(Double(len) * 0.25)
+        let middleEnd = start + Int(Double(len) * 0.75)
+        guard middleEnd > middleStart else { return false }
+
+        var minInMiddle = qPeak
+        var valleyIdx = middleStart
+        for p in middleStart..<middleEnd {
+            if samples[p] < minInMiddle {
+                minInMiddle = samples[p]
+                valleyIdx = p
+            }
+        }
+        guard minInMiddle < threshold else { return false }
+
+        var leftPeak: Double = 0
+        for p in start..<valleyIdx {
+            if samples[p] > leftPeak { leftPeak = samples[p] }
+        }
+        var rightPeak: Double = 0
+        for p in valleyIdx..<end {
+            if samples[p] > rightPeak { rightPeak = samples[p] }
+        }
+        return leftPeak > threshold && rightPeak > threshold
     }
 
     // MARK: - Population summary
@@ -363,7 +476,7 @@ public enum NEDAnalysis {
         let neds = per.map(\.ned)
         let mean = neds.reduce(0, +) / Double(n)
         let p95 = percentile(neds, 95)
-        let flat = per.reduce(0) { $0 + ($1.fi >= 0.85 ? 1 : 0) }
+        let flat = per.reduce(0) { $0 + ($1.fi >= flatBreathFIThreshold ? 1 : 0) }
         let mShape = per.reduce(0) { $0 + ($1.isMShape ? 1 : 0) }
         return Breakdown(
             nedMean: mean,
@@ -376,48 +489,105 @@ public enum NEDAnalysis {
 
     // MARK: - RERA detection
 
-    /// Walk the per-breath NED series looking for runs of
-    /// progressively rising NED that close out with a recovery
-    /// breath. Internal — exposed only via `compute` / `computeDay`
-    /// / `computeHourly`.
+    /// Walk the per-breath series looking for consecutive runs of
+    /// flow-limited breaths (NED > 0.20 OR FI ≥ 0.85), then
+    /// evaluate each candidate run against three acceptance
+    /// criteria: rising NED slope, paired recovery+sigh, or
+    /// sustained max NED. Any one is enough.
+    ///
+    /// Mirrors AirwayLab's `detectRERASequences` / `evaluateRERA`
+    /// pair. Internal — exposed only via `compute` / `computeDay` /
+    /// `computeHourly`.
     static func detectRERAs(per: [BreathMetrics]) -> [RERAEvent] {
-        guard per.count >= reraRunMinBreaths + 1 else { return [] }
+        guard per.count >= reraRunMinBreaths else { return [] }
         var events: [RERAEvent] = []
-        var i = 0
-        let end = per.count - 1  // need at least one breath after the run for recovery
 
-        while i < end {
-            var j = i
-            var rises = 0
-            var slope: Double = 0
-            // Walk forward while every consecutive ΔNED clears the
-            // rise threshold. The first breath in the run is per[i];
-            // a "rise" is a delta between two consecutive breaths,
-            // so `rises` ends up at run_length - 1.
-            while j + 1 < per.count, per[j + 1].ned - per[j].ned >= Self.reraRisePerBreathMin {
-                slope += per[j + 1].ned - per[j].ned
-                rises += 1
-                j += 1
+        func isFL(_ b: BreathMetrics) -> Bool {
+            b.ned > Self.flowLimitedNEDThreshold || b.fi >= Self.flatBreathFIThreshold
+        }
+
+        var runStart: Int? = nil
+        for i in 0..<per.count {
+            if isFL(per[i]) {
+                if runStart == nil { runStart = i }
+            } else if let start = runStart {
+                if let event = evaluateRun(per: per, start: start, end: i) {
+                    events.append(event)
+                }
+                runStart = nil
             }
-
-            let runLength = rises + 1
-            if runLength >= Self.reraRunMinBreaths,
-               j + 1 < per.count,
-               per[j].ned - per[j + 1].ned >= Self.reraRecoveryDropMin,
-               per[j + 1].ned <= Self.reraRecoveryAbsMax {
-                events.append(
-                    RERAEvent(
-                        recoveryBreathSampleIndex: per[j + 1].sampleIndex,
-                        runLength: runLength,
-                        nedSlope: rises > 0 ? slope / Double(rises) : 0
-                    )
-                )
-                i = j + 1 + Self.reraCooldownBreaths
-            } else {
-                i += 1
+        }
+        // Tail-handle a run that extends to the last breath. AirwayLab
+        // does the same — without it a flow-limited run right at the
+        // end of a session never produces an event.
+        if let start = runStart {
+            if let event = evaluateRun(per: per, start: start, end: per.count) {
+                events.append(event)
             }
         }
         return events
+    }
+
+    /// Decide whether the half-open `[start, end)` slice qualifies as
+    /// a RERA. Run-length filtering happens here, not in the caller,
+    /// so the caller doesn't need to know the 3..15 bounds.
+    private static func evaluateRun(
+        per: [BreathMetrics],
+        start: Int,
+        end: Int
+    ) -> RERAEvent? {
+        let breathCount = end - start
+        guard breathCount >= reraRunMinBreaths,
+              breathCount <= reraRunMaxBreaths else { return nil }
+
+        // Linear-regression slope of NED across the run, per breath.
+        // Two-point edge case (breathCount == 2) can't occur because
+        // of the `>= reraRunMinBreaths` guard above (min is 3).
+        var sumX: Double = 0, sumY: Double = 0
+        var sumXY: Double = 0, sumXX: Double = 0
+        var meanQpeak: Double = 0
+        var maxNED: Double = 0
+        for offset in 0..<breathCount {
+            let b = per[start + offset]
+            let x = Double(offset)
+            sumX += x
+            sumY += b.ned
+            sumXY += x * b.ned
+            sumXX += x * x
+            meanQpeak += b.qPeak
+            if b.ned > maxNED { maxNED = b.ned }
+        }
+        meanQpeak /= Double(breathCount)
+        let n = Double(breathCount)
+        let denom = n * sumXX - sumX * sumX
+        let nedSlope = denom != 0 ? (n * sumXY - sumX * sumY) / denom : 0
+
+        // Recovery + sigh both consult the breath right after the
+        // run. AirwayLab requires `end < per.count` here too —
+        // tail-runs (last breath of the session) never have a
+        // recovery / sigh signal, so those acceptance paths can't
+        // fire and only the slope / maxNED paths remain.
+        var hasRecovery = false
+        var hasSigh = false
+        if end < per.count {
+            let next = per[end]
+            hasRecovery = next.ned < Self.reraRecoveryNEDThreshold
+            hasSigh = next.qPeak > Self.reraSighQpeakRatio * meanQpeak
+        }
+
+        let accepted = nedSlope > Self.reraSlopeThreshold
+            || (hasRecovery && hasSigh)
+            || maxNED > Self.reraSustainedMaxNEDThreshold
+        guard accepted else { return nil }
+
+        return RERAEvent(
+            startSampleIndex: per[start].sampleIndex,
+            breathCount: breathCount,
+            nedSlope: nedSlope,
+            maxNED: maxNED,
+            hasRecovery: hasRecovery,
+            hasSigh: hasSigh
+        )
     }
 
     // MARK: - Percentile helper

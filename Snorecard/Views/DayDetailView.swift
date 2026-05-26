@@ -311,9 +311,6 @@ struct DayDetailView: View {
     private var header: some View {
         if let stats = day.stats, stats.hasUsage {
             VStack(alignment: .leading, spacing: 12) {
-                if let rera = stats.reraIndex {
-                    reraChip(rera)
-                }
                 EventDonutView(stats: stats, onTap: explainTap(.ahi))
 
                 LazyVGrid(
@@ -930,43 +927,6 @@ struct DayDetailView: View {
         }
     }
 
-    /// Compact nightly-RERA chip that sits above the AHI hero. Keeps
-    /// the headline NED number in view at a glance even when the
-    /// scroll position is at the top and the StatCard hasn't entered
-    /// the viewport yet. Tap surfaces the same `MetricExplainSheet`
-    /// the StatCard does, so the affordances stay aligned.
-    @ViewBuilder
-    private func reraChip(_ value: Double) -> some View {
-        let label = Label {
-            HStack(spacing: 6) {
-                Text("NED")
-                    .font(.caption.weight(.semibold))
-                Text(String(format: "%.1f /hr", value))
-                    .font(.caption.monospacedDigit().weight(.semibold))
-            }
-        } icon: {
-            Image(systemName: "waveform.path")
-                .font(.caption.weight(.semibold))
-        }
-        .labelStyle(.titleAndIcon)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .foregroundStyle(reraColor(value))
-        .background(reraColor(value).opacity(0.18), in: Capsule())
-
-        if let action = explainTap(.reraIndex) {
-            Button(action: action) { label }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    Text("NED \(String(format: "%.1f", value)) events per hour. Tap for details.")
-                )
-        } else {
-            label
-                .accessibilityLabel(
-                    Text("NED \(String(format: "%.1f", value)) events per hour")
-                )
-        }
-    }
 
     /// Usage palette — red under 4h (non-compliant), amber 4–7h (short),
     /// green 7–9h (target), amber 9–10h (long), red ≥ 10h (over-use).
