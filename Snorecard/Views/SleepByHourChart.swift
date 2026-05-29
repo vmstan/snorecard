@@ -2,44 +2,29 @@ import SwiftUI
 import Charts
 import SnorecardKit
 
-/// Stacked column chart of Apple Watch sleep stages (deep / core / REM)
-/// bucketed by clock hour, with the per-hour CPAP mask-on minutes
-/// overlaid as a line on a secondary axis. Hour bucketing matches
-/// `AHIHourlyChart` so the x-axis lines up with every other hourly
-/// chart on the day view.
+/// Line chart of Apple Watch deep- and REM-sleep minutes bucketed by
+/// clock hour. Hour bucketing matches `AHIHourlyChart` so the x-axis
+/// lines up with every other hourly chart on the day view.
 ///
-/// Awake / in-bed-only stages are deliberately excluded from the
-/// stack — the chart's job is to compare *asleep architecture*
-/// against CPAP usage, not to surface every category sample.
+/// Awake / in-bed-only and core stages are deliberately excluded —
+/// the chart's job is to surface the restorative architecture (deep
+/// and REM) across the night, not to plot every category sample.
 struct SleepByHourChart: View {
     @Environment(Library.self) private var library
     let summary: NightlySleepSummary
-    let sessions: [SessionSegment]
     let dayStart: Date
     /// Total night duration in seconds. Drives the bucket range so
     /// every hourly chart on the day view shares the same x axis,
     /// matching `AHIHourlyChart`.
     let totalDuration: TimeInterval
 
-    /// Label for the device-usage line — derived from the user's
-    /// configured device type so the chart reads "BiPAP Usage" for
-    /// a BiPAP user, "APAP Usage" for an APAP user, etc., matching
-    /// the device-name conventions everywhere else in the app.
-    private var deviceLabel: String {
-        "\(library.deviceType(for: library.card).displayName) Usage"
-    }
-
     private struct HourBucket: Identifiable {
         var id: Int { startHour }
         let startHour: Int
         let clockLabel: String
-        /// Minutes of each asleep stage that fall inside this hour.
+        /// Minutes of each plotted stage that fall inside this hour.
         let deepMinutes: Double
-        let coreMinutes: Double
         let remMinutes: Double
-        /// Minutes the user had the mask on during this hour
-        /// (clamped 0…60 by construction).
-        let cpapMinutes: Double
     }
 
     private var buckets: [HourBucket] {
@@ -57,8 +42,8 @@ struct SleepByHourChart: View {
         // partway through the first hour. The hour grid is anchored
         // earlier (at the hour boundary at-or-before `dayStart`), so
         // we widen the span by `anchorOffset` to make sure the last
-        // hour of CPAP usage gets its own bucket instead of being
-        // clipped past the chart edge.
+        // hour gets its own bucket instead of being clipped past the
+        // chart edge.
         let anchorOffset = dayStart.timeIntervalSince(anchor)
         let anchorToEnd = totalDuration + anchorOffset
         let lastHour = Int((max(anchorToEnd, 1) / 3600).rounded(.up)) - 1
@@ -71,30 +56,14 @@ struct SleepByHourChart: View {
             let bucketEnd = bucketStart.addingTimeInterval(3600)
 
             let deep = stageMinutes(in: bucketStart...bucketEnd, stage: .deep)
-            let core = stageMinutes(in: bucketStart...bucketEnd, stage: .core)
             let rem = stageMinutes(in: bucketStart...bucketEnd, stage: .rem)
-
-            // Mask-on minutes: intersect each session's wall-clock
-            // window with this bucket and sum the overlap.
-            var cpapSeconds: TimeInterval = 0
-            for session in sessions {
-                let sessionStart = dayStart.addingTimeInterval(session.startOffset)
-                let sessionEnd = sessionStart.addingTimeInterval(session.duration)
-                cpapSeconds += overlap(
-                    a: sessionStart...sessionEnd,
-                    b: bucketStart...bucketEnd
-                )
-            }
-            let cpapMinutes = min(60, cpapSeconds / 60)
 
             out.append(
                 HourBucket(
                     startHour: hour,
                     clockLabel: Self.shortClockLabel(for: bucketStart),
                     deepMinutes: deep,
-                    coreMinutes: core,
-                    remMinutes: rem,
-                    cpapMinutes: cpapMinutes
+                    remMinutes: rem
                 )
             )
         }
@@ -123,12 +92,12 @@ struct SleepByHourChart: View {
         return max(0, upper.timeIntervalSince(lower))
     }
 
-    private var peakStackMinutes: Double {
-        buckets.map { $0.deepMinutes + $0.coreMinutes + $0.remMinutes }.max() ?? 0
+    private var peakStageMinutes: Double {
+        buckets.map { max($0.deepMinutes, $0.remMinutes) }.max() ?? 0
     }
 
     private var hasAnyData: Bool {
-        peakStackMinutes > 0 || buckets.contains(where: { $0.cpapMinutes > 0 })
+        peakStageMinutes > 0
     }
 
     var body: some View {
@@ -136,13 +105,12 @@ struct SleepByHourChart: View {
             if hasAnyData {
                 Chart {
                     ForEach(buckets) { bucket in
-                        // One line per asleep stage — minutes-per-
-                        // hour rendered side by side instead of as
-                        // a stacked bar so each stage's trajectory
-                        // across the night reads on its own. PointMark
-                        // anchors every hour bucket so the segments
-                        // read as per-hour readings, not a continuous
-                        // signal.
+                        // One line per plotted stage — minutes-per-
+                        // hour rendered side by side so each stage's
+                        // trajectory across the night reads on its
+                        // own. PointMark anchors every hour bucket so
+                        // the segments read as per-hour readings, not
+                        // a continuous signal.
                         LineMark(
                             x: .value("Hour", bucket.clockLabel),
                             y: .value("Minutes", bucket.deepMinutes),
@@ -161,22 +129,6 @@ struct SleepByHourChart: View {
 
                         LineMark(
                             x: .value("Hour", bucket.clockLabel),
-                            y: .value("Minutes", bucket.coreMinutes),
-                            series: .value("Stage", "Core")
-                        )
-                        .foregroundStyle(by: .value("Stage", "Core"))
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-
-                        PointMark(
-                            x: .value("Hour", bucket.clockLabel),
-                            y: .value("Minutes", bucket.coreMinutes)
-                        )
-                        .foregroundStyle(by: .value("Stage", "Core"))
-                        .symbolSize(28)
-
-                        LineMark(
-                            x: .value("Hour", bucket.clockLabel),
                             y: .value("Minutes", bucket.remMinutes),
                             series: .value("Stage", "REM")
                         )
@@ -190,33 +142,11 @@ struct SleepByHourChart: View {
                         )
                         .foregroundStyle(by: .value("Stage", "REM"))
                         .symbolSize(28)
-
-                        // Device-usage line + marker — same stroke and
-                        // point size as the stage series; a flat
-                        // system gray keeps it present without
-                        // competing with the stage colours.
-                        LineMark(
-                            x: .value("Hour", bucket.clockLabel),
-                            y: .value(deviceLabel, bucket.cpapMinutes),
-                            series: .value("Stage", deviceLabel)
-                        )
-                        .foregroundStyle(by: .value("Stage", deviceLabel))
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-
-                        PointMark(
-                            x: .value("Hour", bucket.clockLabel),
-                            y: .value(deviceLabel, bucket.cpapMinutes)
-                        )
-                        .foregroundStyle(by: .value("Stage", deviceLabel))
-                        .symbolSize(28)
                     }
                 }
                 .chartForegroundStyleScale([
                     "Deep": library.eventColorPalette.deepSleep,
-                    "Core": library.eventColorPalette.coreSleep,
-                    "REM": library.eventColorPalette.remSleep,
-                    deviceLabel: Color.gray
+                    "REM": library.eventColorPalette.remSleep
                 ])
                 .chartLegend(.hidden)
                 .chartXScale(domain: buckets.map(\.clockLabel))
@@ -268,9 +198,7 @@ struct SleepByHourChart: View {
     private var legend: some View {
         FlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
             legendDot(color: library.eventColorPalette.deepSleep, label: "Deep")
-            legendDot(color: library.eventColorPalette.coreSleep, label: "Core")
             legendDot(color: library.eventColorPalette.remSleep, label: "REM")
-            legendLine(color: .gray, label: deviceLabel)
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -279,13 +207,6 @@ struct SleepByHourChart: View {
     private func legendDot(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).foregroundStyle(.secondary)
-        }
-    }
-
-    private func legendLine(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            Capsule().fill(color).frame(width: 14, height: 3)
             Text(label).foregroundStyle(.secondary)
         }
     }

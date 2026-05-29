@@ -540,18 +540,17 @@ struct DayDetailView: View {
                         totalDuration: bundle.totalDuration
                     )
                 }
-                // Sleep-by-hour stack with CPAP usage overlay. Only
-                // renders when both a watch summary and the parsed
-                // waveform bundle are present — needs the bundle's
-                // session list to draw the CPAP-minutes line and
-                // the summary's raw samples to bucket the stages.
-                // Renders on both platforms — the underlying data
-                // comes from sidecars synced via iCloud Drive.
+                // Sleep-by-hour deep/REM chart. Only renders when
+                // both a watch summary and the parsed waveform bundle
+                // are present — the bundle supplies the night window
+                // (dayStart / duration) and the summary's raw samples
+                // are bucketed into the stages. Renders on both
+                // platforms — the underlying data comes from sidecars
+                // synced via iCloud Drive.
                 if let bundle = displayedBundle,
                    let sleep = library.healthSleep.summaryByDate[day.date] {
                     SleepByHourChart(
                         summary: sleep,
-                        sessions: bundle.sessions,
                         dayStart: bundle.dayStart,
                         totalDuration: bundle.totalDuration
                     )
