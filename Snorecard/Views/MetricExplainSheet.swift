@@ -50,16 +50,16 @@ struct MetricExplainSheet: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                // NED Analysis ships a fixed "How it works" card
-                // alongside whatever the on-device model produces —
-                // the definitions don't change night-to-night, and
-                // the static panel keeps the disclaimer wording
-                // verbatim. Shown whether the AI succeeded or not.
-                // Both the per-breath NED Mean card and the
-                // sequence-level RERA Index card open this sheet,
-                // so cover both.
+                // Static "How it works" panels for the metrics that
+                // have one. Definitions don't change night-to-night
+                // and the static wording keeps the upstream
+                // attribution verbatim, so they appear regardless
+                // of whether the on-device model returned anything.
                 if request.metric == .reraIndex || request.metric == .nedMean {
                     NEDExplainerCard()
+                }
+                if request.metric == .glasgowIndex {
+                    GlasgowExplainerCard()
                 }
                 Spacer(minLength: 8)
                 Text("Summary only — not medical advice. Generated using on-device intelligence.")
