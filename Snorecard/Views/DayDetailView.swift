@@ -736,7 +736,7 @@ struct DayDetailView: View {
         case .glasgowIndex:
             return stats.glasgowIndex.map { String(format: "%.2f", $0) } ?? "—"
         case .reraIndex:
-            return stats.reraIndex.map { String(format: "%.1f /hr", $0) } ?? "—"
+            return stats.reraIndex.map { String(format: "%.1f", $0) } ?? "—"
         case .nedMean:
             return stats.nedAnalysisBreakdown.map { String(format: "%.1f%%", $0.nedMean * 100) } ?? "—"
         case .epap95:
